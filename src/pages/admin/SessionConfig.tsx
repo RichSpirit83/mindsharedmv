@@ -124,7 +124,7 @@ export default function SessionConfig() {
   const updateLeadCount = (count: number) => {
     setNumLeads(count);
     const newLeads: TableLead[] = Array.from({ length: count }, (_, i) => (
-      leads[i] || { id: crypto.randomUUID(), name: "", expertiseTags: [], networkStrengths: "", notes: "" }
+      leads[i] || { id: crypto.randomUUID(), name: "", expertiseTags: [], networkStrengths: "", notes: "", linkedinUrl: "" }
     ));
     setLeads(newLeads);
   };
