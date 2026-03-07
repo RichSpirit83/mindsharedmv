@@ -64,6 +64,37 @@ export default function SessionConfig() {
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [showMapper, setShowMapper] = useState(false);
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
+  const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
+
+  const importFromLinkedin = async (index: number) => {
+    const url = leads[index]?.linkedinUrl?.trim();
+    if (!url || !url.includes('linkedin.com')) {
+      toast.error("Please enter a valid LinkedIn URL");
+      return;
+    }
+    setLinkedinLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-linkedin', {
+        body: { url },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to scrape');
+      const profile = data.data;
+      setLeads((prev) => prev.map((l, i) => i === index ? {
+        ...l,
+        name: profile.name || l.name,
+        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : l.expertiseTags,
+        networkStrengths: profile.networkStrengths || l.networkStrengths,
+        notes: profile.notes || l.notes,
+      } : l));
+      toast.success(`Imported profile for ${profile.name || 'lead'}`);
+    } catch (err: any) {
+      console.error('LinkedIn import error:', err);
+      toast.error(err.message || "Failed to import LinkedIn profile");
+    } finally {
+      setLinkedinLoading((prev) => ({ ...prev, [index]: false }));
+    }
+  };
 
   const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
