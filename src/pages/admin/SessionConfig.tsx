@@ -394,6 +394,30 @@ export default function SessionConfig() {
                 <div className="flex items-center justify-between">
                   <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
                 </div>
+                {/* LinkedIn Import */}
+                <div>
+                  <Label>LinkedIn Profile</Label>
+                  <div className="flex gap-2 mt-1.5">
+                    <Input
+                      value={lead.linkedinUrl}
+                      onChange={(e) => updateLead(i, "linkedinUrl", e.target.value)}
+                      placeholder="https://linkedin.com/in/username"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => importFromLinkedin(i)}
+                      disabled={linkedinLoading[i] || !lead.linkedinUrl}
+                    >
+                      {linkedinLoading[i] ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Linkedin className="h-4 w-4 mr-1" />
+                      )}
+                      {linkedinLoading[i] ? "Importing…" : "Import"}
+                    </Button>
+                  </div>
+                </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
                     <Label>Name</Label>
