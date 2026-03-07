@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import ColumnMapper from "@/components/ColumnMapper";
+import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
@@ -32,6 +33,7 @@ interface TableLead {
   expertiseTags: string[];
   networkStrengths: string;
   notes: string;
+  linkedinUrl: string;
 }
 
 const CANONICAL_FIELDS = [
@@ -62,6 +64,37 @@ export default function SessionConfig() {
   const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
   const [showMapper, setShowMapper] = useState(false);
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
+  const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
+
+  const importFromLinkedin = async (index: number) => {
+    const url = leads[index]?.linkedinUrl?.trim();
+    if (!url || !url.includes('linkedin.com')) {
+      toast.error("Please enter a valid LinkedIn URL");
+      return;
+    }
+    setLinkedinLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      const { data, error } = await supabase.functions.invoke('scrape-linkedin', {
+        body: { url },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to scrape');
+      const profile = data.data;
+      setLeads((prev) => prev.map((l, i) => i === index ? {
+        ...l,
+        name: profile.name || l.name,
+        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : l.expertiseTags,
+        networkStrengths: profile.networkStrengths || l.networkStrengths,
+        notes: profile.notes || l.notes,
+      } : l));
+      toast.success(`Imported profile for ${profile.name || 'lead'}`);
+    } catch (err: any) {
+      console.error('LinkedIn import error:', err);
+      toast.error(err.message || "Failed to import LinkedIn profile");
+    } finally {
+      setLinkedinLoading((prev) => ({ ...prev, [index]: false }));
+    }
+  };
 
   const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -122,7 +155,7 @@ export default function SessionConfig() {
   const updateLeadCount = (count: number) => {
     setNumLeads(count);
     const newLeads: TableLead[] = Array.from({ length: count }, (_, i) => (
-      leads[i] || { id: crypto.randomUUID(), name: "", expertiseTags: [], networkStrengths: "", notes: "" }
+      leads[i] || { id: crypto.randomUUID(), name: "", expertiseTags: [], networkStrengths: "", notes: "", linkedinUrl: "" }
     ));
     setLeads(newLeads);
   };
@@ -360,6 +393,30 @@ export default function SessionConfig() {
               <div key={lead.id} className="p-4 border rounded-lg space-y-4 animate-fade-in">
                 <div className="flex items-center justify-between">
                   <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
+                </div>
+                {/* LinkedIn Import */}
+                <div>
+                  <Label>LinkedIn Profile</Label>
+                  <div className="flex gap-2 mt-1.5">
+                    <Input
+                      value={lead.linkedinUrl}
+                      onChange={(e) => updateLead(i, "linkedinUrl", e.target.value)}
+                      placeholder="https://linkedin.com/in/username"
+                      className="flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => importFromLinkedin(i)}
+                      disabled={linkedinLoading[i] || !lead.linkedinUrl}
+                    >
+                      {linkedinLoading[i] ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                      ) : (
+                        <Linkedin className="h-4 w-4 mr-1" />
+                      )}
+                      {linkedinLoading[i] ? "Importing…" : "Import"}
+                    </Button>
+                  </div>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
