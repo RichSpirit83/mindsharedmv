@@ -28,72 +28,104 @@ Deno.serve(async (req) => {
 
     // Extract username from LinkedIn URL
     const usernameMatch = url.match(/linkedin\.com\/in\/([^/?#]+)/);
-    const username = usernameMatch?.[1] || '';
+    const username = usernameMatch?.[1]?.replace(/\/$/, '') || '';
     const searchName = username.replace(/-/g, ' ');
 
-    console.log('Searching for LinkedIn profile:', searchName);
+    console.log('Looking up LinkedIn profile for:', username);
 
-    // Use Firecrawl search to find profile info (LinkedIn direct scrape is blocked)
-    const response = await fetch('https://api.firecrawl.dev/v1/search', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: `"${searchName}" linkedin site:linkedin.com/in/${username}`,
-        limit: 3,
-        scrapeOptions: { formats: ['markdown'] },
-      }),
-    });
+    // Run two searches in parallel for richer data
+    const [linkedinSearch, webSearch] = await Promise.all([
+      // Search 1: Find the LinkedIn listing itself
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${searchName}" site:linkedin.com/in/${username}`,
+          limit: 3,
+        }),
+      }).then(r => r.json()),
+      // Search 2: Find broader web presence (bio, articles, company info)
+      fetch('https://api.firecrawl.dev/v1/search', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: `"${searchName}" founder CEO advisor investor biography`,
+          limit: 5,
+          scrapeOptions: { formats: ['markdown'] },
+        }),
+      }).then(r => r.json()),
+    ]);
 
-    const searchData = await response.json();
+    console.log('LinkedIn search results:', JSON.stringify(linkedinSearch).slice(0, 500));
+    console.log('Web search results:', JSON.stringify(webSearch).slice(0, 500));
 
-    if (!response.ok) {
-      console.error('Firecrawl search error:', searchData);
-      return new Response(
-        JSON.stringify({ success: false, error: searchData.error || `Search failed: ${response.status}` }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // Combine all text from both searches
+    const linkedinResults = linkedinSearch.data || linkedinSearch.results || [];
+    const webResults = webSearch.data || webSearch.results || [];
 
-    // Combine search results to extract profile info
-    const results = searchData.data || searchData.results || [];
-    const allText = results.map((r: any) => `${r.title || ''} ${r.description || ''} ${r.markdown || ''}`).join('\n');
-
-    // Extract name from first result title (usually "FirstName LastName - Title | LinkedIn")
-    const firstTitle = results[0]?.title || '';
-    const nameMatch = firstTitle.match(/^(.*?)(?:\s*[-–|])/);
+    // Extract name from LinkedIn result title (e.g. "Adeleke Adesida - CEO at Company | LinkedIn")
+    const linkedinTitle = linkedinResults[0]?.title || '';
+    const linkedinDesc = linkedinResults[0]?.description || '';
+    const nameMatch = linkedinTitle.match(/^(.*?)(?:\s*[-–|])/);
     let name = nameMatch?.[1]?.trim() || '';
-    // Fallback: capitalize the username
     if (!name) {
       name = searchName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
     }
 
-    // Extract headline from first result description
-    const headline = results[0]?.description?.split('.')?.[0]?.trim() || '';
+    // Extract headline/role from LinkedIn description
+    // LinkedIn descriptions typically look like: "Title at Company. Location. Summary..."
+    const headline = linkedinDesc.split(/\.\s/)?.[0]?.trim() || linkedinDesc.slice(0, 150).trim() || '';
+
+    // Gather all text for keyword extraction
+    const allTexts = [
+      linkedinTitle, linkedinDesc,
+      ...linkedinResults.map((r: any) => `${r.title || ''} ${r.description || ''}`),
+      ...webResults.map((r: any) => `${r.title || ''} ${r.description || ''} ${r.markdown || ''}`),
+    ].join('\n');
 
     // Extract expertise keywords
-    const expertiseKeywords: string[] = [];
-    const patterns = [
-      /(?:SaaS|B2B|B2C|HealthTech|FinTech|EdTech|GovTech|DeepTech|AI|ML|Cybersecurity|IoT|Blockchain|PropTech|CleanTech|AgriTech|InsurTech|LegalTech|MarTech|HRTech|RegTech)/gi,
-      /(?:Series [A-F]|Seed|Pre-seed|Growth|Scale)/gi,
-      /(?:GTM|Go-to-Market|Fundraising|Product|Engineering|Sales|Marketing|Operations|Strategy|Consulting|Venture Capital|Private Equity|Angel|Advisor)/gi,
+    const tags = new Set<string>();
+    const patterns: [RegExp, (m: string) => string][] = [
+      [/\b(?:SaaS|B2B|B2C|HealthTech|FinTech|EdTech|GovTech|DeepTech|PropTech|CleanTech|AgriTech|InsurTech|LegalTech|MarTech|HRTech|RegTech|BioTech|MedTech|FoodTech)\b/gi, (m) => m],
+      [/\b(?:AI|ML|Machine Learning|Artificial Intelligence|Cybersecurity|IoT|Blockchain|Cloud|Data Science|Analytics)\b/gi, (m) => m],
+      [/\b(?:Series [A-F]|Seed|Pre-seed|Growth Stage|Scale-up)\b/gi, (m) => m],
+      [/\b(?:GTM|Go-to-Market|Fundraising|Product Management|Engineering|Sales Leadership|Marketing|Operations|Strategy|Consulting)\b/gi, (m) => m],
+      [/\b(?:Venture Capital|Private Equity|Angel Investor?|Board Member|Advisor|Mentor|Founder|Co-founder|CEO|CTO|COO|CFO|CMO|CPO|VP|Director)\b/gi, (m) => m],
     ];
-    for (const pattern of patterns) {
-      const matches = allText.match(pattern) || [];
-      expertiseKeywords.push(...matches.map((m: string) => m.trim()));
+
+    for (const [pattern, transform] of patterns) {
+      const matches = allTexts.match(pattern) || [];
+      for (const m of matches) {
+        const tag = transform(m.trim());
+        // Normalize: capitalize first letter
+        tags.add(tag.charAt(0).toUpperCase() + tag.slice(1));
+      }
     }
-    const uniqueTags = [...new Set(expertiseKeywords.map((t: string) => t.charAt(0).toUpperCase() + t.slice(1)))].slice(0, 8);
+
+    // Build network strengths from headline + any company/role info
+    const roleMatch = linkedinTitle.match(/[-–|]\s*(.*?)(?:\s*[-–|]\s*LinkedIn)?$/i);
+    const roleInfo = roleMatch?.[1]?.trim() || '';
+    const networkStrengths = [roleInfo, headline].filter(Boolean).join(' — ').slice(0, 200) || headline;
+
+    // Build notes with context
+    const noteLines = [`LinkedIn: ${url}`];
+    if (headline) noteLines.push(`\n${headline}`);
+    if (roleInfo && roleInfo !== headline) noteLines.push(roleInfo);
+    // Add snippets from web results
+    const snippets = webResults
+      .filter((r: any) => r.description)
+      .map((r: any) => `• ${r.description.slice(0, 150)}`)
+      .slice(0, 3);
+    if (snippets.length) noteLines.push('\nWeb mentions:', ...snippets);
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
           name,
-          expertiseTags: uniqueTags,
-          networkStrengths: headline,
-          notes: `LinkedIn: ${url}\n\n${headline}`,
+          expertiseTags: [...tags].slice(0, 10),
+          networkStrengths: networkStrengths || headline,
+          notes: noteLines.join('\n'),
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
