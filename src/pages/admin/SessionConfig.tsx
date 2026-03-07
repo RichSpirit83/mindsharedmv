@@ -9,13 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import Papa from "papaparse";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import ColumnMapper from "@/components/ColumnMapper";
+import { supabase } from "@/integrations/supabase/client";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
