@@ -33,6 +33,7 @@ interface TableLead {
   expertiseTags: string[];
   networkStrengths: string;
   notes: string;
+  linkedinUrl: string;
 }
 
 const CANONICAL_FIELDS = [
