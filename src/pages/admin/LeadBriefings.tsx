@@ -23,6 +23,7 @@ interface TableData {
 
 export default function LeadBriefings() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [tables, setTables] = useState<TableData[]>([]);
   const [session, setSession] = useState<any>(null);
   const [leads, setLeads] = useState<any[]>([]);
