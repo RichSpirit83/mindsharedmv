@@ -170,6 +170,9 @@ strong { color: #1a1a2e; }
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
       <div>
+        <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate(`/admin/matching/${sessionId}`)}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Matching
+        </Button>
         <h1 className="font-heading text-2xl font-bold">Table Lead Briefings</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {session?.session_name ? `${session.session_name} — ` : ""}
