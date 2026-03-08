@@ -153,7 +153,7 @@ export default function MatchingWorkspace() {
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
-            <Button size="sm" disabled={isGenerating || companies.length === 0}>
+            <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={generateMatches}>
               <Sparkles className="h-4 w-4 mr-1" />
               {isGenerating ? "Generating..." : "Generate Matches"}
             </Button>
