@@ -41,15 +41,16 @@ ${leadInfo}
 PARTICIPANTS:
 ${companyDetails}
 
-ENGAGEMENT PROMPTS:
+ENGAGEMENT PROMPTS (MUST BE INCLUDED VERBATIM IN OUTPUT):
 ${promptsList}
 
 Create a professional briefing that includes:
 1. Table Overview - theme and why this group was matched
 2. Participant Snapshots - for each company: name, what they do, sector, stage, and their key challenge
 3. Conversation Starters - specific to this group's shared interests
-4. Facilitation Tips - how the lead should guide the conversation
-5. Key Connections - potential synergies between specific participants`;
+4. Engagement Prompts - include the EXACT engagement prompts listed above as a dedicated section so the lead can reference them during the session
+5. Facilitation Tips - how the lead should guide the conversation
+6. Key Connections - potential synergies between specific participants`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -62,7 +63,7 @@ Create a professional briefing that includes:
         messages: [
           {
             role: "system",
-            content: "You are an expert event facilitator creating detailed table lead briefings. Write in a professional but warm tone. Use markdown formatting with headers, bullet points, and bold text for readability. Keep it concise enough to fit on one printed page.",
+            content: "You are an expert event facilitator creating detailed table lead briefings. Write in a professional but warm tone. Use markdown formatting with headers, bullet points, and bold text for readability. Keep it concise enough to fit on one printed page. IMPORTANT: You MUST include the engagement prompts verbatim in a dedicated section of the briefing — these are the discussion questions the lead will use during the session.",
           },
           { role: "user", content: userPrompt },
         ],

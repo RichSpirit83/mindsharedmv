@@ -26,6 +26,7 @@ const App = () => (
             <Route path="session/:sessionId" element={<SessionConfig />} />
             <Route path="match/:sessionId" element={<MatchingWorkspace />} />
             <Route path="leads/:sessionId" element={<LeadBriefings />} />
+            <Route path="present/:sessionId" element={<PresentationView />} />
           </Route>
           <Route path="/s/:sessionSlug" element={<PublicAttendeeView />} />
           <Route path="/" element={<BreakoutsList />} />
