@@ -194,7 +194,7 @@ strong { color: #1a1a2e; }
         <>
           <div className="flex justify-end">
             <Button
-              onClick={() => tables.forEach((t) => { if (!briefings[t.table_number]) generateBriefing(t); })}
+              onClick={generateAllBriefings}
               disabled={Object.values(generating).some(Boolean)}
             >
               <Sparkles className="h-4 w-4 mr-1" /> Generate All Briefings

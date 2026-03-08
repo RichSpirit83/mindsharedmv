@@ -5,13 +5,42 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+function extractTextFromPdfBytes(base64: string): string {
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+  // Extract printable ASCII runs (min 4 chars) from binary
+  let result = '';
+  let current = '';
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if ((c >= 32 && c <= 126) || c === 10 || c === 13 || c === 9) {
+      current += String.fromCharCode(c);
+    } else {
+      if (current.trim().length >= 4) result += current + ' ';
+      current = '';
+    }
+  }
+  if (current.trim().length >= 4) result += current;
+
+  // Clean up excessive whitespace
+  return result.replace(/\s+/g, ' ').trim();
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { pdfText } = await req.json();
-    if (!pdfText || pdfText.trim().length < 20) {
-      return new Response(JSON.stringify({ success: false, error: "No PDF text content provided" }), {
+    const { pdfBase64, pdfText } = await req.json();
+    
+    let text = pdfText || '';
+    if (pdfBase64) {
+      text = extractTextFromPdfBytes(pdfBase64);
+    }
+    
+    if (!text || text.trim().length < 20) {
+      return new Response(JSON.stringify({ success: false, error: "Could not extract readable text from PDF. Try a different file." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -34,7 +63,7 @@ serve(async (req) => {
           },
           {
             role: "user",
-            content: `Extract structured profile data from this LinkedIn PDF content:\n\n${pdfText.slice(0, 8000)}`,
+            content: `Extract structured profile data from this LinkedIn PDF content:\n\n${text.slice(0, 8000)}`,
           },
         ],
         tools: [
