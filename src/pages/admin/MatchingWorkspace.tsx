@@ -63,6 +63,38 @@ export default function MatchingWorkspace() {
     revenue: row[columnMapping["revenue"] || ""] || "",
   }));
 
+  // Build full company data for the AI (includes all mapped fields)
+  const fullCompanyData = csvData.map((row) => {
+    const mapped: Record<string, string> = {};
+    for (const [canonical, csvCol] of Object.entries(columnMapping)) {
+      if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
+    }
+    return mapped;
+  });
+
+  const generateMatches = async () => {
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-matches", {
+        body: {
+          companies: fullCompanyData,
+          sessionConfig,
+          leads: sessionState?.leads || [],
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setTables(data.tables || []);
+      setHasGenerated(true);
+      toast.success(`Generated ${data.tables?.length || 0} table groupings`);
+    } catch (err: any) {
+      console.error("Match generation failed:", err);
+      toast.error(err.message || "Failed to generate matches");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
   const filteredCompanies = companies.filter(
     (c) =>
       c.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
