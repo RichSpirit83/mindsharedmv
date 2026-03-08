@@ -155,18 +155,24 @@ export default function MatchingWorkspace() {
     }
   };
 
+  const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
-    // Delete old tables (cascade deletes assignments)
     await supabase.from("breakout_tables").delete().eq("session_id", sessionId);
 
-    // Get all company records to map by company_name
     const { data: dbCompanies } = await supabase.from("breakout_companies").select("id, mapped_data").eq("session_id", sessionId);
-    const companyIdMap = new Map<string, string>();
+    const companyByName = new Map<string, string>();
+    const companyByPerson = new Map<string, string>();
     (dbCompanies || []).forEach((c) => {
-      const name = (c.mapped_data as any)?.company_name;
-      if (name) companyIdMap.set(name, c.id);
+      const m = (c.mapped_data as any) || {};
+      if (m.company_name) companyByName.set(normalize(m.company_name), c.id);
+      const personKey = normalize((m.first_name || "") + (m.last_name || ""));
+      if (personKey) companyByPerson.set(personKey, c.id);
     });
+
+    let totalMatched = 0;
+    let totalExpected = 0;
 
     for (const table of tableGroups) {
       const { data: insertedTable } = await supabase.from("breakout_tables").insert({
@@ -183,17 +189,23 @@ export default function MatchingWorkspace() {
       if (insertedTable) {
         const assignments = table.companies
           .map((c) => {
-            const companyId = companyIdMap.get(c.company_name);
-            return companyId ? { table_id: insertedTable.id, company_id: companyId } : null;
+            totalExpected++;
+            const byName = companyByName.get(normalize(c.company_name || ""));
+            if (byName) return { table_id: insertedTable.id, company_id: byName };
+            const byPerson = companyByPerson.get(normalize((c.first_name || "") + (c.last_name || "")));
+            if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
+            console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
+            return null;
           })
           .filter(Boolean);
+        totalMatched += assignments.length;
         if (assignments.length > 0) {
           await supabase.from("breakout_table_assignments").insert(assignments as any);
         }
       }
     }
 
-    // Update session status
+    console.log(`[Match] Saved ${totalMatched}/${totalExpected} assignments`);
     await supabase.from("breakout_sessions").update({ status: "matched" }).eq("id", sessionId);
   };
 
