@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2 } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -26,6 +27,7 @@ const DEFAULT_PROMPTS = [
 
 type GroupingPriority = "sector" | "stage" | "need" | "hybrid";
 type SessionFormat = "deep_dive" | "speed_rounds";
+type PromptMode = "custom" | "generate";
 
 interface TableLead {
   id: string;
@@ -37,18 +39,89 @@ interface TableLead {
 }
 
 const CANONICAL_FIELDS = [
-  "company_name", "first_name", "last_name", "email", "sector",
-  "primary_market", "business_type", "employee_count", "revenue_band",
-  "capital_raised", "last_round", "has_pmf", "sales_stage",
-  "need_networking", "need_trends", "need_partners", "need_opportunities",
-  "need_mentorship", "topics_of_interest", "critical_challenges",
-  "website", "description",
+  "company_name", "first_name", "last_name", "email",
+  "company_description", "company_address", "city", "state_province",
+  "zip_postal_code", "country", "dmv_area",
+  "sector", "primary_market", "business_type", "customer_type", "icp",
+  "employee_count", "revenue", "capital_raised", "last_round",
+  "has_pmf", "sales_stage", "sales_leadership_area",
+  "need_networking", "need_trends", "need_partners", "need_opportunities", "need_mentorship",
+  "topics_of_interest", "critical_challenges", "additional_info",
 ];
 
+// Alias map for fuzzy matching CSV headers to canonical fields
+const FIELD_ALIASES: Record<string, string[]> = {
+  company_name: ["company name", "companyname", "company"],
+  first_name: ["first name", "firstname", "first"],
+  last_name: ["last name", "lastname", "last"],
+  email: ["email", "e-mail", "emailaddress"],
+  company_description: ["company description", "description", "companydescription"],
+  company_address: ["company address", "companyaddress", "address"],
+  city: ["city"],
+  state_province: ["state/province", "stateprovince", "state", "province"],
+  zip_postal_code: ["zip/postal code", "zippostalcode", "zip", "postalcode", "zipcode"],
+  country: ["country (company address)", "country", "countrycompanyaddress"],
+  dmv_area: ["where are you based in the dmv area", "dmv area", "dmvarea", "dmv"],
+  sector: ["sector", "industry"],
+  primary_market: ["primary market served", "primarymarketserved", "primarymarket", "primary market"],
+  business_type: ["business type", "businesstype"],
+  customer_type: ["customer type", "customertype"],
+  icp: ["icp"],
+  employee_count: ["# employees", "employees", "employeecount", "employee count", "numemployees"],
+  revenue: ["revenue", "revenueband", "revenue band"],
+  capital_raised: ["capital raised", "capitalraised"],
+  last_round: ["last round raised", "lastroundraised", "lastround", "last round"],
+  has_pmf: ["product / market fit?", "productmarketfit", "has pmf", "product market fit", "pmf"],
+  sales_stage: ["sales stage", "salesstage"],
+  sales_leadership_area: ["which area of sales leadership do you want to improve the most", "salesleadershiparea", "sales leadership"],
+  need_networking: ["networking (what are your main professional objectives", "networking", "neednetworking"],
+  need_trends: ["discovering industry trends", "needtrends", "industry trends"],
+  need_partners: ["finding business partners", "needpartners", "business partners"],
+  need_opportunities: ["finding business opportunities", "needopportunities", "business opportunities"],
+  need_mentorship: ["mentorship (what are your main professional objectives", "mentorship", "needmentorship"],
+  topics_of_interest: ["what topics are you most interested in learning about", "topicsofinterest", "topics of interest", "topics"],
+  critical_challenges: ["what are your most critical challenges", "criticalchallenges", "critical challenges", "challenges"],
+  additional_info: ["is there any thing additional you would like to add", "additionalinfo", "additional info", "additional"],
+};
+
+function fuzzyMatchHeader(header: string, canonicalFields: string[]): string | null {
+  const normalized = header.toLowerCase().replace(/[\s_\-\/\?\(\)#,.']+/g, " ").trim();
+  const collapsed = normalized.replace(/\s+/g, "");
+
+  for (const field of canonicalFields) {
+    const aliases = FIELD_ALIASES[field] || [field.replace(/_/g, " ")];
+    for (const alias of aliases) {
+      const aliasCollapsed = alias.replace(/[\s_\-\/\?\(\)#,.']+/g, "");
+      // Exact collapsed match
+      if (collapsed === aliasCollapsed) return field;
+      // Header starts with alias (for long column names)
+      if (collapsed.startsWith(aliasCollapsed) && aliasCollapsed.length >= 6) return field;
+      if (aliasCollapsed.startsWith(collapsed) && collapsed.length >= 6) return field;
+    }
+  }
+  return null;
+}
+
+function computeSpeedRounds(breakoutStart: string, breakoutEnd: string) {
+  const [sh, sm] = breakoutStart.split(":").map(Number);
+  const [eh, em] = breakoutEnd.split(":").map(Number);
+  const totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
+  if (totalMinutes <= 0) return { rounds: 0, perRound: 0, totalMinutes: 0 };
+
+  // Try 20-min rounds first, then 15-min if needed
+  let perRound = 20;
+  let rounds = Math.floor(totalMinutes / perRound);
+  if (rounds < 2) {
+    perRound = 15;
+    rounds = Math.floor(totalMinutes / perRound);
+  }
+  return { rounds: Math.max(rounds, 1), perRound, totalMinutes };
+}
+
 export default function SessionConfig() {
+  const navigate = useNavigate();
   const [sessionName, setSessionName] = useState("");
   const [sessionDate, setSessionDate] = useState<Date>();
-  const [eventStartTime, setEventStartTime] = useState("09:00");
   const [breakoutStart, setBreakoutStart] = useState("10:00");
   const [breakoutEnd, setBreakoutEnd] = useState("11:00");
   const [numTables, setNumTables] = useState(5);
@@ -57,7 +130,9 @@ export default function SessionConfig() {
   const [groupingPriority, setGroupingPriority] = useState<GroupingPriority>("sector");
   const [allowStageMixing, setAllowStageMixing] = useState(true);
   const [sessionFormat, setSessionFormat] = useState<SessionFormat>("deep_dive");
+  const [promptMode, setPromptMode] = useState<PromptMode>("custom");
   const [prompts, setPrompts] = useState(DEFAULT_PROMPTS);
+  const [isGeneratingPrompts, setIsGeneratingPrompts] = useState(false);
   const [leads, setLeads] = useState<TableLead[]>([]);
   const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -65,6 +140,8 @@ export default function SessionConfig() {
   const [showMapper, setShowMapper] = useState(false);
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
   const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
+
+  const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   const importFromLinkedin = async (index: number) => {
     const url = leads[index]?.linkedinUrl?.trim();
@@ -74,9 +151,7 @@ export default function SessionConfig() {
     }
     setLinkedinLoading((prev) => ({ ...prev, [index]: true }));
     try {
-      const { data, error } = await supabase.functions.invoke('scrape-linkedin', {
-        body: { url },
-      });
+      const { data, error } = await supabase.functions.invoke('scrape-linkedin', { body: { url } });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to scrape');
       const profile = data.data;
@@ -96,6 +171,20 @@ export default function SessionConfig() {
     }
   };
 
+  const autoMapHeaders = (headers: string[]) => {
+    const autoMap: Record<string, string> = {};
+    CANONICAL_FIELDS.forEach((field) => {
+      for (const h of headers) {
+        const match = fuzzyMatchHeader(h, [field]);
+        if (match) {
+          autoMap[field] = h;
+          break;
+        }
+      }
+    });
+    return autoMap;
+  };
+
   const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -106,14 +195,7 @@ export default function SessionConfig() {
         const headers = results.meta.fields || [];
         setCsvHeaders(headers);
         setCsvData(results.data as Record<string, string>[]);
-        // Auto-map matching columns
-        const autoMap: Record<string, string> = {};
-        CANONICAL_FIELDS.forEach((field) => {
-          const match = headers.find(
-            (h) => h.toLowerCase().replace(/[\s_-]/g, "") === field.replace(/_/g, "")
-          );
-          if (match) autoMap[field] = match;
-        });
+        const autoMap = autoMapHeaders(headers);
         setColumnMapping(autoMap);
         const unmapped = CANONICAL_FIELDS.filter((f) => !autoMap[f]);
         if (unmapped.length > 0) setShowMapper(true);
@@ -137,13 +219,7 @@ export default function SessionConfig() {
         const headers = results.meta.fields || [];
         setCsvHeaders(headers);
         setCsvData(results.data as Record<string, string>[]);
-        const autoMap: Record<string, string> = {};
-        CANONICAL_FIELDS.forEach((field) => {
-          const match = headers.find(
-            (h) => h.toLowerCase().replace(/[\s_-]/g, "") === field.replace(/_/g, "")
-          );
-          if (match) autoMap[field] = match;
-        });
+        const autoMap = autoMapHeaders(headers);
         setColumnMapping(autoMap);
         const unmapped = CANONICAL_FIELDS.filter((f) => !autoMap[f]);
         if (unmapped.length > 0) setShowMapper(true);
@@ -151,6 +227,41 @@ export default function SessionConfig() {
       },
     });
   }, []);
+
+  const generatePrompts = async () => {
+    if (csvData.length === 0) {
+      toast.error("Upload company data first to generate prompts");
+      return;
+    }
+    setIsGeneratingPrompts(true);
+    try {
+      const challengeCol = columnMapping["critical_challenges"];
+      const topicCol = columnMapping["topics_of_interest"];
+      const challenges = challengeCol ? csvData.map(r => r[challengeCol]).filter(Boolean) : [];
+      const topics = topicCol ? csvData.map(r => r[topicCol]).filter(Boolean) : [];
+
+      if (challenges.length === 0 && topics.length === 0) {
+        toast.error("No challenges or topics data found in CSV. Check column mapping.");
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('generate-prompts', {
+        body: { challenges, topics },
+      });
+      if (error) throw error;
+      if (data?.prompts?.length) {
+        setPrompts(data.prompts);
+        toast.success("Generated 3 engagement prompts from your data");
+      } else {
+        throw new Error(data?.error || "Failed to generate prompts");
+      }
+    } catch (err: any) {
+      console.error("Prompt generation error:", err);
+      toast.error(err.message || "Failed to generate prompts");
+    } finally {
+      setIsGeneratingPrompts(false);
+    }
+  };
 
   const updateLeadCount = (count: number) => {
     setNumLeads(count);
@@ -173,6 +284,28 @@ export default function SessionConfig() {
 
   const removeTag = (leadIndex: number, tagIndex: number) => {
     updateLead(leadIndex, "expertiseTags", leads[leadIndex].expertiseTags.filter((_, i) => i !== tagIndex));
+  };
+
+  const handleContinue = () => {
+    navigate("/admin/match", {
+      state: {
+        sessionConfig: {
+          sessionName,
+          sessionDate,
+          breakoutStart,
+          breakoutEnd,
+          numTables,
+          targetPerTable,
+          groupingPriority,
+          allowStageMixing,
+          sessionFormat,
+          prompts,
+        },
+        csvData,
+        columnMapping,
+        leads,
+      },
+    });
   };
 
   const groupingOptions: { value: GroupingPriority; label: string; desc: string }[] = [
@@ -211,11 +344,7 @@ export default function SessionConfig() {
               </PopoverContent>
             </Popover>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <div>
-              <Label>Event Start</Label>
-              <Input type="time" value={eventStartTime} onChange={(e) => setEventStartTime(e.target.value)} className="mt-1.5" />
-            </div>
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Breakout Start</Label>
               <Input type="time" value={breakoutStart} onChange={(e) => setBreakoutStart(e.target.value)} className="mt-1.5" />
@@ -315,17 +444,71 @@ export default function SessionConfig() {
                   {sessionFormat === "speed_rounds" && <Check className="h-4 w-4 text-primary" />}
                   <span className="font-medium">Speed Rounds</span>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">3× 20-minute rotations</p>
+                <p className="text-sm text-muted-foreground mt-1">Multiple timed rotations</p>
               </button>
             </div>
+            {sessionFormat === "speed_rounds" && (
+              <div className="mt-3 p-3 rounded-lg bg-muted/50 border">
+                {speedRoundInfo.totalMinutes > 0 ? (
+                  <p className="text-sm font-medium">
+                    {speedRoundInfo.rounds} round{speedRoundInfo.rounds !== 1 ? "s" : ""} × {speedRoundInfo.perRound} min
+                    <span className="text-muted-foreground font-normal ml-2">
+                      ({speedRoundInfo.totalMinutes} min total breakout time)
+                    </span>
+                  </p>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Set valid breakout times to calculate rounds</p>
+                )}
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
       {/* Engagement Prompts */}
       <Card>
-        <CardHeader><CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle></CardHeader>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
+            <div className="flex gap-2">
+              <Button
+                variant={promptMode === "custom" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPromptMode("custom")}
+              >
+                Write Your Own
+              </Button>
+              <Button
+                variant={promptMode === "generate" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setPromptMode("generate")}
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                Generate from Data
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
         <CardContent className="space-y-4">
+          {promptMode === "generate" && (
+            <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
+              <p className="text-sm text-muted-foreground">
+                {csvData.length === 0
+                  ? "Upload company data first, then generate prompts tailored to attendee challenges and interests."
+                  : `Generate prompts from ${csvData.length} companies' challenges and topics.`}
+              </p>
+              <Button
+                onClick={generatePrompts}
+                disabled={csvData.length === 0 || isGeneratingPrompts}
+              >
+                {isGeneratingPrompts ? (
+                  <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</>
+                ) : (
+                  <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>
+                )}
+              </Button>
+            </div>
+          )}
           {prompts.map((prompt, i) => (
             <div key={i}>
               <Label>Prompt {i + 1}</Label>
@@ -362,10 +545,18 @@ export default function SessionConfig() {
                 <div className="flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5 text-primary" />
                   <span className="font-medium">{csvData.length} companies imported</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {Object.values(columnMapping).filter(Boolean).length}/{CANONICAL_FIELDS.length} fields mapped
+                  </Badge>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); }}>
-                  Replace File
-                </Button>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setShowMapper(!showMapper)}>
+                    {showMapper ? "Hide Mapper" : "Edit Mapping"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); }}>
+                    Replace File
+                  </Button>
+                </div>
               </div>
 
               {showMapper && (
@@ -394,7 +585,6 @@ export default function SessionConfig() {
                 <div className="flex items-center justify-between">
                   <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
                 </div>
-                {/* LinkedIn Import */}
                 <div>
                   <Label>LinkedIn Profile</Label>
                   <div className="flex gap-2 mt-1.5">
@@ -460,7 +650,7 @@ export default function SessionConfig() {
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline">Save Draft</Button>
-        <Button disabled={csvData.length === 0 || !sessionName}>
+        <Button disabled={csvData.length === 0 || !sessionName} onClick={handleContinue}>
           Continue to Matching →
         </Button>
       </div>
