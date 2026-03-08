@@ -26,106 +26,134 @@ Deno.serve(async (req) => {
       );
     }
 
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'AI gateway not configured' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Extract username from LinkedIn URL
     const usernameMatch = url.match(/linkedin\.com\/in\/([^/?#]+)/);
     const username = usernameMatch?.[1]?.replace(/\/$/, '') || '';
-    const searchName = username.replace(/-/g, ' ');
 
-    console.log('Looking up LinkedIn profile for:', username);
+    console.log('Looking up LinkedIn profile for:', username, 'URL:', url);
 
-    // Run two searches in parallel for richer data
+    // Run two searches in parallel — use the exact URL as search query for precision
     const [linkedinSearch, webSearch] = await Promise.all([
-      // Search 1: Find the LinkedIn listing itself
       fetch('https://api.firecrawl.dev/v1/search', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `"${searchName}" site:linkedin.com/in/${username}`,
+          query: `"linkedin.com/in/${username}"`,
           limit: 3,
+          scrapeOptions: { formats: ['markdown'] },
         }),
       }).then(r => r.json()),
-      // Search 2: Find broader web presence (bio, articles, company info)
       fetch('https://api.firecrawl.dev/v1/search', {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          query: `"${searchName}" founder CEO advisor investor biography`,
+          query: `"${username.replace(/-/g, ' ')}" linkedin professional`,
           limit: 5,
           scrapeOptions: { formats: ['markdown'] },
         }),
       }).then(r => r.json()),
     ]);
 
-    console.log('LinkedIn search results:', JSON.stringify(linkedinSearch).slice(0, 500));
-    console.log('Web search results:', JSON.stringify(webSearch).slice(0, 500));
+    console.log('LinkedIn search results count:', (linkedinSearch.data || []).length);
+    console.log('Web search results count:', (webSearch.data || []).length);
 
-    // Combine all text from both searches
+    // Aggregate all text from both searches
     const linkedinResults = linkedinSearch.data || linkedinSearch.results || [];
     const webResults = webSearch.data || webSearch.results || [];
 
-    // Extract name from LinkedIn result title (e.g. "Adeleke Adesida - CEO at Company | LinkedIn")
-    const linkedinTitle = linkedinResults[0]?.title || '';
-    const linkedinDesc = linkedinResults[0]?.description || '';
-    const nameMatch = linkedinTitle.match(/^(.*?)(?:\s*[-–|])/);
-    let name = nameMatch?.[1]?.trim() || '';
-    if (!name) {
-      name = searchName.split(' ').map((w: string) => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    const allText = [
+      ...linkedinResults.map((r: any) => `[LinkedIn Result] Title: ${r.title || ''}\nURL: ${r.url || ''}\nDescription: ${r.description || ''}\nContent: ${(r.markdown || '').slice(0, 2000)}`),
+      ...webResults.map((r: any) => `[Web Result] Title: ${r.title || ''}\nURL: ${r.url || ''}\nDescription: ${r.description || ''}\nContent: ${(r.markdown || '').slice(0, 1500)}`),
+    ].join('\n\n---\n\n');
+
+    if (!allText.trim()) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'No search results found for this profile' }),
+        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    // Extract headline/role from LinkedIn description
-    // LinkedIn descriptions typically look like: "Title at Company. Location. Summary..."
-    const headline = linkedinDesc.split(/\.\s/)?.[0]?.trim() || linkedinDesc.slice(0, 150).trim() || '';
+    // Use AI to extract structured profile data
+    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-3-flash-preview',
+        messages: [
+          {
+            role: 'system',
+            content: `You are extracting professional profile information from search results about a LinkedIn user. The target LinkedIn profile URL is: ${url}. Focus on results that match this specific person. Extract their real full name, professional headline/role, expertise areas, and network value.`,
+          },
+          {
+            role: 'user',
+            content: `Extract profile information from these search results:\n\n${allText.slice(0, 8000)}`,
+          },
+        ],
+        tools: [
+          {
+            type: 'function',
+            function: {
+              name: 'extract_profile',
+              description: 'Extract structured LinkedIn profile data',
+              parameters: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string', description: 'Full name of the person' },
+                  headline: { type: 'string', description: 'Professional headline or current role (e.g. "CEO at Company X")' },
+                  expertiseTags: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Up to 10 expertise/industry tags (e.g. SaaS, FinTech, Series A, AI, Go-to-Market)',
+                  },
+                  networkStrengths: { type: 'string', description: 'Summary of their network value and professional strengths (1-2 sentences)' },
+                  notes: { type: 'string', description: 'Key background info, achievements, and relevant context' },
+                },
+                required: ['name', 'headline', 'expertiseTags', 'networkStrengths', 'notes'],
+                additionalProperties: false,
+              },
+            },
+          },
+        ],
+        tool_choice: { type: 'function', function: { name: 'extract_profile' } },
+      }),
+    });
 
-    // Gather all text for keyword extraction
-    const allTexts = [
-      linkedinTitle, linkedinDesc,
-      ...linkedinResults.map((r: any) => `${r.title || ''} ${r.description || ''}`),
-      ...webResults.map((r: any) => `${r.title || ''} ${r.description || ''} ${r.markdown || ''}`),
-    ].join('\n');
-
-    // Extract expertise keywords
-    const tags = new Set<string>();
-    const patterns: [RegExp, (m: string) => string][] = [
-      [/\b(?:SaaS|B2B|B2C|HealthTech|FinTech|EdTech|GovTech|DeepTech|PropTech|CleanTech|AgriTech|InsurTech|LegalTech|MarTech|HRTech|RegTech|BioTech|MedTech|FoodTech)\b/gi, (m) => m],
-      [/\b(?:AI|ML|Machine Learning|Artificial Intelligence|Cybersecurity|IoT|Blockchain|Cloud|Data Science|Analytics)\b/gi, (m) => m],
-      [/\b(?:Series [A-F]|Seed|Pre-seed|Growth Stage|Scale-up)\b/gi, (m) => m],
-      [/\b(?:GTM|Go-to-Market|Fundraising|Product Management|Engineering|Sales Leadership|Marketing|Operations|Strategy|Consulting)\b/gi, (m) => m],
-      [/\b(?:Venture Capital|Private Equity|Angel Investor?|Board Member|Advisor|Mentor|Founder|Co-founder|CEO|CTO|COO|CFO|CMO|CPO|VP|Director)\b/gi, (m) => m],
-    ];
-
-    for (const [pattern, transform] of patterns) {
-      const matches = allTexts.match(pattern) || [];
-      for (const m of matches) {
-        const tag = transform(m.trim());
-        // Normalize: capitalize first letter
-        tags.add(tag.charAt(0).toUpperCase() + tag.slice(1));
+    if (!aiResponse.ok) {
+      const errText = await aiResponse.text();
+      console.error('AI gateway error:', aiResponse.status, errText);
+      if (aiResponse.status === 429) {
+        return new Response(JSON.stringify({ success: false, error: 'Rate limited, please try again shortly.' }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
+      throw new Error('AI extraction failed');
     }
 
-    // Build network strengths from headline + any company/role info
-    const roleMatch = linkedinTitle.match(/[-–|]\s*(.*?)(?:\s*[-–|]\s*LinkedIn)?$/i);
-    const roleInfo = roleMatch?.[1]?.trim() || '';
-    const networkStrengths = [roleInfo, headline].filter(Boolean).join(' — ').slice(0, 200) || headline;
+    const aiData = await aiResponse.json();
+    const toolCall = aiData.choices?.[0]?.message?.tool_calls?.[0];
+    if (!toolCall) throw new Error('No tool call in AI response');
 
-    // Build notes with context
-    const noteLines = [`LinkedIn: ${url}`];
-    if (headline) noteLines.push(`\n${headline}`);
-    if (roleInfo && roleInfo !== headline) noteLines.push(roleInfo);
-    // Add snippets from web results
-    const snippets = webResults
-      .filter((r: any) => r.description)
-      .map((r: any) => `• ${r.description.slice(0, 150)}`)
-      .slice(0, 3);
-    if (snippets.length) noteLines.push('\nWeb mentions:', ...snippets);
+    const profile = JSON.parse(toolCall.function.arguments);
+    console.log('AI extracted profile:', profile.name, '- Tags:', profile.expertiseTags?.length);
 
     return new Response(
       JSON.stringify({
         success: true,
         data: {
-          name,
-          expertiseTags: [...tags].slice(0, 10),
-          networkStrengths: networkStrengths || headline,
-          notes: noteLines.join('\n'),
+          name: profile.name || username.replace(/-/g, ' '),
+          expertiseTags: (profile.expertiseTags || []).slice(0, 10),
+          networkStrengths: profile.networkStrengths || profile.headline || '',
+          notes: `LinkedIn: ${url}\n${profile.headline || ''}\n\n${profile.notes || ''}`.trim(),
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

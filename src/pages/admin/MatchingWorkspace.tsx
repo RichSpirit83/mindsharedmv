@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Shuffle, Lock, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const TABLE_COLORS = [
   "bg-table-blue", "bg-table-teal", "bg-table-green", "bg-table-yellow",
@@ -60,6 +62,38 @@ export default function MatchingWorkspace() {
     stage: row[columnMapping["sales_stage"] || ""] || "",
     revenue: row[columnMapping["revenue"] || ""] || "",
   }));
+
+  // Build full company data for the AI (includes all mapped fields)
+  const fullCompanyData = csvData.map((row) => {
+    const mapped: Record<string, string> = {};
+    for (const [canonical, csvCol] of Object.entries(columnMapping)) {
+      if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
+    }
+    return mapped;
+  });
+
+  const generateMatches = async () => {
+    setIsGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("generate-matches", {
+        body: {
+          companies: fullCompanyData,
+          sessionConfig,
+          leads: sessionState?.leads || [],
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setTables(data.tables || []);
+      setHasGenerated(true);
+      toast.success(`Generated ${data.tables?.length || 0} table groupings`);
+    } catch (err: any) {
+      console.error("Match generation failed:", err);
+      toast.error(err.message || "Failed to generate matches");
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   const filteredCompanies = companies.filter(
     (c) =>
@@ -119,7 +153,7 @@ export default function MatchingWorkspace() {
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
-            <Button size="sm" disabled={isGenerating || companies.length === 0}>
+            <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={generateMatches}>
               <Sparkles className="h-4 w-4 mr-1" />
               {isGenerating ? "Generating..." : "Generate Matches"}
             </Button>
@@ -166,7 +200,9 @@ export default function MatchingWorkspace() {
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
-            <Button variant="outline">Regenerate All</Button>
+            <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
+              {isGenerating ? "Regenerating..." : "Regenerate All"}
+            </Button>
             <Button>
               <Check className="h-4 w-4 mr-1" /> Finalize & Publish
             </Button>
