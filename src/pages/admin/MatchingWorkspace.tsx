@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Search, Shuffle, Lock, Sparkles, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 const TABLE_COLORS = [
   "bg-table-blue", "bg-table-teal", "bg-table-green", "bg-table-yellow",
