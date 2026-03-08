@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -49,7 +49,6 @@ const CANONICAL_FIELDS = [
   "topics_of_interest", "critical_challenges", "additional_info",
 ];
 
-// Alias map for fuzzy matching CSV headers to canonical fields
 const FIELD_ALIASES: Record<string, string[]> = {
   company_name: ["company name", "companyname", "company"],
   first_name: ["first name", "firstname", "first"],
@@ -87,14 +86,11 @@ const FIELD_ALIASES: Record<string, string[]> = {
 function fuzzyMatchHeader(header: string, canonicalFields: string[]): string | null {
   const normalized = header.toLowerCase().replace(/[\s_\-\/\?\(\)#,.']+/g, " ").trim();
   const collapsed = normalized.replace(/\s+/g, "");
-
   for (const field of canonicalFields) {
     const aliases = FIELD_ALIASES[field] || [field.replace(/_/g, " ")];
     for (const alias of aliases) {
       const aliasCollapsed = alias.replace(/[\s_\-\/\?\(\)#,.']+/g, "");
-      // Exact collapsed match
       if (collapsed === aliasCollapsed) return field;
-      // Header starts with alias (for long column names)
       if (collapsed.startsWith(aliasCollapsed) && aliasCollapsed.length >= 6) return field;
       if (aliasCollapsed.startsWith(collapsed) && collapsed.length >= 6) return field;
     }
@@ -107,19 +103,15 @@ function computeSpeedRounds(breakoutStart: string, breakoutEnd: string) {
   const [eh, em] = breakoutEnd.split(":").map(Number);
   const totalMinutes = (eh * 60 + em) - (sh * 60 + sm);
   if (totalMinutes <= 0) return { rounds: 0, perRound: 0, totalMinutes: 0 };
-
-  // Try 20-min rounds first, then 15-min if needed
   let perRound = 20;
   let rounds = Math.floor(totalMinutes / perRound);
-  if (rounds < 2) {
-    perRound = 15;
-    rounds = Math.floor(totalMinutes / perRound);
-  }
+  if (rounds < 2) { perRound = 15; rounds = Math.floor(totalMinutes / perRound); }
   return { rounds: Math.max(rounds, 1), perRound, totalMinutes };
 }
 
 export default function SessionConfig() {
   const navigate = useNavigate();
+  const { sessionId } = useParams<{ sessionId: string }>();
   const [sessionName, setSessionName] = useState("");
   const [sessionDate, setSessionDate] = useState<Date>();
   const [breakoutStart, setBreakoutStart] = useState("10:00");
@@ -140,15 +132,136 @@ export default function SessionConfig() {
   const [showMapper, setShowMapper] = useState(false);
   const [tagInput, setTagInput] = useState<Record<string, string>>({});
   const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
+  const [pdfLoading, setPdfLoading] = useState<Record<number, boolean>>({});
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
+  // Load session from DB
+  useEffect(() => {
+    if (!sessionId) return;
+    const load = async () => {
+      const { data: session } = await supabase
+        .from("breakout_sessions")
+        .select("*")
+        .eq("id", sessionId)
+        .single();
+      if (!session) { toast.error("Session not found"); navigate("/admin"); return; }
+
+      setSessionName(session.session_name || "");
+      if (session.session_date) setSessionDate(new Date(session.session_date));
+      setBreakoutStart(session.breakout_start || "10:00");
+      setBreakoutEnd(session.breakout_end || "11:00");
+      setNumTables(session.num_tables || 5);
+      setTargetPerTable(session.target_per_table || 6);
+      setGroupingPriority((session.grouping_priority as GroupingPriority) || "sector");
+      setAllowStageMixing(session.allow_stage_mixing ?? true);
+      setSessionFormat((session.session_format as SessionFormat) || "deep_dive");
+      setPrompts((session.prompts as string[]) || DEFAULT_PROMPTS);
+      setColumnMapping((session.column_mapping as Record<string, string>) || {});
+
+      // Load companies
+      const { data: companies } = await supabase
+        .from("breakout_companies")
+        .select("*")
+        .eq("session_id", sessionId);
+      if (companies && companies.length > 0) {
+        const rows = companies.map((c) => c.raw_data as Record<string, string>);
+        setCsvData(rows);
+        if (rows[0]) setCsvHeaders(Object.keys(rows[0]));
+      }
+
+      // Load leads
+      const { data: dbLeads } = await supabase
+        .from("breakout_leads")
+        .select("*")
+        .eq("session_id", sessionId);
+      if (dbLeads && dbLeads.length > 0) {
+        const mapped = dbLeads.map((l) => ({
+          id: l.id,
+          name: l.name || "",
+          expertiseTags: (l.expertise_tags as string[]) || [],
+          networkStrengths: l.network_strengths || "",
+          notes: l.notes || "",
+          linkedinUrl: l.linkedin_url || "",
+        }));
+        setLeads(mapped);
+        setNumLeads(mapped.length);
+      }
+
+      setLoaded(true);
+    };
+    load();
+  }, [sessionId]);
+
+  // Auto-save (debounced)
+  const saveToDb = useCallback(async () => {
+    if (!sessionId || !loaded) return;
+    setSaving(true);
+    try {
+      await supabase.from("breakout_sessions").update({
+        session_name: sessionName,
+        session_date: sessionDate ? format(sessionDate, "yyyy-MM-dd") : null,
+        breakout_start: breakoutStart,
+        breakout_end: breakoutEnd,
+        num_tables: numTables,
+        target_per_table: targetPerTable,
+        grouping_priority: groupingPriority,
+        allow_stage_mixing: allowStageMixing,
+        session_format: sessionFormat,
+        prompts: prompts as any,
+        column_mapping: columnMapping as any,
+      }).eq("id", sessionId);
+
+      // Save companies: delete old, insert new
+      if (csvData.length > 0) {
+        await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
+        const companyRows = csvData.map((row) => {
+          const mapped: Record<string, string> = {};
+          for (const [canonical, csvCol] of Object.entries(columnMapping)) {
+            if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
+          }
+          return { session_id: sessionId, raw_data: row as any, mapped_data: mapped as any };
+        });
+        // Insert in batches of 100
+        for (let i = 0; i < companyRows.length; i += 100) {
+          await supabase.from("breakout_companies").insert(companyRows.slice(i, i + 100));
+        }
+      }
+
+      // Save leads
+      await supabase.from("breakout_leads").delete().eq("session_id", sessionId);
+      if (leads.length > 0) {
+        const leadRows = leads.map((l) => ({
+          session_id: sessionId,
+          name: l.name,
+          linkedin_url: l.linkedinUrl,
+          network_strengths: l.networkStrengths,
+          notes: l.notes,
+          expertise_tags: l.expertiseTags as any,
+        }));
+        await supabase.from("breakout_leads").insert(leadRows);
+      }
+    } catch (err) {
+      console.error("Auto-save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionId, loaded, sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads]);
+
+  // Debounce auto-save
+  useEffect(() => {
+    if (!loaded || !sessionId) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(saveToDb, 2000);
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
+  }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads, saveToDb]);
+
   const importFromLinkedin = async (index: number) => {
     const url = leads[index]?.linkedinUrl?.trim();
-    if (!url || !url.includes('linkedin.com')) {
-      toast.error("Please enter a valid LinkedIn URL");
-      return;
-    }
+    if (!url || !url.includes('linkedin.com')) { toast.error("Please enter a valid LinkedIn URL"); return; }
     setLinkedinLoading((prev) => ({ ...prev, [index]: true }));
     try {
       const { data, error } = await supabase.functions.invoke('scrape-linkedin', { body: { url } });
@@ -165,9 +278,42 @@ export default function SessionConfig() {
       toast.success(`Imported profile for ${profile.name || 'lead'}`);
     } catch (err: any) {
       console.error('LinkedIn import error:', err);
-      toast.error(err.message || "Failed to import LinkedIn profile");
+      toast.error(err.message || "Failed to import LinkedIn profile. Try uploading a PDF instead.");
     } finally {
       setLinkedinLoading((prev) => ({ ...prev, [index]: false }));
+    }
+  };
+
+  const handlePdfUpload = async (index: number, file: File) => {
+    if (!file || !file.name.endsWith('.pdf')) { toast.error("Please upload a PDF file"); return; }
+    setPdfLoading((prev) => ({ ...prev, [index]: true }));
+    try {
+      // Read PDF as text (basic extraction)
+      const text = await file.text();
+
+      // Upload to storage
+      const filePath = `${sessionId}/${leads[index].id}_${file.name}`;
+      await supabase.storage.from('lead-profiles').upload(filePath, file, { upsert: true });
+
+      // Call AI to extract profile data
+      const { data, error } = await supabase.functions.invoke('parse-lead-pdf', { body: { pdfText: text } });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Failed to parse PDF');
+
+      const profile = data.data;
+      setLeads((prev) => prev.map((l, i) => i === index ? {
+        ...l,
+        name: profile.name || l.name,
+        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : l.expertiseTags,
+        networkStrengths: profile.networkStrengths || l.networkStrengths,
+        notes: profile.notes || l.notes,
+      } : l));
+      toast.success(`Extracted profile from PDF for ${profile.name || 'lead'}`);
+    } catch (err: any) {
+      console.error('PDF import error:', err);
+      toast.error(err.message || "Failed to parse PDF");
+    } finally {
+      setPdfLoading((prev) => ({ ...prev, [index]: false }));
     }
   };
 
@@ -176,10 +322,7 @@ export default function SessionConfig() {
     CANONICAL_FIELDS.forEach((field) => {
       for (const h of headers) {
         const match = fuzzyMatchHeader(h, [field]);
-        if (match) {
-          autoMap[field] = h;
-          break;
-        }
+        if (match) { autoMap[field] = h; break; }
       }
     });
     return autoMap;
@@ -189,16 +332,14 @@ export default function SessionConfig() {
     const file = e.target.files?.[0];
     if (!file) return;
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
+      header: true, skipEmptyLines: true,
       complete: (results) => {
         const headers = results.meta.fields || [];
         setCsvHeaders(headers);
         setCsvData(results.data as Record<string, string>[]);
         const autoMap = autoMapHeaders(headers);
         setColumnMapping(autoMap);
-        const unmapped = CANONICAL_FIELDS.filter((f) => !autoMap[f]);
-        if (unmapped.length > 0) setShowMapper(true);
+        if (CANONICAL_FIELDS.filter((f) => !autoMap[f]).length > 0) setShowMapper(true);
         toast.success(`Imported ${results.data.length} companies`);
       },
       error: () => toast.error("Failed to parse CSV"),
@@ -208,55 +349,35 @@ export default function SessionConfig() {
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (!file || !file.name.endsWith(".csv")) {
-      toast.error("Please drop a CSV file");
-      return;
-    }
+    if (!file || !file.name.endsWith(".csv")) { toast.error("Please drop a CSV file"); return; }
     Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
+      header: true, skipEmptyLines: true,
       complete: (results) => {
         const headers = results.meta.fields || [];
         setCsvHeaders(headers);
         setCsvData(results.data as Record<string, string>[]);
         const autoMap = autoMapHeaders(headers);
         setColumnMapping(autoMap);
-        const unmapped = CANONICAL_FIELDS.filter((f) => !autoMap[f]);
-        if (unmapped.length > 0) setShowMapper(true);
+        if (CANONICAL_FIELDS.filter((f) => !autoMap[f]).length > 0) setShowMapper(true);
         toast.success(`Imported ${results.data.length} companies`);
       },
     });
   }, []);
 
   const generatePrompts = async () => {
-    if (csvData.length === 0) {
-      toast.error("Upload company data first to generate prompts");
-      return;
-    }
+    if (csvData.length === 0) { toast.error("Upload company data first to generate prompts"); return; }
     setIsGeneratingPrompts(true);
     try {
       const challengeCol = columnMapping["critical_challenges"];
       const topicCol = columnMapping["topics_of_interest"];
       const challenges = challengeCol ? csvData.map(r => r[challengeCol]).filter(Boolean) : [];
       const topics = topicCol ? csvData.map(r => r[topicCol]).filter(Boolean) : [];
-
-      if (challenges.length === 0 && topics.length === 0) {
-        toast.error("No challenges or topics data found in CSV. Check column mapping.");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('generate-prompts', {
-        body: { challenges, topics },
-      });
+      if (challenges.length === 0 && topics.length === 0) { toast.error("No challenges or topics data found."); return; }
+      const { data, error } = await supabase.functions.invoke('generate-prompts', { body: { challenges, topics } });
       if (error) throw error;
-      if (data?.prompts?.length) {
-        setPrompts(data.prompts);
-        toast.success("Generated 3 engagement prompts from your data");
-      } else {
-        throw new Error(data?.error || "Failed to generate prompts");
-      }
+      if (data?.prompts?.length) { setPrompts(data.prompts); toast.success("Generated 3 engagement prompts"); }
+      else throw new Error(data?.error || "Failed to generate prompts");
     } catch (err: any) {
-      console.error("Prompt generation error:", err);
       toast.error(err.message || "Failed to generate prompts");
     } finally {
       setIsGeneratingPrompts(false);
@@ -286,26 +407,9 @@ export default function SessionConfig() {
     updateLead(leadIndex, "expertiseTags", leads[leadIndex].expertiseTags.filter((_, i) => i !== tagIndex));
   };
 
-  const handleContinue = () => {
-    navigate("/admin/match", {
-      state: {
-        sessionConfig: {
-          sessionName,
-          sessionDate,
-          breakoutStart,
-          breakoutEnd,
-          numTables,
-          targetPerTable,
-          groupingPriority,
-          allowStageMixing,
-          sessionFormat,
-          prompts,
-        },
-        csvData,
-        columnMapping,
-        leads,
-      },
-    });
+  const handleContinue = async () => {
+    await saveToDb();
+    navigate(`/admin/match/${sessionId}`);
   };
 
   const groupingOptions: { value: GroupingPriority; label: string; desc: string }[] = [
@@ -317,9 +421,21 @@ export default function SessionConfig() {
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
-        <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
+          <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
+        </div>
+        {saving && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin" /> Saving...
+          </div>
+        )}
+        {!saving && loaded && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Save className="h-3 w-3" /> Auto-saved
+          </div>
+        )}
       </div>
 
       {/* Session Details */}
@@ -391,9 +507,7 @@ export default function SessionConfig() {
                 onClick={() => setGroupingPriority(opt.value)}
                 className={cn(
                   "text-left p-4 rounded-lg border-2 transition-all",
-                  groupingPriority === opt.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border hover:border-muted-foreground/30"
+                  groupingPriority === opt.value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -404,9 +518,7 @@ export default function SessionConfig() {
               </button>
             ))}
           </div>
-
           <Separator />
-
           <div className="flex items-center justify-between">
             <div>
               <Label>Allow stage mixing within tables</Label>
@@ -414,18 +526,13 @@ export default function SessionConfig() {
             </div>
             <Switch checked={allowStageMixing} onCheckedChange={setAllowStageMixing} />
           </div>
-
           <Separator />
-
           <div>
             <Label className="mb-3 block">Session Format</Label>
             <div className="grid gap-3 md:grid-cols-2">
               <button
                 onClick={() => setSessionFormat("deep_dive")}
-                className={cn(
-                  "text-left p-4 rounded-lg border-2 transition-all",
-                  sessionFormat === "deep_dive" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
-                )}
+                className={cn("text-left p-4 rounded-lg border-2 transition-all", sessionFormat === "deep_dive" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30")}
               >
                 <div className="flex items-center gap-2">
                   {sessionFormat === "deep_dive" && <Check className="h-4 w-4 text-primary" />}
@@ -435,10 +542,7 @@ export default function SessionConfig() {
               </button>
               <button
                 onClick={() => setSessionFormat("speed_rounds")}
-                className={cn(
-                  "text-left p-4 rounded-lg border-2 transition-all",
-                  sessionFormat === "speed_rounds" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30"
-                )}
+                className={cn("text-left p-4 rounded-lg border-2 transition-all", sessionFormat === "speed_rounds" ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/30")}
               >
                 <div className="flex items-center gap-2">
                   {sessionFormat === "speed_rounds" && <Check className="h-4 w-4 text-primary" />}
@@ -452,9 +556,7 @@ export default function SessionConfig() {
                 {speedRoundInfo.totalMinutes > 0 ? (
                   <p className="text-sm font-medium">
                     {speedRoundInfo.rounds} round{speedRoundInfo.rounds !== 1 ? "s" : ""} × {speedRoundInfo.perRound} min
-                    <span className="text-muted-foreground font-normal ml-2">
-                      ({speedRoundInfo.totalMinutes} min total breakout time)
-                    </span>
+                    <span className="text-muted-foreground font-normal ml-2">({speedRoundInfo.totalMinutes} min total)</span>
                   </p>
                 ) : (
                   <p className="text-sm text-muted-foreground">Set valid breakout times to calculate rounds</p>
@@ -471,20 +573,9 @@ export default function SessionConfig() {
           <div className="flex items-center justify-between">
             <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
             <div className="flex gap-2">
-              <Button
-                variant={promptMode === "custom" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPromptMode("custom")}
-              >
-                Write Your Own
-              </Button>
-              <Button
-                variant={promptMode === "generate" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setPromptMode("generate")}
-              >
-                <Sparkles className="h-4 w-4 mr-1" />
-                Generate from Data
+              <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
+              <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
+                <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
               </Button>
             </div>
           </div>
@@ -493,30 +584,17 @@ export default function SessionConfig() {
           {promptMode === "generate" && (
             <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
               <p className="text-sm text-muted-foreground">
-                {csvData.length === 0
-                  ? "Upload company data first, then generate prompts tailored to attendee challenges and interests."
-                  : `Generate prompts from ${csvData.length} companies' challenges and topics.`}
+                {csvData.length === 0 ? "Upload company data first." : `Generate prompts from ${csvData.length} companies' data.`}
               </p>
-              <Button
-                onClick={generatePrompts}
-                disabled={csvData.length === 0 || isGeneratingPrompts}
-              >
-                {isGeneratingPrompts ? (
-                  <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</>
-                ) : (
-                  <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>
-                )}
+              <Button onClick={generatePrompts} disabled={csvData.length === 0 || isGeneratingPrompts}>
+                {isGeneratingPrompts ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</> : <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>}
               </Button>
             </div>
           )}
           {prompts.map((prompt, i) => (
             <div key={i}>
               <Label>Prompt {i + 1}</Label>
-              <Textarea
-                value={prompt}
-                onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))}
-                className="mt-1.5 min-h-[80px]"
-              />
+              <Textarea value={prompt} onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))} className="mt-1.5 min-h-[80px]" />
             </div>
           ))}
         </CardContent>
@@ -527,11 +605,7 @@ export default function SessionConfig() {
         <CardHeader><CardTitle className="font-heading text-lg">Company Data Upload</CardTitle></CardHeader>
         <CardContent>
           {csvData.length === 0 ? (
-            <div
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={handleDrop}
-              className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer"
-            >
+            <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer">
               <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" id="csv-upload" />
               <label htmlFor="csv-upload" className="cursor-pointer">
                 <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
@@ -558,17 +632,9 @@ export default function SessionConfig() {
                   </Button>
                 </div>
               </div>
-
               {showMapper && (
-                <ColumnMapper
-                  csvHeaders={csvHeaders}
-                  canonicalFields={CANONICAL_FIELDS}
-                  mapping={columnMapping}
-                  onMappingChange={(m) => setColumnMapping(m)}
-                  onConfirm={() => setShowMapper(false)}
-                />
+                <ColumnMapper csvHeaders={csvHeaders} canonicalFields={CANONICAL_FIELDS} mapping={columnMapping} onMappingChange={(m) => setColumnMapping(m)} onConfirm={() => setShowMapper(false)} />
               )}
-
               {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} />}
             </div>
           )}
@@ -594,19 +660,27 @@ export default function SessionConfig() {
                       placeholder="https://linkedin.com/in/username"
                       className="flex-1"
                     />
-                    <Button
-                      variant="outline"
-                      onClick={() => importFromLinkedin(i)}
-                      disabled={linkedinLoading[i] || !lead.linkedinUrl}
-                    >
-                      {linkedinLoading[i] ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                      ) : (
-                        <Linkedin className="h-4 w-4 mr-1" />
-                      )}
+                    <Button variant="outline" onClick={() => importFromLinkedin(i)} disabled={linkedinLoading[i] || !lead.linkedinUrl}>
+                      {linkedinLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Linkedin className="h-4 w-4 mr-1" />}
                       {linkedinLoading[i] ? "Importing…" : "Import"}
                     </Button>
+                    <div>
+                      <input
+                        type="file"
+                        accept=".pdf"
+                        className="hidden"
+                        id={`pdf-upload-${i}`}
+                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfUpload(i, f); }}
+                      />
+                      <Button variant="outline" asChild disabled={pdfLoading[i]}>
+                        <label htmlFor={`pdf-upload-${i}`} className="cursor-pointer">
+                          {pdfLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileUp className="h-4 w-4 mr-1" />}
+                          PDF
+                        </label>
+                      </Button>
+                    </div>
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">Import from LinkedIn or upload a PDF profile as backup</p>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
@@ -621,9 +695,7 @@ export default function SessionConfig() {
                     <Label>Expertise Tags</Label>
                     <div className="flex flex-wrap gap-2 mt-1.5 mb-2">
                       {lead.expertiseTags.map((tag, ti) => (
-                        <Badge key={ti} variant="secondary" className="gap-1 cursor-pointer" onClick={() => removeTag(i, ti)}>
-                          {tag} ×
-                        </Badge>
+                        <Badge key={ti} variant="secondary" className="gap-1 cursor-pointer" onClick={() => removeTag(i, ti)}>{tag} ×</Badge>
                       ))}
                     </div>
                     <div className="flex gap-2">
@@ -649,7 +721,9 @@ export default function SessionConfig() {
 
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
-        <Button variant="outline">Save Draft</Button>
+        <Button variant="outline" onClick={saveToDb} disabled={saving}>
+          {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
+        </Button>
         <Button disabled={csvData.length === 0 || !sessionName} onClick={handleContinue}>
           Continue to Matching →
         </Button>

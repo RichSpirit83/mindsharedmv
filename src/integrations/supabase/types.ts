@@ -14,7 +14,216 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      breakout_companies: {
+        Row: {
+          created_at: string
+          id: string
+          mapped_data: Json | null
+          raw_data: Json | null
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          mapped_data?: Json | null
+          raw_data?: Json | null
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          mapped_data?: Json | null
+          raw_data?: Json | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_companies_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      breakout_leads: {
+        Row: {
+          created_at: string
+          expertise_tags: Json | null
+          id: string
+          linkedin_url: string | null
+          name: string | null
+          network_strengths: string | null
+          notes: string | null
+          profile_pdf_url: string | null
+          session_id: string
+        }
+        Insert: {
+          created_at?: string
+          expertise_tags?: Json | null
+          id?: string
+          linkedin_url?: string | null
+          name?: string | null
+          network_strengths?: string | null
+          notes?: string | null
+          profile_pdf_url?: string | null
+          session_id: string
+        }
+        Update: {
+          created_at?: string
+          expertise_tags?: Json | null
+          id?: string
+          linkedin_url?: string | null
+          name?: string | null
+          network_strengths?: string | null
+          notes?: string | null
+          profile_pdf_url?: string | null
+          session_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_leads_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      breakout_sessions: {
+        Row: {
+          allow_stage_mixing: boolean | null
+          breakout_end: string | null
+          breakout_start: string | null
+          column_mapping: Json | null
+          created_at: string
+          grouping_priority: string | null
+          id: string
+          num_tables: number | null
+          prompts: Json | null
+          session_date: string | null
+          session_format: string | null
+          session_name: string
+          status: string | null
+          target_per_table: number | null
+          updated_at: string
+        }
+        Insert: {
+          allow_stage_mixing?: boolean | null
+          breakout_end?: string | null
+          breakout_start?: string | null
+          column_mapping?: Json | null
+          created_at?: string
+          grouping_priority?: string | null
+          id?: string
+          num_tables?: number | null
+          prompts?: Json | null
+          session_date?: string | null
+          session_format?: string | null
+          session_name?: string
+          status?: string | null
+          target_per_table?: number | null
+          updated_at?: string
+        }
+        Update: {
+          allow_stage_mixing?: boolean | null
+          breakout_end?: string | null
+          breakout_start?: string | null
+          column_mapping?: Json | null
+          created_at?: string
+          grouping_priority?: string | null
+          id?: string
+          num_tables?: number | null
+          prompts?: Json | null
+          session_date?: string | null
+          session_format?: string | null
+          session_name?: string
+          status?: string | null
+          target_per_table?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      breakout_table_assignments: {
+        Row: {
+          company_id: string
+          id: string
+          table_id: string
+        }
+        Insert: {
+          company_id: string
+          id?: string
+          table_id: string
+        }
+        Update: {
+          company_id?: string
+          id?: string
+          table_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_table_assignments_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakout_table_assignments_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      breakout_tables: {
+        Row: {
+          created_at: string
+          id: string
+          rationale: string | null
+          session_id: string
+          shared_challenges: Json | null
+          stage_mix: string | null
+          suggested_lead: string | null
+          table_name: string | null
+          table_number: number
+          theme: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          session_id: string
+          shared_challenges?: Json | null
+          stage_mix?: string | null
+          suggested_lead?: string | null
+          table_name?: string | null
+          table_number: number
+          theme?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          session_id?: string
+          shared_challenges?: Json | null
+          stage_mix?: string | null
+          suggested_lead?: string | null
+          table_name?: string | null
+          table_number?: number
+          theme?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_tables_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,5 +1,5 @@
-import { Outlet, useLocation } from "react-router-dom";
-import { Settings, Shuffle, Users, LayoutDashboard } from "lucide-react";
+import { Outlet } from "react-router-dom";
+import { Settings, Shuffle, Users, LayoutDashboard, LayoutGrid } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
   Sidebar,
@@ -16,9 +16,7 @@ import {
 } from "@/components/ui/sidebar";
 
 const navItems = [
-  { title: "Session Config", url: "/admin", icon: Settings },
-  { title: "Matching", url: "/admin/match", icon: Shuffle },
-  { title: "Lead Briefings", url: "/admin/leads", icon: Users },
+  { title: "Breakouts", url: "/admin", icon: LayoutGrid, end: true },
 ];
 
 function AppSidebar() {
@@ -50,7 +48,7 @@ function AppSidebar() {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
-                      end={item.url === "/admin"}
+                      end={item.end}
                       className="hover:bg-sidebar-accent"
                       activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
                     >
