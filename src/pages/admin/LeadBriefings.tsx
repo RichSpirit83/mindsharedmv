@@ -67,15 +67,28 @@ export default function LeadBriefings() {
     load();
   }, [sessionId]);
 
+  const trimCompany = (c: Record<string, string>) => ({
+    company_name: c.company_name || "",
+    first_name: c.first_name || "",
+    last_name: c.last_name || "",
+    sector: c.sector || "",
+    sales_stage: c.sales_stage || c.stage || "",
+    revenue: c.revenue || "",
+    capital_raised: c.capital_raised || "",
+    critical_challenges: (c.critical_challenges || "").slice(0, 200),
+    company_description: (c.company_description || "").slice(0, 150),
+  });
+
   const generateBriefing = async (table: TableData) => {
     setGenerating((prev) => ({ ...prev, [table.table_number]: true }));
     try {
       const lead = leads.find((l) => l.name === table.suggested_lead);
+      const trimmedCompanies = table.companies.map(trimCompany);
       const { data, error } = await supabase.functions.invoke("generate-briefing", {
         body: {
-          table,
-          companies: table.companies,
-          lead,
+          table: { table_name: table.table_name, table_number: table.table_number, theme: table.theme, rationale: table.rationale, stage_mix: table.stage_mix },
+          companies: trimmedCompanies,
+          lead: lead ? { name: lead.name, expertise_tags: lead.expertise_tags, network_strengths: lead.network_strengths } : null,
           prompts: (session?.prompts as string[]) || [],
           sessionName: session?.session_name,
         },
@@ -88,6 +101,15 @@ export default function LeadBriefings() {
       toast.error(err.message || "Failed to generate briefing");
     } finally {
       setGenerating((prev) => ({ ...prev, [table.table_number]: false }));
+    }
+  };
+
+  const generateAllBriefings = async () => {
+    for (const t of tables) {
+      if (!briefings[t.table_number]) {
+        await generateBriefing(t);
+        await new Promise((r) => setTimeout(r, 500));
+      }
     }
   };
 
