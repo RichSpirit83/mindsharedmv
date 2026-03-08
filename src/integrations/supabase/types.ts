@@ -179,6 +179,7 @@ export type Database = {
       }
       breakout_tables: {
         Row: {
+          briefing_content: string | null
           created_at: string
           id: string
           rationale: string | null
@@ -191,6 +192,7 @@ export type Database = {
           theme: string | null
         }
         Insert: {
+          briefing_content?: string | null
           created_at?: string
           id?: string
           rationale?: string | null
@@ -203,6 +205,7 @@ export type Database = {
           theme?: string | null
         }
         Update: {
+          briefing_content?: string | null
           created_at?: string
           id?: string
           rationale?: string | null

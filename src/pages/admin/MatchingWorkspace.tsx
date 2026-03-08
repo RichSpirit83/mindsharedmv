@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Shuffle, Lock, Sparkles, Check, Loader2 } from "lucide-react";
+import { Search, Shuffle, Lock, Sparkles, Check, Loader2, Monitor } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -325,6 +325,9 @@ export default function MatchingWorkspace() {
           <div className="p-4 border-t bg-card flex justify-end gap-2">
             <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : "Regenerate All"}
+            </Button>
+            <Button variant="outline" onClick={() => window.open(`/admin/present/${sessionId}`, '_blank')}>
+              <Monitor className="h-4 w-4 mr-1" /> Present
             </Button>
             <Button onClick={handleFinalize}>
               <Check className="h-4 w-4 mr-1" /> Finalize & Continue

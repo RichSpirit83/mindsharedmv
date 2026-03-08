@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Copy, Download, Loader2, Users, Sparkles, ArrowLeft } from "lucide-react";
+import { FileText, Copy, Download, Loader2, Users, Sparkles, ArrowLeft, Monitor } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -46,8 +46,17 @@ export default function LeadBriefings() {
         const tableIds = dbTables.map((t) => t.id);
         const { data: assignments } = await supabase.from("breakout_table_assignments").select("*, breakout_companies(*)").in("table_id", tableIds);
 
+        // Pre-populate briefings from saved data
+        const savedBriefings: Record<number, string> = {};
+        
         const enriched: TableData[] = dbTables.map((t) => {
           const tableAssignments = (assignments || []).filter((a) => a.table_id === t.id);
+          
+          // Load saved briefing content
+          if ((t as any).briefing_content) {
+            savedBriefings[t.table_number] = (t as any).briefing_content;
+          }
+          
           return {
             id: t.id,
             table_number: t.table_number,
@@ -61,6 +70,7 @@ export default function LeadBriefings() {
           };
         });
         setTables(enriched);
+        setBriefings(savedBriefings);
       }
       setLoading(false);
     };
@@ -79,6 +89,10 @@ export default function LeadBriefings() {
     company_description: (c.company_description || "").slice(0, 150),
   });
 
+  const saveBriefingToDb = async (tableId: string, content: string) => {
+    await supabase.from("breakout_tables").update({ briefing_content: content } as any).eq("id", tableId);
+  };
+
   const generateBriefing = async (table: TableData) => {
     setGenerating((prev) => ({ ...prev, [table.table_number]: true }));
     try {
@@ -95,7 +109,13 @@ export default function LeadBriefings() {
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
-      setBriefings((prev) => ({ ...prev, [table.table_number]: data.briefing }));
+      
+      const briefingContent = data.briefing;
+      setBriefings((prev) => ({ ...prev, [table.table_number]: briefingContent }));
+      
+      // Persist to database
+      await saveBriefingToDb(table.id, briefingContent);
+      
       toast.success(`Briefing generated for Table ${table.table_number}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to generate briefing");
@@ -170,9 +190,14 @@ strong { color: #1a1a2e; }
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
       <div>
-        <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate(`/admin/matching/${sessionId}`)}>
-          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Matching
-        </Button>
+        <div className="flex items-center justify-between mb-2">
+          <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate(`/admin/match/${sessionId}`)}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> Back to Matching
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => window.open(`/admin/present/${sessionId}`, '_blank')}>
+            <Monitor className="h-4 w-4 mr-1" /> Present
+          </Button>
+        </div>
         <h1 className="font-heading text-2xl font-bold">Table Lead Briefings</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {session?.session_name ? `${session.session_name} — ` : ""}

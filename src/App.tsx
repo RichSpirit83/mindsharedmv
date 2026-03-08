@@ -8,6 +8,7 @@ import BreakoutsList from "@/pages/admin/BreakoutsList";
 import SessionConfig from "@/pages/admin/SessionConfig";
 import MatchingWorkspace from "@/pages/admin/MatchingWorkspace";
 import LeadBriefings from "@/pages/admin/LeadBriefings";
+import PresentationView from "@/pages/admin/PresentationView";
 import PublicAttendeeView from "@/pages/PublicAttendeeView";
 import NotFound from "./pages/NotFound";
 
@@ -25,6 +26,7 @@ const App = () => (
             <Route path="session/:sessionId" element={<SessionConfig />} />
             <Route path="match/:sessionId" element={<MatchingWorkspace />} />
             <Route path="leads/:sessionId" element={<LeadBriefings />} />
+            <Route path="present/:sessionId" element={<PresentationView />} />
           </Route>
           <Route path="/s/:sessionSlug" element={<PublicAttendeeView />} />
           <Route path="/" element={<BreakoutsList />} />

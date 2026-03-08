@@ -1,0 +1,1 @@
+ALTER TABLE public.breakout_tables ADD COLUMN briefing_content text;
