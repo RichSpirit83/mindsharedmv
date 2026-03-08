@@ -1,10 +1,10 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Copy, Download, Loader2, Users, Sparkles } from "lucide-react";
+import { FileText, Copy, Download, Loader2, Users, Sparkles, ArrowLeft } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -23,6 +23,7 @@ interface TableData {
 
 export default function LeadBriefings() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [tables, setTables] = useState<TableData[]>([]);
   const [session, setSession] = useState<any>(null);
   const [leads, setLeads] = useState<any[]>([]);
@@ -66,15 +67,28 @@ export default function LeadBriefings() {
     load();
   }, [sessionId]);
 
+  const trimCompany = (c: Record<string, string>) => ({
+    company_name: c.company_name || "",
+    first_name: c.first_name || "",
+    last_name: c.last_name || "",
+    sector: c.sector || "",
+    sales_stage: c.sales_stage || c.stage || "",
+    revenue: c.revenue || "",
+    capital_raised: c.capital_raised || "",
+    critical_challenges: (c.critical_challenges || "").slice(0, 200),
+    company_description: (c.company_description || "").slice(0, 150),
+  });
+
   const generateBriefing = async (table: TableData) => {
     setGenerating((prev) => ({ ...prev, [table.table_number]: true }));
     try {
       const lead = leads.find((l) => l.name === table.suggested_lead);
+      const trimmedCompanies = table.companies.map(trimCompany);
       const { data, error } = await supabase.functions.invoke("generate-briefing", {
         body: {
-          table,
-          companies: table.companies,
-          lead,
+          table: { table_name: table.table_name, table_number: table.table_number, theme: table.theme, rationale: table.rationale, stage_mix: table.stage_mix },
+          companies: trimmedCompanies,
+          lead: lead ? { name: lead.name, expertise_tags: lead.expertise_tags, network_strengths: lead.network_strengths } : null,
           prompts: (session?.prompts as string[]) || [],
           sessionName: session?.session_name,
         },
@@ -87,6 +101,15 @@ export default function LeadBriefings() {
       toast.error(err.message || "Failed to generate briefing");
     } finally {
       setGenerating((prev) => ({ ...prev, [table.table_number]: false }));
+    }
+  };
+
+  const generateAllBriefings = async () => {
+    for (const t of tables) {
+      if (!briefings[t.table_number]) {
+        await generateBriefing(t);
+        await new Promise((r) => setTimeout(r, 500));
+      }
     }
   };
 
@@ -147,6 +170,9 @@ strong { color: #1a1a2e; }
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
       <div>
+        <Button variant="ghost" size="sm" className="mb-2 -ml-2" onClick={() => navigate(`/admin/matching/${sessionId}`)}>
+          <ArrowLeft className="h-4 w-4 mr-1" /> Back to Matching
+        </Button>
         <h1 className="font-heading text-2xl font-bold">Table Lead Briefings</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {session?.session_name ? `${session.session_name} — ` : ""}
@@ -168,7 +194,7 @@ strong { color: #1a1a2e; }
         <>
           <div className="flex justify-end">
             <Button
-              onClick={() => tables.forEach((t) => { if (!briefings[t.table_number]) generateBriefing(t); })}
+              onClick={generateAllBriefings}
               disabled={Object.values(generating).some(Boolean)}
             >
               <Sparkles className="h-4 w-4 mr-1" /> Generate All Briefings

@@ -288,15 +288,19 @@ export default function SessionConfig() {
     if (!file || !file.name.endsWith('.pdf')) { toast.error("Please upload a PDF file"); return; }
     setPdfLoading((prev) => ({ ...prev, [index]: true }));
     try {
-      // Read PDF as text (basic extraction)
-      const text = await file.text();
+      // Read PDF as base64 for AI extraction
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = '';
+      for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+      const pdfBase64 = btoa(binary);
 
       // Upload to storage
       const filePath = `${sessionId}/${leads[index].id}_${file.name}`;
       await supabase.storage.from('lead-profiles').upload(filePath, file, { upsert: true });
 
       // Call AI to extract profile data
-      const { data, error } = await supabase.functions.invoke('parse-lead-pdf', { body: { pdfText: text } });
+      const { data, error } = await supabase.functions.invoke('parse-lead-pdf', { body: { pdfBase64 } });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to parse PDF');
 
