@@ -200,7 +200,9 @@ export default function MatchingWorkspace() {
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
-            <Button variant="outline">Regenerate All</Button>
+            <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
+              {isGenerating ? "Regenerating..." : "Regenerate All"}
+            </Button>
             <Button>
               <Check className="h-4 w-4 mr-1" /> Finalize & Publish
             </Button>
