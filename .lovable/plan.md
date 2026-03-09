@@ -1,54 +1,61 @@
 
 
-## Analysis: Current Issues Found
+## Analysis: Zero Companies Assigned Despite Matching
 
-After reviewing the code, I found **two critical bugs** plus the requested feature changes:
+The database shows:
+- **8 tables** created with themes and suggested leads
+- **0 assignments** in the `breakout_table_assignments` table
+- PresentationView is loading tables correctly, but the `companies` array is empty because assignments don't exist
 
-### Bug 1: Lead Profile Data Not Reaching AI
-In `generate-matches/index.ts` line 27, the edge function expects `l.expertiseTags` (camelCase), but `MatchingWorkspace.tsx` passes the raw DB object which uses `expertise_tags` (snake_case). So the AI receives empty expertise info.
+This is the **same bug** we supposedly fixed earlier — the company matching logic in `saveTablesToDb` is still failing to create assignments.
 
-### Bug 2: Grouping Priority Not Reaching AI
-Same issue: edge function reads `sessionConfig?.groupingPriority` (line 18) but the DB column is `grouping_priority`. The priority setting has no effect on matching.
+### Root Cause
+Looking at lines 158-209 in `MatchingWorkspace.tsx`:
+1. The `normalize` function and dual-lookup (by company name, then by person name) are implemented
+2. The logging shows "Saved 0/X assignments"
+3. **BUT**: The edge function is passing `sessionConfig` and `leads` **without transformation**
 
-### Current State
-- Lead profiles ARE collected in SessionConfig with expertise tags and network strengths
-- These ARE stored in the database correctly
-- But the camelCase/snake_case mismatch means the AI never sees them
+At line 130:
+```typescript
+body: { companies: fullCompanyData, sessionConfig, leads }
+```
+
+The `sessionConfig` object comes from the database (line 62) with snake_case fields like `grouping_priority`, but the edge function expects camelCase `groupingPriority`. Same issue with `leads` — the DB has `expertise_tags` but the function expects `expertiseTags`.
+
+**This was supposedly fixed in the last approved plan, but the code still doesn't transform the data before sending it to the edge function.**
+
+### Second Issue: Settings Panel Missing
+The user requested "settings on the left" to adjust:
+- Grouping Priority
+- Allow Stage Mixing
+
+This panel was planned but **never implemented** in the left sidebar.
 
 ---
 
 ## Plan
 
-### 1. Fix Data Transformation in MatchingWorkspace
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
+### 1. Fix Data Transformation (MatchingWorkspace.tsx)
+Before invoking the edge function at line 129, transform:
+- `sessionConfig`: map snake_case → camelCase
+- `leads`: map `expertise_tags` → `expertiseTags`, `network_strengths` → `networkStrengths`
 
-Before invoking the edge function, transform the DB data to use camelCase:
-- Map `expertise_tags` → `expertiseTags`
-- Map `network_strengths` → `networkStrengths`  
-- Transform `sessionConfig` fields: `grouping_priority` → `groupingPriority`, `num_tables` → `numTables`, `target_per_table` → `targetPerTable`
+### 2. Add Settings Collapsible Panel (MatchingWorkspace.tsx)
+Below the companies list in the left sidebar (after line 275), add a `Collapsible` section:
+- **Grouping Priority** dropdown (Sector, Stage, Need, Hybrid)
+- **Allow Stage Mixing** toggle
+- On change: update DB + set `hasGenerated = false` to enable regeneration
+- Show lead count summary
 
-### 2. Add Settings Panel to Left Sidebar
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
-
-Add a collapsible "Settings" section in the left panel (below the companies list) with:
-- Grouping Priority selector (4 options: Sector, Stage, Need, Hybrid)
-- Allow Stage Mixing toggle
-- Table leads summary with edit link back to SessionConfig
-
-These settings update the session in the DB and re-enable "Generate Matches" when changed.
-
-### 3. Enhance Edge Function Lead Instructions
-**File: `supabase/functions/generate-matches/index.ts`**
-
-Make the AI use lead expertise more explicitly:
-- Change prompt from "assign one per table where possible" to explicit matching instruction: "Match each lead to a table whose theme aligns with their expertise tags"
+### 3. Verify PresentationView Logic
+PresentationView code (lines 53-72) is correct — it queries assignments and maps to companies. Once assignments exist, it will work.
 
 ---
 
-## File Changes
+## Files Changed
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/MatchingWorkspace.tsx` | Fix camelCase transform for leads/sessionConfig; add settings panel to left sidebar |
-| `supabase/functions/generate-matches/index.ts` | Strengthen lead-to-table matching instruction |
+| `src/pages/admin/MatchingWorkspace.tsx` | Add data transformation before edge function call; add Settings collapsible panel in left sidebar |
+| `src/components/ui/collapsible.tsx` | Already exists (confirmed in files list) |
 
