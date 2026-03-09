@@ -19,13 +19,16 @@ serve(async (req) => {
     const allowStageMixing =
       typeof sessionConfig?.allowStageMixing === "boolean"
         ? sessionConfig.allowStageMixing
-        : typeof sessionConfig?.allow_stage_mixing === "boolean"
-          ? sessionConfig.allow_stage_mixing
-          : true;
+        : true;
+    const avoidCompetitors =
+      typeof sessionConfig?.avoidCompetitors === "boolean"
+        ? sessionConfig.avoidCompetitors
+        : true;
+    const leadMatchingMode = sessionConfig?.leadMatchingMode || "flexible";
 
     const hybridRule = allowStageMixing
-      ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges. Avoid placing direct competitors at the same table."
-      : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges. Avoid placing direct competitors at the same table.";
+      ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges."
+      : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges.";
 
     const priorityInstructions: Record<string, string> = {
       sector: "Group companies primarily by SECTOR similarity so each table shares an industry vertical.",
@@ -42,6 +45,14 @@ serve(async (req) => {
         return `Lead: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${strengths}${notes}`;
       })
       .join("\n");
+
+    const leadMatchingInstruction = leadMatchingMode === "strict"
+      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme. If no lead matches a table's theme, leave that table without a suggested lead."
+      : "When choosing a suggested lead, prefer leads whose expertise tags align with the table theme and shared challenges, but you may use your best judgment.";
+
+    const competitorRule = avoidCompetitors
+      ? "- Direct competitors should NOT be at the same table"
+      : "- Competitors MAY be seated together (intentional competitive-intelligence setup)";
 
     const companyList = companies.map((c: any, i: number) => {
       const parts = [`#${i + 1} ${c.company_name || "Unknown"}`];
@@ -65,13 +76,12 @@ ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
 
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
-- Direct competitors should NOT be at the same table
+${competitorRule}
 - Each table needs a clear thematic rationale
 - Tables should foster productive peer conversation
-- When choosing a suggested lead, match lead expertise/strengths/notes to the table theme and shared challenges
 ${allowStageMixing ? "" : "- Keep companies at similar stages within each table (avoid stage mixing)"}
 
-${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}` : ""}`;
+${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\n\n${leadMatchingInstruction}` : ""}`;
 
     const userPrompt = `Assign these ${companies.length} companies to ${numTables} tables:\n\n${companyList}`;
 
