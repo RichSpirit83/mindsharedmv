@@ -154,12 +154,19 @@ export default function MatchingWorkspace() {
   };
 
   const updateMatchingSettings = async (
-    patch: Partial<{ grouping_priority: string; allow_stage_mixing: boolean }>
+    patch: Partial<{
+      grouping_priority: string;
+      allow_stage_mixing: boolean;
+      num_tables: number;
+      target_per_table: number;
+      avoid_competitors: boolean;
+      lead_matching_mode: string;
+    }>
   ) => {
     if (!sessionId) return;
     const { data, error } = await supabase
       .from("breakout_sessions")
-      .update(patch)
+      .update(patch as any)
       .eq("id", sessionId)
       .select("*")
       .single();
@@ -171,7 +178,6 @@ export default function MatchingWorkspace() {
     }
 
     setSessionConfig(data);
-    toast.success("Settings updated — regenerate to apply");
   };
 
   const generateMatches = async () => {
@@ -182,6 +188,8 @@ export default function MatchingWorkspace() {
         targetPerTable: sessionConfig?.target_per_table ?? undefined,
         groupingPriority: sessionConfig?.grouping_priority ?? undefined,
         allowStageMixing: sessionConfig?.allow_stage_mixing ?? undefined,
+        avoidCompetitors: sessionConfig?.avoid_competitors ?? true,
+        leadMatchingMode: sessionConfig?.lead_matching_mode ?? "flexible",
       };
 
       const leadsForAi = (leads || []).map((l: any) => ({
