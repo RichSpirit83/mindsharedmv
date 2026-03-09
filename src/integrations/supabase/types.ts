@@ -93,12 +93,14 @@ export type Database = {
       breakout_sessions: {
         Row: {
           allow_stage_mixing: boolean | null
+          avoid_competitors: boolean | null
           breakout_end: string | null
           breakout_start: string | null
           column_mapping: Json | null
           created_at: string
           grouping_priority: string | null
           id: string
+          lead_matching_mode: string | null
           num_tables: number | null
           prompts: Json | null
           session_date: string | null
@@ -110,12 +112,14 @@ export type Database = {
         }
         Insert: {
           allow_stage_mixing?: boolean | null
+          avoid_competitors?: boolean | null
           breakout_end?: string | null
           breakout_start?: string | null
           column_mapping?: Json | null
           created_at?: string
           grouping_priority?: string | null
           id?: string
+          lead_matching_mode?: string | null
           num_tables?: number | null
           prompts?: Json | null
           session_date?: string | null
@@ -127,12 +131,14 @@ export type Database = {
         }
         Update: {
           allow_stage_mixing?: boolean | null
+          avoid_competitors?: boolean | null
           breakout_end?: string | null
           breakout_start?: string | null
           column_mapping?: Json | null
           created_at?: string
           grouping_priority?: string | null
           id?: string
+          lead_matching_mode?: string | null
           num_tables?: number | null
           prompts?: Json | null
           session_date?: string | null
