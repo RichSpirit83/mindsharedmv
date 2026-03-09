@@ -358,9 +358,15 @@ export default function MatchingWorkspace() {
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search companies..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+            <Input
+              placeholder="Search companies..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
         </div>
+
         <div className="flex-1 overflow-auto p-4 space-y-1">
           {companies.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -378,12 +384,67 @@ export default function MatchingWorkspace() {
                   <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
                   <p className="text-xs text-muted-foreground">{c.first_name} {c.last_name}</p>
                 </div>
-                {c.sector && <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>}
+                {c.sector && (
+                  <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>
+                )}
               </div>
             ))
           )}
         </div>
+
+        <div className="border-t p-4">
+          <Collapsible defaultOpen>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between px-2">
+                  <span className="inline-flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-heading font-semibold text-sm">Matching Settings</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+
+            <CollapsibleContent className="mt-3 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Grouping priority</Label>
+                <Select
+                  value={sessionConfig?.grouping_priority || "hybrid"}
+                  onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sector">Sector</SelectItem>
+                    <SelectItem value="stage">Stage</SelectItem>
+                    <SelectItem value="need">Need</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">This drives how companies are grouped together.</p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">Allow stage mixing</Label>
+                  <p className="text-xs text-muted-foreground">Affects Hybrid matching behavior.</p>
+                </div>
+                <Switch
+                  checked={!!sessionConfig?.allow_stage_mixing}
+                  onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Leads loaded: <span className="text-foreground">{leads.length}</span>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
       </div>
+
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col">
