@@ -2,10 +2,34 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Search, Shuffle, Lock, Sparkles, Check, Loader2, Monitor } from "lucide-react";
+import {
+  Search,
+  Shuffle,
+  Lock,
+  Sparkles,
+  Check,
+  Loader2,
+  Monitor,
+  ChevronDown,
+  SlidersHorizontal,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -123,21 +147,67 @@ export default function MatchingWorkspace() {
     load();
   }, [sessionId]);
 
+  const toStringArray = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.filter(Boolean).map((x) => String(x));
+    if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+    return [];
+  };
+
+  const updateMatchingSettings = async (
+    patch: Partial<{ grouping_priority: string; allow_stage_mixing: boolean }>
+  ) => {
+    if (!sessionId) return;
+    const { data, error } = await supabase
+      .from("breakout_sessions")
+      .update(patch)
+      .eq("id", sessionId)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Failed to update session settings:", error);
+      toast.error("Failed to update settings");
+      return;
+    }
+
+    setSessionConfig(data);
+    toast.success("Settings updated — regenerate to apply");
+  };
+
   const generateMatches = async () => {
     setIsGenerating(true);
     try {
+      const sessionConfigForAi = {
+        numTables: sessionConfig?.num_tables ?? undefined,
+        targetPerTable: sessionConfig?.target_per_table ?? undefined,
+        groupingPriority: sessionConfig?.grouping_priority ?? undefined,
+        allowStageMixing: sessionConfig?.allow_stage_mixing ?? undefined,
+      };
+
+      const leadsForAi = (leads || []).map((l: any) => ({
+        name: l.name ?? "",
+        expertiseTags: toStringArray(l.expertise_tags),
+        networkStrengths: l.network_strengths ?? "",
+        notes: l.notes ?? "",
+      }));
+
       const { data, error } = await supabase.functions.invoke("generate-matches", {
-        body: { companies: fullCompanyData, sessionConfig, leads },
+        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      const normalizeCompany = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+      const fullByName = new Map(
+        (fullCompanyData || []).map((fd: any) => [normalizeCompany(fd?.company_name || ""), fd])
+      );
 
       // Add mapped_data to company chips
       const enrichedTables = (data.tables || []).map((t: any) => ({
         ...t,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
-          mapped_data: fullCompanyData.find((fd) => fd.company_name === c.company_name) || c,
+          mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
       }));
 
@@ -145,7 +215,6 @@ export default function MatchingWorkspace() {
       setHasGenerated(true);
       toast.success(`Generated ${enrichedTables.length} table groupings`);
 
-      // Save to DB
       await saveTablesToDb(enrichedTables);
     } catch (err: any) {
       console.error("Match generation failed:", err);
@@ -159,9 +228,35 @@ export default function MatchingWorkspace() {
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
-    await supabase.from("breakout_tables").delete().eq("session_id", sessionId);
 
-    const { data: dbCompanies } = await supabase.from("breakout_companies").select("id, mapped_data").eq("session_id", sessionId);
+    // Clear previous assignments for this session's tables (assignments have no session_id)
+    const { data: existingTables, error: existingTablesError } = await supabase
+      .from("breakout_tables")
+      .select("id")
+      .eq("session_id", sessionId);
+    if (existingTablesError) throw existingTablesError;
+
+    const existingTableIds = (existingTables || []).map((t) => t.id);
+    if (existingTableIds.length > 0) {
+      const { error: delAssignmentsError } = await supabase
+        .from("breakout_table_assignments")
+        .delete()
+        .in("table_id", existingTableIds);
+      if (delAssignmentsError) throw delAssignmentsError;
+    }
+
+    const { error: delTablesError } = await supabase
+      .from("breakout_tables")
+      .delete()
+      .eq("session_id", sessionId);
+    if (delTablesError) throw delTablesError;
+
+    const { data: dbCompanies, error: companiesError } = await supabase
+      .from("breakout_companies")
+      .select("id, mapped_data")
+      .eq("session_id", sessionId);
+    if (companiesError) throw companiesError;
+
     const companyByName = new Map<string, string>();
     const companyByPerson = new Map<string, string>();
     (dbCompanies || []).forEach((c) => {
@@ -175,38 +270,53 @@ export default function MatchingWorkspace() {
     let totalExpected = 0;
 
     for (const table of tableGroups) {
-      const { data: insertedTable } = await supabase.from("breakout_tables").insert({
-        session_id: sessionId,
-        table_number: table.table_number,
-        table_name: table.table_name,
-        theme: table.theme,
-        stage_mix: table.stage_mix,
-        suggested_lead: table.suggested_lead,
-        rationale: table.rationale,
-        shared_challenges: table.shared_challenges as any,
-      }).select().single();
+      const { data: insertedTable, error: insertTableError } = await supabase
+        .from("breakout_tables")
+        .insert({
+          session_id: sessionId,
+          table_number: table.table_number,
+          table_name: table.table_name,
+          theme: table.theme,
+          stage_mix: table.stage_mix,
+          suggested_lead: table.suggested_lead,
+          rationale: table.rationale,
+          shared_challenges: table.shared_challenges as any,
+        })
+        .select()
+        .single();
 
-      if (insertedTable) {
-        const assignments = table.companies
-          .map((c) => {
-            totalExpected++;
-            const byName = companyByName.get(normalize(c.company_name || ""));
-            if (byName) return { table_id: insertedTable.id, company_id: byName };
-            const byPerson = companyByPerson.get(normalize((c.first_name || "") + (c.last_name || "")));
-            if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
-            console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
-            return null;
-          })
-          .filter(Boolean);
-        totalMatched += assignments.length;
-        if (assignments.length > 0) {
-          await supabase.from("breakout_table_assignments").insert(assignments as any);
-        }
+      if (insertTableError) throw insertTableError;
+      if (!insertedTable) continue;
+
+      const assignments = table.companies
+        .map((c) => {
+          totalExpected++;
+          const byName = companyByName.get(normalize(c.company_name || ""));
+          if (byName) return { table_id: insertedTable.id, company_id: byName };
+          const byPerson = companyByPerson.get(
+            normalize((c.first_name || "") + (c.last_name || ""))
+          );
+          if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
+          console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
+          return null;
+        })
+        .filter(Boolean);
+
+      totalMatched += assignments.length;
+      if (assignments.length > 0) {
+        const { error: insertAssignmentsError } = await supabase
+          .from("breakout_table_assignments")
+          .insert(assignments as any);
+        if (insertAssignmentsError) throw insertAssignmentsError;
       }
     }
 
     console.log(`[Match] Saved ${totalMatched}/${totalExpected} assignments`);
-    await supabase.from("breakout_sessions").update({ status: "matched" }).eq("id", sessionId);
+    const { error: statusError } = await supabase
+      .from("breakout_sessions")
+      .update({ status: "matched" })
+      .eq("id", sessionId);
+    if (statusError) throw statusError;
   };
 
   const handleFinalize = async () => {
@@ -248,9 +358,15 @@ export default function MatchingWorkspace() {
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Search companies..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="pl-9" />
+            <Input
+              placeholder="Search companies..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+            />
           </div>
         </div>
+
         <div className="flex-1 overflow-auto p-4 space-y-1">
           {companies.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
@@ -268,12 +384,67 @@ export default function MatchingWorkspace() {
                   <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
                   <p className="text-xs text-muted-foreground">{c.first_name} {c.last_name}</p>
                 </div>
-                {c.sector && <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>}
+                {c.sector && (
+                  <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>
+                )}
               </div>
             ))
           )}
         </div>
+
+        <div className="border-t p-4">
+          <Collapsible defaultOpen>
+            <div className="flex items-center justify-between">
+              <CollapsibleTrigger asChild>
+                <Button variant="ghost" size="sm" className="w-full justify-between px-2">
+                  <span className="inline-flex items-center gap-2">
+                    <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-heading font-semibold text-sm">Matching Settings</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </Button>
+              </CollapsibleTrigger>
+            </div>
+
+            <CollapsibleContent className="mt-3 space-y-4">
+              <div className="space-y-2">
+                <Label className="text-xs">Grouping priority</Label>
+                <Select
+                  value={sessionConfig?.grouping_priority || "hybrid"}
+                  onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sector">Sector</SelectItem>
+                    <SelectItem value="stage">Stage</SelectItem>
+                    <SelectItem value="need">Need</SelectItem>
+                    <SelectItem value="hybrid">Hybrid</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">This drives how companies are grouped together.</p>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs">Allow stage mixing</Label>
+                  <p className="text-xs text-muted-foreground">Affects Hybrid matching behavior.</p>
+                </div>
+                <Switch
+                  checked={!!sessionConfig?.allow_stage_mixing}
+                  onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
+                />
+              </div>
+
+              <div className="text-xs text-muted-foreground">
+                Leads loaded: <span className="text-foreground">{leads.length}</span>
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        </div>
       </div>
+
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col">

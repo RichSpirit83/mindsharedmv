@@ -16,15 +16,32 @@ serve(async (req) => {
     const numTables = sessionConfig?.numTables || Math.ceil(companies.length / 6);
     const targetPerTable = sessionConfig?.targetPerTable || Math.ceil(companies.length / numTables);
     const groupingPriority = sessionConfig?.groupingPriority || "hybrid";
+    const allowStageMixing =
+      typeof sessionConfig?.allowStageMixing === "boolean"
+        ? sessionConfig.allowStageMixing
+        : typeof sessionConfig?.allow_stage_mixing === "boolean"
+          ? sessionConfig.allow_stage_mixing
+          : true;
+
+    const hybridRule = allowStageMixing
+      ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges. Avoid placing direct competitors at the same table."
+      : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges. Avoid placing direct competitors at the same table.";
 
     const priorityInstructions: Record<string, string> = {
       sector: "Group companies primarily by SECTOR similarity so each table shares an industry vertical.",
       stage: "Group companies primarily by STAGE/REVENUE similarity so each table has companies at similar growth phases.",
       need: "Group companies primarily by shared CHALLENGES and NEEDS so conversations are most relevant.",
-      hybrid: "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges. Avoid placing direct competitors at the same table.",
+      hybrid: hybridRule,
     };
 
-    const leadsInfo = (leads || []).map((l: any) => `Lead: ${l.name} — expertise: ${l.expertiseTags?.join(", ")} — strengths: ${l.networkStrengths}`).join("\n");
+    const leadsInfo = (leads || [])
+      .map((l: any) => {
+        const tags = (l.expertiseTags || []).join(", ");
+        const strengths = l.networkStrengths ? ` — strengths: ${l.networkStrengths}` : "";
+        const notes = l.notes ? ` — notes: ${l.notes}` : "";
+        return `Lead: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${strengths}${notes}`;
+      })
+      .join("\n");
 
     const companyList = companies.map((c: any, i: number) => {
       const parts = [`#${i + 1} ${c.company_name || "Unknown"}`];
@@ -44,11 +61,15 @@ serve(async (req) => {
 
 GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
 
+ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
+
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
 - Direct competitors should NOT be at the same table
 - Each table needs a clear thematic rationale
 - Tables should foster productive peer conversation
+- When choosing a suggested lead, match lead expertise/strengths/notes to the table theme and shared challenges
+${allowStageMixing ? "" : "- Keep companies at similar stages within each table (avoid stage mixing)"}
 
 ${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}` : ""}`;
 
