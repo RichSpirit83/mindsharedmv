@@ -400,56 +400,132 @@ export default function MatchingWorkspace() {
           )}
         </div>
 
-        <div className="border-t p-4">
-          <Collapsible defaultOpen>
-            <div className="flex items-center justify-between">
-              <CollapsibleTrigger asChild>
-                <Button variant="ghost" size="sm" className="w-full justify-between px-2">
-                  <span className="inline-flex items-center gap-2">
-                    <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-heading font-semibold text-sm">Matching Settings</span>
-                  </span>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </CollapsibleTrigger>
-            </div>
-
-            <CollapsibleContent className="mt-3 space-y-4">
-              <div className="space-y-2">
-                <Label className="text-xs">Grouping priority</Label>
-                <Select
-                  value={sessionConfig?.grouping_priority || "hybrid"}
-                  onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select priority" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sector">Sector</SelectItem>
-                    <SelectItem value="stage">Stage</SelectItem>
-                    <SelectItem value="need">Need</SelectItem>
-                    <SelectItem value="hybrid">Hybrid</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">This drives how companies are grouped together.</p>
+        <div className="border-t p-3">
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button variant="outline" size="sm" className="w-full justify-between">
+                <span className="inline-flex items-center gap-2">
+                  <Settings2 className="h-4 w-4 text-muted-foreground" />
+                  <span className="font-heading font-semibold text-sm">Matching Settings</span>
+                </span>
+                <Badge variant="secondary" className="text-xs font-mono capitalize">
+                  {sessionConfig?.grouping_priority || "hybrid"}
+                </Badge>
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent side="right" align="end" className="w-80 p-0">
+              <div className="px-4 py-3 border-b">
+                <h3 className="font-heading font-semibold text-sm">Matching Settings</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Changes apply on next generation</p>
               </div>
 
-              <div className="flex items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <Label className="text-xs">Allow stage mixing</Label>
-                  <p className="text-xs text-muted-foreground">Affects Hybrid matching behavior.</p>
+              {/* TABLE STRUCTURE */}
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Table Structure</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Number of Tables</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={20}
+                      value={sessionConfig?.num_tables ?? 5}
+                      onChange={(e) => updateMatchingSettings({ num_tables: parseInt(e.target.value) || 5 })}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Target per Table</Label>
+                    <Input
+                      type="number"
+                      min={2}
+                      max={20}
+                      value={sessionConfig?.target_per_table ?? 6}
+                      onChange={(e) => updateMatchingSettings({ target_per_table: parseInt(e.target.value) || 6 })}
+                      className="h-8 text-sm"
+                    />
+                  </div>
                 </div>
-                <Switch
-                  checked={!!sessionConfig?.allow_stage_mixing}
-                  onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
-                />
               </div>
 
-              <div className="text-xs text-muted-foreground">
-                Leads loaded: <span className="text-foreground">{leads.length}</span>
+              <Separator />
+
+              {/* GROUPING */}
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Grouping</p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Priority</Label>
+                  <Select
+                    value={sessionConfig?.grouping_priority || "hybrid"}
+                    onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue placeholder="Select priority" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="sector">Sector</SelectItem>
+                      <SelectItem value="stage">Stage</SelectItem>
+                      <SelectItem value="need">Need</SelectItem>
+                      <SelectItem value="hybrid">Hybrid</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs">Allow Stage Mixing</Label>
+                    <p className="text-xs text-muted-foreground">Mix early &amp; growth-stage companies</p>
+                  </div>
+                  <Switch
+                    checked={!!sessionConfig?.allow_stage_mixing}
+                    onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
+                  />
+                </div>
               </div>
-            </CollapsibleContent>
-          </Collapsible>
+
+              <Separator />
+
+              {/* AI BEHAVIOR */}
+              <div className="px-4 py-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Behavior</p>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-xs">Avoid Direct Competitors</Label>
+                    <p className="text-xs text-muted-foreground">Prevent rival companies from sitting together</p>
+                  </div>
+                  <Switch
+                    checked={sessionConfig?.avoid_competitors !== false}
+                    onCheckedChange={(checked) => updateMatchingSettings({ avoid_competitors: checked })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Lead Matching</Label>
+                  <Select
+                    value={sessionConfig?.lead_matching_mode || "flexible"}
+                    onValueChange={(v) => updateMatchingSettings({ lead_matching_mode: v })}
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="flexible">Flexible</SelectItem>
+                      <SelectItem value="strict">Strict</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {sessionConfig?.lead_matching_mode === "strict"
+                      ? "Lead expertise must directly match the table theme."
+                      : "AI prefers matching lead expertise to theme but can override."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-4 py-2.5 border-t bg-muted/30">
+                <p className="text-xs text-muted-foreground">
+                  Leads loaded: <span className="text-foreground font-medium">{leads.length}</span>
+                </p>
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
