@@ -228,9 +228,35 @@ export default function MatchingWorkspace() {
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
-    await supabase.from("breakout_tables").delete().eq("session_id", sessionId);
 
-    const { data: dbCompanies } = await supabase.from("breakout_companies").select("id, mapped_data").eq("session_id", sessionId);
+    // Clear previous assignments for this session's tables (assignments have no session_id)
+    const { data: existingTables, error: existingTablesError } = await supabase
+      .from("breakout_tables")
+      .select("id")
+      .eq("session_id", sessionId);
+    if (existingTablesError) throw existingTablesError;
+
+    const existingTableIds = (existingTables || []).map((t) => t.id);
+    if (existingTableIds.length > 0) {
+      const { error: delAssignmentsError } = await supabase
+        .from("breakout_table_assignments")
+        .delete()
+        .in("table_id", existingTableIds);
+      if (delAssignmentsError) throw delAssignmentsError;
+    }
+
+    const { error: delTablesError } = await supabase
+      .from("breakout_tables")
+      .delete()
+      .eq("session_id", sessionId);
+    if (delTablesError) throw delTablesError;
+
+    const { data: dbCompanies, error: companiesError } = await supabase
+      .from("breakout_companies")
+      .select("id, mapped_data")
+      .eq("session_id", sessionId);
+    if (companiesError) throw companiesError;
+
     const companyByName = new Map<string, string>();
     const companyByPerson = new Map<string, string>();
     (dbCompanies || []).forEach((c) => {
@@ -244,38 +270,53 @@ export default function MatchingWorkspace() {
     let totalExpected = 0;
 
     for (const table of tableGroups) {
-      const { data: insertedTable } = await supabase.from("breakout_tables").insert({
-        session_id: sessionId,
-        table_number: table.table_number,
-        table_name: table.table_name,
-        theme: table.theme,
-        stage_mix: table.stage_mix,
-        suggested_lead: table.suggested_lead,
-        rationale: table.rationale,
-        shared_challenges: table.shared_challenges as any,
-      }).select().single();
+      const { data: insertedTable, error: insertTableError } = await supabase
+        .from("breakout_tables")
+        .insert({
+          session_id: sessionId,
+          table_number: table.table_number,
+          table_name: table.table_name,
+          theme: table.theme,
+          stage_mix: table.stage_mix,
+          suggested_lead: table.suggested_lead,
+          rationale: table.rationale,
+          shared_challenges: table.shared_challenges as any,
+        })
+        .select()
+        .single();
 
-      if (insertedTable) {
-        const assignments = table.companies
-          .map((c) => {
-            totalExpected++;
-            const byName = companyByName.get(normalize(c.company_name || ""));
-            if (byName) return { table_id: insertedTable.id, company_id: byName };
-            const byPerson = companyByPerson.get(normalize((c.first_name || "") + (c.last_name || "")));
-            if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
-            console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
-            return null;
-          })
-          .filter(Boolean);
-        totalMatched += assignments.length;
-        if (assignments.length > 0) {
-          await supabase.from("breakout_table_assignments").insert(assignments as any);
-        }
+      if (insertTableError) throw insertTableError;
+      if (!insertedTable) continue;
+
+      const assignments = table.companies
+        .map((c) => {
+          totalExpected++;
+          const byName = companyByName.get(normalize(c.company_name || ""));
+          if (byName) return { table_id: insertedTable.id, company_id: byName };
+          const byPerson = companyByPerson.get(
+            normalize((c.first_name || "") + (c.last_name || ""))
+          );
+          if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
+          console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
+          return null;
+        })
+        .filter(Boolean);
+
+      totalMatched += assignments.length;
+      if (assignments.length > 0) {
+        const { error: insertAssignmentsError } = await supabase
+          .from("breakout_table_assignments")
+          .insert(assignments as any);
+        if (insertAssignmentsError) throw insertAssignmentsError;
       }
     }
 
     console.log(`[Match] Saved ${totalMatched}/${totalExpected} assignments`);
-    await supabase.from("breakout_sessions").update({ status: "matched" }).eq("id", sessionId);
+    const { error: statusError } = await supabase
+      .from("breakout_sessions")
+      .update({ status: "matched" })
+      .eq("id", sessionId);
+    if (statusError) throw statusError;
   };
 
   const handleFinalize = async () => {
