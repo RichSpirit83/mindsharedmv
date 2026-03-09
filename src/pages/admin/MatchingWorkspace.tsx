@@ -147,21 +147,67 @@ export default function MatchingWorkspace() {
     load();
   }, [sessionId]);
 
+  const toStringArray = (v: unknown): string[] => {
+    if (Array.isArray(v)) return v.filter(Boolean).map((x) => String(x));
+    if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+    return [];
+  };
+
+  const updateMatchingSettings = async (
+    patch: Partial<{ grouping_priority: string; allow_stage_mixing: boolean }>
+  ) => {
+    if (!sessionId) return;
+    const { data, error } = await supabase
+      .from("breakout_sessions")
+      .update(patch)
+      .eq("id", sessionId)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("Failed to update session settings:", error);
+      toast.error("Failed to update settings");
+      return;
+    }
+
+    setSessionConfig(data);
+    toast.success("Settings updated — regenerate to apply");
+  };
+
   const generateMatches = async () => {
     setIsGenerating(true);
     try {
+      const sessionConfigForAi = {
+        numTables: sessionConfig?.num_tables ?? undefined,
+        targetPerTable: sessionConfig?.target_per_table ?? undefined,
+        groupingPriority: sessionConfig?.grouping_priority ?? undefined,
+        allowStageMixing: sessionConfig?.allow_stage_mixing ?? undefined,
+      };
+
+      const leadsForAi = (leads || []).map((l: any) => ({
+        name: l.name ?? "",
+        expertiseTags: toStringArray(l.expertise_tags),
+        networkStrengths: l.network_strengths ?? "",
+        notes: l.notes ?? "",
+      }));
+
       const { data, error } = await supabase.functions.invoke("generate-matches", {
-        body: { companies: fullCompanyData, sessionConfig, leads },
+        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+
+      const normalizeCompany = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
+      const fullByName = new Map(
+        (fullCompanyData || []).map((fd: any) => [normalizeCompany(fd?.company_name || ""), fd])
+      );
 
       // Add mapped_data to company chips
       const enrichedTables = (data.tables || []).map((t: any) => ({
         ...t,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
-          mapped_data: fullCompanyData.find((fd) => fd.company_name === c.company_name) || c,
+          mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
       }));
 
@@ -169,7 +215,6 @@ export default function MatchingWorkspace() {
       setHasGenerated(true);
       toast.success(`Generated ${enrichedTables.length} table groupings`);
 
-      // Save to DB
       await saveTablesToDb(enrichedTables);
     } catch (err: any) {
       console.error("Match generation failed:", err);
