@@ -9,7 +9,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 export default function Login() {
-  const { user, isPending, loading, signIn, signUp } = useAuth();
+  const { user, isPending, loading, signIn, signUp, signOut } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
