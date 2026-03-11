@@ -40,10 +40,7 @@ export default function Login() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">{user.email}</p>
-            <Button variant="outline" size="sm" onClick={() => {
-              const { signOut } = useAuth();
-              signOut();
-            }}>
+            <Button variant="outline" size="sm" onClick={() => signOut()}>
               Sign out
             </Button>
           </CardContent>
