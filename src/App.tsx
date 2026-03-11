@@ -11,6 +11,8 @@ import BreakoutsList from "@/pages/admin/BreakoutsList";
 import SessionConfig from "@/pages/admin/SessionConfig";
 import MatchingWorkspace from "@/pages/admin/MatchingWorkspace";
 import LeadBriefings from "@/pages/admin/LeadBriefings";
+import LeadPool from "@/pages/admin/LeadPool";
+import UserManagement from "@/pages/admin/UserManagement";
 import PresentationView from "@/pages/admin/PresentationView";
 import PublicAttendeeView from "@/pages/PublicAttendeeView";
 import Login from "@/pages/Login";
@@ -45,6 +47,8 @@ const App = () => (
               <Route path="session/:sessionId" element={<SessionConfig />} />
               <Route path="match/:sessionId" element={<MatchingWorkspace />} />
               <Route path="leads/:sessionId" element={<LeadBriefings />} />
+              <Route path="lead-pool" element={<LeadPool />} />
+              <Route path="users" element={<UserManagement />} />
             </Route>
             <Route
               path="/admin/present/:sessionId"

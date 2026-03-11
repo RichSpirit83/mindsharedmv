@@ -1,18 +1,19 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { LayoutDashboard, Mail, ArrowRight, CheckCircle2 } from "lucide-react";
+import { LayoutDashboard, ArrowRight, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
 export default function Login() {
-  const { user, loading } = useAuth();
+  const { user, isPending, loading, signIn, signUp } = useAuth();
   const [email, setEmail] = useState("");
-  const [sent, setSent] = useState(false);
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const { signIn } = useAuth();
+  const [tab, setTab] = useState<string>("signin");
 
   if (loading) {
     return (
@@ -22,21 +23,58 @@ export default function Login() {
     );
   }
 
-  if (user) {
+  if (user && isPending) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-md text-center">
+          <CardHeader className="space-y-3">
+            <div className="flex justify-center">
+              <div className="rounded-xl bg-muted p-3">
+                <Lock className="h-8 w-8 text-muted-foreground" />
+              </div>
+            </div>
+            <CardTitle className="text-xl font-heading">Pending Approval</CardTitle>
+            <CardDescription>
+              Your account has been created but is waiting for admin approval. You'll be able to access the app once approved.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">{user.email}</p>
+            <Button variant="outline" size="sm" onClick={() => {
+              const { signOut } = useAuth();
+              signOut();
+            }}>
+              Sign out
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (user && !isPending) {
     return <Navigate to="/admin" replace />;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
     setSubmitting(true);
-    const { error } = await signIn(email.trim());
-    setSubmitting(false);
-    if (error) {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
+
+    if (tab === "signin") {
+      const { error } = await signIn(email.trim(), password);
+      if (error) {
+        toast({ title: "Sign in failed", description: error.message, variant: "destructive" });
+      }
     } else {
-      setSent(true);
+      const { error } = await signUp(email.trim(), password);
+      if (error) {
+        toast({ title: "Sign up failed", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Account created", description: "Your account is pending admin approval." });
+      }
     }
+    setSubmitting(false);
   };
 
   return (
@@ -49,42 +87,42 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-heading">Mindshare</CardTitle>
-          <CardDescription>
-            {sent ? "Check your inbox" : "Sign in with a magic link"}
-          </CardDescription>
+          <CardDescription>Sign in to access the breakout engine</CardDescription>
         </CardHeader>
         <CardContent>
-          {sent ? (
-            <div className="flex flex-col items-center gap-4 py-4 text-center">
-              <CheckCircle2 className="h-12 w-12 text-primary" />
-              <p className="text-sm text-muted-foreground">
-                We sent a login link to <span className="font-medium text-foreground">{email}</span>.
-                Click it to sign in.
-              </p>
-              <Button variant="ghost" size="sm" onClick={() => setSent(false)}>
-                Use a different email
-              </Button>
-            </div>
-          ) : (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList className="grid w-full grid-cols-2 mb-4">
+              <TabsTrigger value="signin">Sign In</TabsTrigger>
+              <TabsTrigger value="signup">Sign Up</TabsTrigger>
+            </TabsList>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="you@company.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-10"
-                  required
-                  autoFocus
-                />
-              </div>
+              <Input
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                autoFocus
+              />
+              <Input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+              />
               <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? "Sending…" : "Send me a login link"}
+                {submitting ? "Please wait…" : tab === "signin" ? "Sign In" : "Request Access"}
                 {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
+              {tab === "signup" && (
+                <p className="text-xs text-muted-foreground text-center">
+                  New accounts require admin approval before access is granted.
+                </p>
+              )}
             </form>
-          )}
+          </Tabs>
         </CardContent>
       </Card>
     </div>
