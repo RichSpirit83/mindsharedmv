@@ -11,7 +11,7 @@ import { toast } from "@/hooks/use-toast";
 type UserWithRole = {
   user_id: string;
   email: string;
-  role: "admin" | "viewer" | "pending";
+  role: string;
   created_at: string;
 };
 

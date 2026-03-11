@@ -79,7 +79,7 @@ export default function LeadPool() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("lead_pool").delete().eq("id", id);
+      const { error } = await (supabase.from("lead_pool" as any).delete().eq("id", id) as any);
       if (error) throw error;
     },
     onSuccess: () => {
