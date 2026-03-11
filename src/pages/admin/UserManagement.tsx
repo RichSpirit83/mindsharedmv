@@ -31,7 +31,7 @@ export default function UserManagement() {
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
       const { error } = await supabase
         .from("user_roles")
-        .update({ role: newRole })
+        .update({ role: newRole as any })
         .eq("user_id", userId);
       if (error) throw error;
     },
