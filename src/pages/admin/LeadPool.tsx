@@ -33,10 +33,10 @@ export default function LeadPool() {
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["lead_pool"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("lead_pool")
+      const { data, error } = await (supabase
+        .from("lead_pool" as any)
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false }) as any);
       if (error) throw error;
       return (data ?? []).map((l: any) => ({
         ...l,
