@@ -1,6 +1,8 @@
 import { Outlet } from "react-router-dom";
-import { Settings, Shuffle, Users, LayoutDashboard, LayoutGrid } from "lucide-react";
+import { LayoutDashboard, LayoutGrid, LogOut } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
 import {
   Sidebar,
   SidebarContent,
@@ -12,6 +14,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  SidebarFooter,
   useSidebar,
 } from "@/components/ui/sidebar";
 
@@ -22,6 +25,7 @@ const navItems = [
 function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
+  const { user, signOut } = useAuth();
 
   return (
     <Sidebar collapsible="icon">
@@ -62,6 +66,35 @@ function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter className="border-t border-sidebar-border p-3">
+        {!collapsed && user && (
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-xs text-sidebar-muted truncate max-w-[140px]">
+              {user.email}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-sidebar-muted hover:text-sidebar-primary-foreground hover:bg-sidebar-accent"
+              onClick={signOut}
+              title="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+        {collapsed && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 mx-auto text-sidebar-muted hover:text-sidebar-primary-foreground hover:bg-sidebar-accent"
+            onClick={signOut}
+            title="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </Button>
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 }
