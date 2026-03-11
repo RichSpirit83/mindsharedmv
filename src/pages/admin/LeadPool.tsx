@@ -60,10 +60,10 @@ export default function LeadPool() {
       };
 
       if (lead.id) {
-        const { error } = await supabase.from("lead_pool").update(payload).eq("id", lead.id);
+        const { error } = await (supabase.from("lead_pool" as any).update(payload).eq("id", lead.id) as any);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("lead_pool").insert(payload);
+        const { error } = await (supabase.from("lead_pool" as any).insert(payload) as any);
         if (error) throw error;
       }
     },
