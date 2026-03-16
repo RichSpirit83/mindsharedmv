@@ -10,7 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -18,6 +19,7 @@ import Papa from "papaparse";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import ColumnMapper from "@/components/ColumnMapper";
 import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
@@ -32,16 +34,20 @@ type PromptMode = "custom" | "generate";
 interface TableLead {
   id: string;
   name: string;
+  company: string;
+  title: string;
+  email: string;
+  website: string;
   expertiseTags: string[];
-  networkStrengths: string;
-  notes: string;
+  background: string;
   linkedinUrl: string;
 }
 
 const CANONICAL_FIELDS = [
   "company_name", "first_name", "last_name", "email",
   "company_description", "company_address", "city", "state_province",
-  "zip_postal_code", "country", "dmv_area",
+  "zip_postal_code", "country",
+  "dmv_area",
   "sector", "primary_market", "business_type", "customer_type", "icp",
   "employee_count", "revenue", "capital_raised", "last_round",
   "has_pmf", "sales_stage", "sales_leadership_area",
@@ -84,12 +90,12 @@ const FIELD_ALIASES: Record<string, string[]> = {
 };
 
 function fuzzyMatchHeader(header: string, canonicalFields: string[]): string | null {
-  const normalized = header.toLowerCase().replace(/[\s_\-\/\?\(\)#,.']+/g, " ").trim();
+  const normalized = header.toLowerCase().replace(/[\s_\-\/\?\(\)#,.'"]+/g, " ").trim();
   const collapsed = normalized.replace(/\s+/g, "");
   for (const field of canonicalFields) {
     const aliases = FIELD_ALIASES[field] || [field.replace(/_/g, " ")];
     for (const alias of aliases) {
-      const aliasCollapsed = alias.replace(/[\s_\-\/\?\(\)#,.']+/g, "");
+      const aliasCollapsed = alias.replace(/[\s_\-\/\?\(\)#,.'"]+/g, "");
       if (collapsed === aliasCollapsed) return field;
       if (collapsed.startsWith(aliasCollapsed) && aliasCollapsed.length >= 6) return field;
       if (aliasCollapsed.startsWith(collapsed) && collapsed.length >= 6) return field;
@@ -107,6 +113,10 @@ function computeSpeedRounds(breakoutStart: string, breakoutEnd: string) {
   let rounds = Math.floor(totalMinutes / perRound);
   if (rounds < 2) { perRound = 15; rounds = Math.floor(totalMinutes / perRound); }
   return { rounds: Math.max(rounds, 1), perRound, totalMinutes };
+}
+
+function emptyLead(): TableLead {
+  return { id: crypto.randomUUID(), name: "", company: "", title: "", email: "", website: "", expertiseTags: [], background: "", linkedinUrl: "" };
 }
 
 export default function SessionConfig() {
@@ -135,9 +145,20 @@ export default function SessionConfig() {
   const [pdfLoading, setPdfLoading] = useState<Record<number, boolean>>({});
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
+
+  // Load lead pool for "Add from Pool" dialog
+  const { data: leadPool = [], refetch: refetchPool } = useQuery({
+    queryKey: ["lead_pool"],
+    queryFn: async () => {
+      const { data, error } = await (supabase.from("lead_pool" as any).select("*").order("created_at", { ascending: false }) as any);
+      if (error) throw error;
+      return (data ?? []) as any[];
+    },
+  });
 
   // Load session from DB
   useEffect(() => {
@@ -182,9 +203,12 @@ export default function SessionConfig() {
         const mapped = dbLeads.map((l) => ({
           id: l.id,
           name: l.name || "",
+          company: l.company || "",
+          title: l.title || "",
+          email: l.email || "",
+          website: l.website || "",
           expertiseTags: (l.expertise_tags as string[]) || [],
-          networkStrengths: l.network_strengths || "",
-          notes: l.notes || "",
+          background: l.background || "",
           linkedinUrl: l.linkedin_url || "",
         }));
         setLeads(mapped);
@@ -215,7 +239,7 @@ export default function SessionConfig() {
         column_mapping: columnMapping as any,
       }).eq("id", sessionId);
 
-      // Save companies: delete old, insert new
+      // Save companies
       if (csvData.length > 0) {
         await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
         const companyRows = csvData.map((row) => {
@@ -225,7 +249,6 @@ export default function SessionConfig() {
           }
           return { session_id: sessionId, raw_data: row as any, mapped_data: mapped as any };
         });
-        // Insert in batches of 100
         for (let i = 0; i < companyRows.length; i += 100) {
           await supabase.from("breakout_companies").insert(companyRows.slice(i, i + 100));
         }
@@ -238,8 +261,11 @@ export default function SessionConfig() {
           session_id: sessionId,
           name: l.name,
           linkedin_url: l.linkedinUrl,
-          network_strengths: l.networkStrengths,
-          notes: l.notes,
+          company: l.company,
+          title: l.title,
+          email: l.email,
+          website: l.website,
+          background: l.background,
           expertise_tags: l.expertiseTags as any,
         }));
         await supabase.from("breakout_leads").insert(leadRows);
@@ -259,6 +285,25 @@ export default function SessionConfig() {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads, saveToDb]);
 
+  // Auto-sync imported lead to lead_pool
+  const syncToLeadPool = async (lead: TableLead) => {
+    try {
+      await (supabase.from("lead_pool" as any).insert({
+        name: lead.name,
+        linkedin_url: lead.linkedinUrl || null,
+        company: lead.company || null,
+        title: lead.title || null,
+        email: lead.email || null,
+        website: lead.website || null,
+        expertise_tags: lead.expertiseTags as any,
+        background: lead.background || null,
+      }) as any);
+      refetchPool();
+    } catch (err) {
+      console.error("Failed to sync to lead pool:", err);
+    }
+  };
+
   const importFromLinkedin = async (index: number) => {
     const url = leads[index]?.linkedinUrl?.trim();
     if (!url || !url.includes('linkedin.com')) { toast.error("Please enter a valid LinkedIn URL"); return; }
@@ -268,14 +313,20 @@ export default function SessionConfig() {
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to scrape');
       const profile = data.data;
-      setLeads((prev) => prev.map((l, i) => i === index ? {
-        ...l,
-        name: profile.name || l.name,
-        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : l.expertiseTags,
-        networkStrengths: profile.networkStrengths || l.networkStrengths,
-        notes: profile.notes || l.notes,
-      } : l));
+      const updatedLead: TableLead = {
+        ...leads[index],
+        name: profile.name || leads[index].name,
+        company: profile.company || leads[index].company,
+        title: profile.title || leads[index].title,
+        email: profile.email || leads[index].email,
+        website: profile.website || leads[index].website,
+        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : leads[index].expertiseTags,
+        background: profile.background || leads[index].background,
+      };
+      setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Imported profile for ${profile.name || 'lead'}`);
+      // Auto-sync to lead pool
+      await syncToLeadPool(updatedLead);
     } catch (err: any) {
       console.error('LinkedIn import error:', err);
       toast.error(err.message || "Failed to import LinkedIn profile. Try uploading a PDF instead.");
@@ -288,37 +339,58 @@ export default function SessionConfig() {
     if (!file || !file.name.endsWith('.pdf')) { toast.error("Please upload a PDF file"); return; }
     setPdfLoading((prev) => ({ ...prev, [index]: true }));
     try {
-      // Read PDF as base64 for AI extraction
       const arrayBuffer = await file.arrayBuffer();
       const bytes = new Uint8Array(arrayBuffer);
       let binary = '';
       for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
       const pdfBase64 = btoa(binary);
 
-      // Upload to storage
       const filePath = `${sessionId}/${leads[index].id}_${file.name}`;
       await supabase.storage.from('lead-profiles').upload(filePath, file, { upsert: true });
 
-      // Call AI to extract profile data
       const { data, error } = await supabase.functions.invoke('parse-lead-pdf', { body: { pdfBase64 } });
       if (error) throw error;
       if (!data?.success) throw new Error(data?.error || 'Failed to parse PDF');
 
       const profile = data.data;
-      setLeads((prev) => prev.map((l, i) => i === index ? {
-        ...l,
-        name: profile.name || l.name,
-        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : l.expertiseTags,
-        networkStrengths: profile.networkStrengths || l.networkStrengths,
-        notes: profile.notes || l.notes,
-      } : l));
+      const updatedLead: TableLead = {
+        ...leads[index],
+        name: profile.name || leads[index].name,
+        company: profile.company || leads[index].company,
+        title: profile.title || leads[index].title,
+        email: profile.email || leads[index].email,
+        website: profile.website || leads[index].website,
+        expertiseTags: profile.expertiseTags?.length ? profile.expertiseTags : leads[index].expertiseTags,
+        background: profile.background || leads[index].background,
+      };
+      setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Extracted profile from PDF for ${profile.name || 'lead'}`);
+      // Auto-sync to lead pool
+      await syncToLeadPool(updatedLead);
     } catch (err: any) {
       console.error('PDF import error:', err);
       toast.error(err.message || "Failed to parse PDF");
     } finally {
       setPdfLoading((prev) => ({ ...prev, [index]: false }));
     }
+  };
+
+  const addFromPool = (poolLead: any) => {
+    const newLead: TableLead = {
+      id: crypto.randomUUID(),
+      name: poolLead.name || "",
+      company: poolLead.company || "",
+      title: poolLead.title || "",
+      email: poolLead.email || "",
+      website: poolLead.website || "",
+      expertiseTags: Array.isArray(poolLead.expertise_tags) ? poolLead.expertise_tags : [],
+      background: poolLead.background || "",
+      linkedinUrl: poolLead.linkedin_url || "",
+    };
+    setLeads((prev) => [...prev, newLead]);
+    setNumLeads((prev) => prev + 1);
+    setPoolDialogOpen(false);
+    toast.success(`Added ${newLead.name} from lead pool`);
   };
 
   const autoMapHeaders = (headers: string[]) => {
@@ -391,7 +463,7 @@ export default function SessionConfig() {
   const updateLeadCount = (count: number) => {
     setNumLeads(count);
     const newLeads: TableLead[] = Array.from({ length: count }, (_, i) => (
-      leads[i] || { id: crypto.randomUUID(), name: "", expertiseTags: [], networkStrengths: "", notes: "", linkedinUrl: "" }
+      leads[i] || emptyLead()
     ));
     setLeads(newLeads);
   };
@@ -422,6 +494,11 @@ export default function SessionConfig() {
     { value: "need", label: "Primary Need", desc: "GTM / Fundraising / Ops / Product" },
     { value: "hybrid", label: "Hybrid AI-Optimized", desc: "Let AI balance all factors" },
   ];
+
+  // Filter pool leads that aren't already added
+  const availablePoolLeads = leadPool.filter(
+    (pl: any) => !leads.some((l) => l.name === pl.name && l.linkedinUrl === (pl.linkedin_url || ""))
+  );
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
@@ -646,82 +723,146 @@ export default function SessionConfig() {
       </Card>
 
       {/* Table Leads */}
-      {numLeads > 0 && (
-        <Card>
-          <CardHeader><CardTitle className="font-heading text-lg">Table Leads</CardTitle></CardHeader>
-          <CardContent className="space-y-6">
-            {leads.map((lead, i) => (
-              <div key={lead.id} className="p-4 border rounded-lg space-y-4 animate-fade-in">
-                <div className="flex items-center justify-between">
-                  <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
-                </div>
-                <div>
-                  <Label>LinkedIn Profile</Label>
-                  <div className="flex gap-2 mt-1.5">
-                    <Input
-                      value={lead.linkedinUrl}
-                      onChange={(e) => updateLead(i, "linkedinUrl", e.target.value)}
-                      placeholder="https://linkedin.com/in/username"
-                      className="flex-1"
-                    />
-                    <Button variant="outline" onClick={() => importFromLinkedin(i)} disabled={linkedinLoading[i] || !lead.linkedinUrl}>
-                      {linkedinLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Linkedin className="h-4 w-4 mr-1" />}
-                      {linkedinLoading[i] ? "Importing…" : "Import"}
-                    </Button>
-                    <div>
-                      <input
-                        type="file"
-                        accept=".pdf"
-                        className="hidden"
-                        id={`pdf-upload-${i}`}
-                        onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfUpload(i, f); }}
-                      />
-                      <Button variant="outline" asChild disabled={pdfLoading[i]}>
-                        <label htmlFor={`pdf-upload-${i}`} className="cursor-pointer">
-                          {pdfLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileUp className="h-4 w-4 mr-1" />}
-                          PDF
-                        </label>
-                      </Button>
-                    </div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">Import from LinkedIn or upload a PDF profile as backup</p>
-                </div>
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div>
-                    <Label>Name</Label>
-                    <Input value={lead.name} onChange={(e) => updateLead(i, "name", e.target.value)} className="mt-1.5" placeholder="Full name" />
-                  </div>
-                  <div>
-                    <Label>Network Strengths</Label>
-                    <Input value={lead.networkStrengths} onChange={(e) => updateLead(i, "networkStrengths", e.target.value)} className="mt-1.5" placeholder="e.g. Strong DC gov connections" />
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Expertise Tags</Label>
-                    <div className="flex flex-wrap gap-2 mt-1.5 mb-2">
-                      {lead.expertiseTags.map((tag, ti) => (
-                        <Badge key={ti} variant="secondary" className="gap-1 cursor-pointer" onClick={() => removeTag(i, ti)}>{tag} ×</Badge>
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
+            <div className="flex gap-2">
+              <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    <Users className="h-4 w-4 mr-1" /> Add from Lead Pool
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg">
+                  <DialogHeader>
+                    <DialogTitle>Add from Lead Pool</DialogTitle>
+                  </DialogHeader>
+                  {availablePoolLeads.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No available leads in the pool.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-80 overflow-auto">
+                      {availablePoolLeads.map((pl: any) => (
+                        <button
+                          key={pl.id}
+                          onClick={() => addFromPool(pl)}
+                          className="w-full text-left p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                        >
+                          <div className="font-medium text-sm">{pl.name}</div>
+                          {(pl.title || pl.company) && (
+                            <div className="text-xs text-muted-foreground">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
+                          )}
+                          {Array.isArray(pl.expertise_tags) && pl.expertise_tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1">
+                              {pl.expertise_tags.slice(0, 5).map((t: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </button>
                       ))}
                     </div>
-                    <div className="flex gap-2">
-                      <Input
-                        value={tagInput[i] || ""}
-                        onChange={(e) => setTagInput((prev) => ({ ...prev, [i]: e.target.value }))}
-                        onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag(i))}
-                        placeholder="Add tag and press Enter"
-                      />
-                      <Button variant="outline" size="icon" onClick={() => addTag(i)}><Plus className="h-4 w-4" /></Button>
-                    </div>
-                  </div>
-                  <div className="md:col-span-2">
-                    <Label>Notes</Label>
-                    <Textarea value={lead.notes} onChange={(e) => updateLead(i, "notes", e.target.value)} className="mt-1.5" placeholder="Additional notes about this lead..." />
+                  )}
+                </DialogContent>
+              </Dialog>
+              <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); }}>
+                <Plus className="h-4 w-4 mr-1" /> Add Lead
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {leads.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No table leads yet. Add leads manually or from the lead pool.</p>
+          ) : leads.map((lead, i) => (
+            <div key={lead.id} className="p-4 border rounded-lg space-y-4 animate-fade-in">
+              <div className="flex items-center justify-between">
+                <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
+                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
+                  setLeads((prev) => prev.filter((_, idx) => idx !== i));
+                  setNumLeads((prev) => prev - 1);
+                }}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+              <div>
+                <Label>LinkedIn Profile</Label>
+                <div className="flex gap-2 mt-1.5">
+                  <Input
+                    value={lead.linkedinUrl}
+                    onChange={(e) => updateLead(i, "linkedinUrl", e.target.value)}
+                    placeholder="https://linkedin.com/in/username"
+                    className="flex-1"
+                  />
+                  <Button variant="outline" onClick={() => importFromLinkedin(i)} disabled={linkedinLoading[i] || !lead.linkedinUrl}>
+                    {linkedinLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Linkedin className="h-4 w-4 mr-1" />}
+                    {linkedinLoading[i] ? "Importing…" : "Import"}
+                  </Button>
+                  <div>
+                    <input
+                      type="file"
+                      accept=".pdf"
+                      className="hidden"
+                      id={`pdf-upload-${i}`}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) handlePdfUpload(i, f); }}
+                    />
+                    <Button variant="outline" asChild disabled={pdfLoading[i]}>
+                      <label htmlFor={`pdf-upload-${i}`} className="cursor-pointer">
+                        {pdfLoading[i] ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileUp className="h-4 w-4 mr-1" />}
+                        PDF
+                      </label>
+                    </Button>
                   </div>
                 </div>
+                <p className="text-xs text-muted-foreground mt-1">Import from LinkedIn or upload a PDF profile as backup</p>
               </div>
-            ))}
-          </CardContent>
-        </Card>
-      )}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={lead.name} onChange={(e) => updateLead(i, "name", e.target.value)} className="mt-1.5" placeholder="Full name" />
+                </div>
+                <div>
+                  <Label>Company</Label>
+                  <Input value={lead.company} onChange={(e) => updateLead(i, "company", e.target.value)} className="mt-1.5" placeholder="Company name" />
+                </div>
+                <div>
+                  <Label>Title</Label>
+                  <Input value={lead.title} onChange={(e) => updateLead(i, "title", e.target.value)} className="mt-1.5" placeholder="e.g. CEO, VP Engineering" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input value={lead.email} onChange={(e) => updateLead(i, "email", e.target.value)} className="mt-1.5" placeholder="email@company.com" />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Website</Label>
+                  <Input value={lead.website} onChange={(e) => updateLead(i, "website", e.target.value)} className="mt-1.5" placeholder="https://company.com" />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Expertise Tags</Label>
+                  <div className="flex flex-wrap gap-2 mt-1.5 mb-2">
+                    {lead.expertiseTags.map((tag, ti) => (
+                      <Badge key={ti} variant="secondary" className="gap-1 cursor-pointer" onClick={() => removeTag(i, ti)}>{tag} ×</Badge>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <Input
+                      value={tagInput[i] || ""}
+                      onChange={(e) => setTagInput((prev) => ({ ...prev, [i]: e.target.value }))}
+                      onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addTag(i))}
+                      placeholder="Add tag and press Enter"
+                    />
+                    <Button variant="outline" size="icon" onClick={() => addTag(i)}><Plus className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Background / Notes</Label>
+                  <Textarea value={lead.background} onChange={(e) => updateLead(i, "background", e.target.value)} className="mt-1.5" placeholder="Professional background and relevant notes..." />
+                </div>
+              </div>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
 
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">

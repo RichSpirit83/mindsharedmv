@@ -10,7 +10,6 @@ function extractTextFromPdfBytes(base64: string): string {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
 
-  // Extract printable ASCII runs (min 4 chars) from binary
   let result = '';
   let current = '';
   for (let i = 0; i < bytes.length; i++) {
@@ -24,7 +23,6 @@ function extractTextFromPdfBytes(base64: string): string {
   }
   if (current.trim().length >= 4) result += current;
 
-  // Clean up excessive whitespace
   return result.replace(/\s+/g, ' ').trim();
 }
 
@@ -59,7 +57,7 @@ serve(async (req) => {
         messages: [
           {
             role: "system",
-            content: "You are an expert at extracting structured professional profile data from LinkedIn PDF exports. Extract the person's full name, current headline/title, areas of expertise, network strengths, and any notable information.",
+            content: "You are an expert at extracting structured professional profile data from LinkedIn PDF exports. Extract the person's full name, company, job title, email, company website, areas of expertise, and a background summary.",
           },
           {
             role: "user",
@@ -76,12 +74,14 @@ serve(async (req) => {
                 type: "object",
                 properties: {
                   name: { type: "string", description: "Full name" },
-                  headline: { type: "string", description: "Current title/headline" },
+                  company: { type: "string", description: "Current company name" },
+                  title: { type: "string", description: "Current job title" },
+                  email: { type: "string", description: "Email address if found, otherwise empty string" },
+                  website: { type: "string", description: "Company website URL if found, otherwise empty string" },
                   expertiseTags: { type: "array", items: { type: "string" }, description: "3-6 expertise areas" },
-                  networkStrengths: { type: "string", description: "Summary of network strengths and industry connections" },
-                  notes: { type: "string", description: "Notable background, achievements, or relevant info" },
+                  background: { type: "string", description: "A 2-3 sentence summary of the person's professional background, achievements, and relevant context" },
                 },
-                required: ["name", "headline", "expertiseTags", "networkStrengths", "notes"],
+                required: ["name", "company", "title", "email", "website", "expertiseTags", "background"],
                 additionalProperties: false,
               },
             },
@@ -111,7 +111,17 @@ serve(async (req) => {
 
     const profile = JSON.parse(toolCall.function.arguments);
 
-    return new Response(JSON.stringify({ success: true, data: profile }), {
+    // Add "AI Generated" to expertise tags
+    const tags = (profile.expertiseTags || []).slice(0, 10);
+    if (!tags.includes('AI Generated')) tags.push('AI Generated');
+
+    return new Response(JSON.stringify({
+      success: true,
+      data: {
+        ...profile,
+        expertiseTags: tags,
+      },
+    }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (e) {

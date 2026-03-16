@@ -34,13 +34,11 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract username from LinkedIn URL
     const usernameMatch = url.match(/linkedin\.com\/in\/([^/?#]+)/);
     const username = usernameMatch?.[1]?.replace(/\/$/, '') || '';
 
     console.log('Looking up LinkedIn profile for:', username, 'URL:', url);
 
-    // Run two searches in parallel — use the exact URL as search query for precision
     const [linkedinSearch, webSearch] = await Promise.all([
       fetch('https://api.firecrawl.dev/v1/search', {
         method: 'POST',
@@ -62,10 +60,6 @@ Deno.serve(async (req) => {
       }).then(r => r.json()),
     ]);
 
-    console.log('LinkedIn search results count:', (linkedinSearch.data || []).length);
-    console.log('Web search results count:', (webSearch.data || []).length);
-
-    // Aggregate all text from both searches
     const linkedinResults = linkedinSearch.data || linkedinSearch.results || [];
     const webResults = webSearch.data || webSearch.results || [];
 
@@ -81,7 +75,6 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Use AI to extract structured profile data
     const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -93,7 +86,7 @@ Deno.serve(async (req) => {
         messages: [
           {
             role: 'system',
-            content: `You are extracting professional profile information from search results about a LinkedIn user. The target LinkedIn profile URL is: ${url}. Focus on results that match this specific person. Extract their real full name, professional headline/role, expertise areas, and network value.`,
+            content: `You are extracting professional profile information from search results about a LinkedIn user. The target LinkedIn profile URL is: ${url}. Focus on results that match this specific person. Extract their real full name, company, title, email if available, company website, expertise areas, and a background summary.`,
           },
           {
             role: 'user',
@@ -110,16 +103,18 @@ Deno.serve(async (req) => {
                 type: 'object',
                 properties: {
                   name: { type: 'string', description: 'Full name of the person' },
-                  headline: { type: 'string', description: 'Professional headline or current role (e.g. "CEO at Company X")' },
+                  company: { type: 'string', description: 'Current company name' },
+                  title: { type: 'string', description: 'Current job title (e.g. "CEO", "VP of Engineering")' },
+                  email: { type: 'string', description: 'Email address if found, otherwise empty string' },
+                  website: { type: 'string', description: 'Company website URL if found, otherwise empty string' },
                   expertiseTags: {
                     type: 'array',
                     items: { type: 'string' },
                     description: 'Up to 10 expertise/industry tags (e.g. SaaS, FinTech, Series A, AI, Go-to-Market)',
                   },
-                  networkStrengths: { type: 'string', description: 'Summary of their network value and professional strengths (1-2 sentences)' },
-                  notes: { type: 'string', description: 'Key background info, achievements, and relevant context' },
+                  background: { type: 'string', description: 'A 2-3 sentence summary of the person\'s professional background, achievements, and relevant context' },
                 },
-                required: ['name', 'headline', 'expertiseTags', 'networkStrengths', 'notes'],
+                required: ['name', 'company', 'title', 'email', 'website', 'expertiseTags', 'background'],
                 additionalProperties: false,
               },
             },
@@ -146,14 +141,21 @@ Deno.serve(async (req) => {
     const profile = JSON.parse(toolCall.function.arguments);
     console.log('AI extracted profile:', profile.name, '- Tags:', profile.expertiseTags?.length);
 
+    // Add "AI Generated" to expertise tags
+    const tags = (profile.expertiseTags || []).slice(0, 10);
+    if (!tags.includes('AI Generated')) tags.push('AI Generated');
+
     return new Response(
       JSON.stringify({
         success: true,
         data: {
           name: profile.name || username.replace(/-/g, ' '),
-          expertiseTags: (profile.expertiseTags || []).slice(0, 10),
-          networkStrengths: profile.networkStrengths || profile.headline || '',
-          notes: `LinkedIn: ${url}\n${profile.headline || ''}\n\n${profile.notes || ''}`.trim(),
+          company: profile.company || '',
+          title: profile.title || '',
+          email: profile.email || '',
+          website: profile.website || '',
+          expertiseTags: tags,
+          background: `LinkedIn: ${url}\n${profile.title || ''} at ${profile.company || ''}\n\n${profile.background || ''}`.trim(),
         },
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
