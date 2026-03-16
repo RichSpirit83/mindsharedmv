@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Edit2, Users, Upload } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
+import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 
 const LEAD_POOL_FIELDS = [
   "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
