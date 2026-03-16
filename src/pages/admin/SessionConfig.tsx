@@ -853,7 +853,7 @@ export default function SessionConfig() {
               {showMapper && (
                 <ColumnMapper csvHeaders={csvHeaders} canonicalFields={CANONICAL_FIELDS} mapping={columnMapping} onMappingChange={(m) => setColumnMapping(m)} onConfirm={() => setShowMapper(false)} />
               )}
-              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} />}
+              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => setCsvData((prev) => prev.filter((_, i) => i !== index))} />}
             </div>
           )}
         </CardContent>
