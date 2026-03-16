@@ -618,10 +618,10 @@ export default function MatchingWorkspace() {
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" align="end" className="w-80 p-0">
-              <div className="px-4 py-3 border-b">
-                <h3 className="font-heading font-semibold text-sm">Matching Settings</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Changes apply on next generation</p>
-              </div>
+               <div className="px-4 py-3 border-b">
+                 <h3 className="font-heading font-semibold text-sm">Round {activeRound} Settings</h3>
+                 <p className="text-xs text-muted-foreground mt-0.5">Changes apply on next generation</p>
+               </div>
 
               {/* TABLE STRUCTURE */}
               <div className="px-4 py-3 space-y-3">
