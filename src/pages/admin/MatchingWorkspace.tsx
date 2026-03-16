@@ -817,7 +817,7 @@ export default function MatchingWorkspace() {
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
             <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
-              {isGenerating ? "Regenerating..." : "Regenerate All"}
+              {isGenerating ? "Regenerating..." : `Regenerate Round ${activeRound}`}
             </Button>
             <Button variant="outline" onClick={handleDownloadPdf} disabled={tables.length === 0}>
               <Download className="h-4 w-4 mr-1" /> Download PDF
