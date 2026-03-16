@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,8 +9,44 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Edit2, Users } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import Papa from "papaparse";
+import ColumnMapper from "@/components/ColumnMapper";
+import CsvPreviewTable from "@/components/CsvPreviewTable";
+
+const LEAD_POOL_FIELDS = [
+  "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
+];
+
+const FIELD_ALIASES: Record<string, string[]> = {
+  name: ["name", "full name", "fullname"],
+  company: ["company", "company name", "companyname", "organization"],
+  title: ["title", "job title", "jobtitle", "position", "role"],
+  email: ["email", "e-mail", "emailaddress", "email address"],
+  website: ["website", "url", "company website", "site"],
+  linkedin_url: ["linkedin", "linkedin url", "linkedinurl", "linkedin profile"],
+  expertise_tags: ["expertise", "tags", "expertise tags", "skills", "specialties"],
+  background: ["background", "notes", "bio", "summary", "about", "description"],
+};
+
+function autoMapLeadHeaders(headers: string[]): Record<string, string> {
+  const mapping: Record<string, string> = {};
+  for (const field of LEAD_POOL_FIELDS) {
+    const aliases = FIELD_ALIASES[field] || [field];
+    for (const h of headers) {
+      const norm = h.toLowerCase().replace(/[\s_\-\/]+/g, "").trim();
+      for (const alias of aliases) {
+        if (norm === alias.replace(/[\s_\-\/]+/g, "")) {
+          mapping[field] = h;
+          break;
+        }
+      }
+      if (mapping[field]) break;
+    }
+  }
+  return mapping;
+}
 
 type LeadPoolEntry = {
   id: string;
@@ -33,6 +69,14 @@ export default function LeadPool() {
     name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "",
   });
 
+  // CSV import state
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [csvMapping, setCsvMapping] = useState<Record<string, string>>({});
+  const [csvStep, setCsvStep] = useState<"mapping" | "preview">("mapping");
+  const [importing, setImporting] = useState(false);
+
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["lead_pool"],
     queryFn: async () => {
@@ -50,10 +94,7 @@ export default function LeadPool() {
 
   const saveMutation = useMutation({
     mutationFn: async (lead: typeof form & { id?: string }) => {
-      const tags = lead.expertise_tags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
+      const tags = lead.expertise_tags.split(",").map((t) => t.trim()).filter(Boolean);
       const payload = {
         name: lead.name,
         linkedin_url: lead.linkedin_url || null,
@@ -64,7 +105,6 @@ export default function LeadPool() {
         email: lead.email || null,
         website: lead.website || null,
       };
-
       if (lead.id) {
         const { error } = await (supabase.from("lead_pool" as any).update(payload).eq("id", lead.id) as any);
         if (error) throw error;
@@ -117,6 +157,72 @@ export default function LeadPool() {
     setDialogOpen(true);
   };
 
+  // CSV import handlers
+  const handleCsvFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const headers = results.meta.fields || [];
+        const data = results.data as Record<string, string>[];
+        setCsvHeaders(headers);
+        setCsvData(data);
+        setCsvMapping(autoMapLeadHeaders(headers));
+        setCsvStep("mapping");
+        setCsvDialogOpen(true);
+      },
+      error: () => toast({ title: "Failed to parse CSV", variant: "destructive" }),
+    });
+    e.target.value = "";
+  }, []);
+
+  const confirmCsvMapping = () => {
+    if (!csvMapping.name) {
+      toast({ title: "Name field is required", description: "Please map the 'name' column before continuing.", variant: "destructive" });
+      return;
+    }
+    setCsvStep("preview");
+  };
+
+  const executeBulkImport = async () => {
+    setImporting(true);
+    try {
+      const rows = csvData.map((row) => {
+        const tagsRaw = csvMapping.expertise_tags ? row[csvMapping.expertise_tags] : "";
+        const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [];
+        return {
+          name: row[csvMapping.name] || "Unknown",
+          company: csvMapping.company ? row[csvMapping.company] || null : null,
+          title: csvMapping.title ? row[csvMapping.title] || null : null,
+          email: csvMapping.email ? row[csvMapping.email] || null : null,
+          website: csvMapping.website ? row[csvMapping.website] || null : null,
+          linkedin_url: csvMapping.linkedin_url ? row[csvMapping.linkedin_url] || null : null,
+          expertise_tags: tags,
+          background: csvMapping.background ? row[csvMapping.background] || null : null,
+        };
+      }).filter((r) => r.name && r.name !== "Unknown");
+
+      // Batch insert in chunks of 100
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await (supabase.from("lead_pool" as any).insert(rows.slice(i, i + 100)) as any);
+        if (error) throw error;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["lead_pool"] });
+      setCsvDialogOpen(false);
+      setCsvData([]);
+      setCsvHeaders([]);
+      setCsvMapping({});
+      toast({ title: `Imported ${rows.length} leads` });
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -125,64 +231,107 @@ export default function LeadPool() {
           <h1 className="text-2xl font-heading font-bold">Lead Pool</h1>
           <Badge variant="secondary">{leads.length} leads</Badge>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingLead(null); }}>
-          <DialogTrigger asChild>
-            <Button onClick={openNew}>
-              <Plus className="mr-2 h-4 w-4" /> Add Lead
+        <div className="flex gap-2">
+          {/* CSV Import */}
+          <div>
+            <input type="file" accept=".csv" className="hidden" id="csv-lead-import" onChange={handleCsvFile} />
+            <Button variant="outline" asChild>
+              <label htmlFor="csv-lead-import" className="cursor-pointer">
+                <Upload className="mr-2 h-4 w-4" /> Import CSV
+              </label>
             </Button>
-          </DialogTrigger>
-          <DialogContent className="sm:max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{editingLead ? "Edit Lead" : "Add Lead"}</DialogTitle>
-            </DialogHeader>
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveMutation.mutate({ ...form, id: editingLead?.id });
-              }}
-              className="space-y-4"
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Name *</Label>
-                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
-                </div>
-                <div className="space-y-2">
-                  <Label>Company</Label>
-                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company name" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Title</Label>
-                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Job title" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@company.com" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label>LinkedIn URL</Label>
-                <Input value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} placeholder="https://linkedin.com/in/..." />
-              </div>
-              <div className="space-y-2">
-                <Label>Website</Label>
-                <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://company.com" />
-              </div>
-              <div className="space-y-2">
-                <Label>Expertise Tags</Label>
-                <Input value={form.expertise_tags} onChange={(e) => setForm({ ...form, expertise_tags: e.target.value })} placeholder="fintech, AI, growth (comma-separated)" />
-              </div>
-              <div className="space-y-2">
-                <Label>Background / Notes</Label>
-                <Textarea value={form.background} onChange={(e) => setForm({ ...form, background: e.target.value })} rows={3} />
-              </div>
-              <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
-                {saveMutation.isPending ? "Saving…" : editingLead ? "Update Lead" : "Add Lead"}
+          </div>
+
+          {/* Add Lead Dialog */}
+          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingLead(null); }}>
+            <DialogTrigger asChild>
+              <Button onClick={openNew}>
+                <Plus className="mr-2 h-4 w-4" /> Add Lead
               </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-lg">
+              <DialogHeader>
+                <DialogTitle>{editingLead ? "Edit Lead" : "Add Lead"}</DialogTitle>
+              </DialogHeader>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  saveMutation.mutate({ ...form, id: editingLead?.id });
+                }}
+                className="space-y-4"
+              >
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Name *</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Company</Label>
+                    <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company name" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Title</Label>
+                    <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Job title" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@company.com" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>LinkedIn URL</Label>
+                  <Input value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} placeholder="https://linkedin.com/in/..." />
+                </div>
+                <div className="space-y-2">
+                  <Label>Website</Label>
+                  <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://company.com" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Expertise Tags</Label>
+                  <Input value={form.expertise_tags} onChange={(e) => setForm({ ...form, expertise_tags: e.target.value })} placeholder="fintech, AI, growth (comma-separated)" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Background / Notes</Label>
+                  <Textarea value={form.background} onChange={(e) => setForm({ ...form, background: e.target.value })} rows={3} />
+                </div>
+                <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
+                  {saveMutation.isPending ? "Saving…" : editingLead ? "Update Lead" : "Add Lead"}
+                </Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvDialogOpen} onOpenChange={(open) => { setCsvDialogOpen(open); if (!open) { setCsvData([]); setCsvHeaders([]); setCsvMapping({}); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {csvStep === "mapping" ? "Map CSV Columns" : `Preview Import (${csvData.length} leads)`}
+            </DialogTitle>
+          </DialogHeader>
+          {csvStep === "mapping" ? (
+            <ColumnMapper
+              csvHeaders={csvHeaders}
+              canonicalFields={LEAD_POOL_FIELDS}
+              mapping={csvMapping}
+              onMappingChange={setCsvMapping}
+              onConfirm={confirmCsvMapping}
+            />
+          ) : (
+            <div className="space-y-4">
+              <CsvPreviewTable data={csvData} mapping={csvMapping} />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setCsvStep("mapping")}>Back to Mapping</Button>
+                <Button onClick={executeBulkImport} disabled={importing}>
+                  {importing ? "Importing…" : `Import ${csvData.length} Leads`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       <Card>
         <CardContent className="p-0">
@@ -190,7 +339,7 @@ export default function LeadPool() {
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
           ) : leads.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
-              No leads in the pool yet. Add leads to build your candidate roster.
+              No leads in the pool yet. Add leads manually or import a CSV.
             </div>
           ) : (
             <Table>

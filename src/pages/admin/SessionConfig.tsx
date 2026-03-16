@@ -495,10 +495,11 @@ export default function SessionConfig() {
     { value: "hybrid", label: "Hybrid AI-Optimized", desc: "Let AI balance all factors" },
   ];
 
-  // Filter pool leads that aren't already added
-  const availablePoolLeads = leadPool.filter(
-    (pl: any) => !leads.some((l) => l.name === pl.name && l.linkedinUrl === (pl.linkedin_url || ""))
-  );
+  // Annotate pool leads with "already in session" status
+  const annotatedPoolLeads = leadPool.map((pl: any) => ({
+    ...pl,
+    alreadyInSession: leads.some((l) => l.name === pl.name && l.linkedinUrl === (pl.linkedin_url || "")),
+  }));
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
@@ -738,17 +739,24 @@ export default function SessionConfig() {
                   <DialogHeader>
                     <DialogTitle>Add from Lead Pool</DialogTitle>
                   </DialogHeader>
-                  {availablePoolLeads.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">No available leads in the pool.</p>
+                  {leadPool.length === 0 ? (
+                    <p className="text-sm text-muted-foreground py-4 text-center">No leads in the pool yet. Add leads from the Lead Pool page first.</p>
                   ) : (
                     <div className="space-y-2 max-h-80 overflow-auto">
-                      {availablePoolLeads.map((pl: any) => (
+                      {annotatedPoolLeads.map((pl: any) => (
                         <button
                           key={pl.id}
-                          onClick={() => addFromPool(pl)}
-                          className="w-full text-left p-3 rounded-lg border hover:bg-muted/50 transition-colors"
+                          onClick={() => !pl.alreadyInSession && addFromPool(pl)}
+                          disabled={pl.alreadyInSession}
+                          className={cn(
+                            "w-full text-left p-3 rounded-lg border transition-colors",
+                            pl.alreadyInSession ? "opacity-50 cursor-not-allowed bg-muted/20" : "hover:bg-muted/50"
+                          )}
                         >
-                          <div className="font-medium text-sm">{pl.name}</div>
+                          <div className="flex items-center justify-between">
+                            <div className="font-medium text-sm">{pl.name}</div>
+                            {pl.alreadyInSession && <Badge variant="secondary" className="text-xs">Already added</Badge>}
+                          </div>
                           {(pl.title || pl.company) && (
                             <div className="text-xs text-muted-foreground">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
                           )}
