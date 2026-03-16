@@ -222,12 +222,13 @@ export default function MatchingWorkspace() {
       );
 
       // Add mapped_data to company chips
-      const enrichedTables = (data.tables || []).map((t: any) => ({
+      const enrichedTables: TableGroup[] = (data.tables || []).map((t: any) => ({
         ...t,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
+        assigned_leads: t.assigned_leads || [],
       }));
 
       setTables(enrichedTables);
