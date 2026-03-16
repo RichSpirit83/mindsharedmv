@@ -895,33 +895,55 @@ export default function SessionConfig() {
                   {leadPool.length === 0 ? (
                     <p className="text-sm text-muted-foreground py-4 text-center">No leads in the pool yet. Add leads from the Lead Pool page first.</p>
                   ) : (
-                    <div className="space-y-2 max-h-80 overflow-auto">
-                      {annotatedPoolLeads.map((pl: any) => (
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
                         <button
-                          key={pl.id}
-                          onClick={() => !pl.alreadyInSession && addFromPool(pl)}
-                          disabled={pl.alreadyInSession}
-                          className={cn(
-                            "w-full text-left p-3 rounded-lg border transition-colors",
-                            pl.alreadyInSession ? "opacity-50 cursor-not-allowed bg-muted/20" : "hover:bg-muted/50"
-                          )}
+                          onClick={toggleSelectAllPool}
+                          className="text-xs text-primary hover:underline"
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="font-medium text-sm">{pl.name}</div>
-                            {pl.alreadyInSession && <Badge variant="secondary" className="text-xs">Already added</Badge>}
-                          </div>
-                          {(pl.title || pl.company) && (
-                            <div className="text-xs text-muted-foreground">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
-                          )}
-                          {Array.isArray(pl.expertise_tags) && pl.expertise_tags.length > 0 && (
-                            <div className="flex flex-wrap gap-1 mt-1">
-                              {pl.expertise_tags.slice(0, 5).map((t: string, i: number) => (
-                                <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
-                              ))}
-                            </div>
-                          )}
+                          {poolSelection.size === annotatedPoolLeads.filter((pl: any) => !pl.alreadyInSession).length ? "Deselect All" : "Select All"}
                         </button>
-                      ))}
+                        <span className="text-xs text-muted-foreground">{poolSelection.size} selected</span>
+                      </div>
+                      <div className="space-y-2 max-h-80 overflow-auto">
+                        {annotatedPoolLeads.map((pl: any) => (
+                          <button
+                            key={pl.id}
+                            onClick={() => !pl.alreadyInSession && togglePoolSelection(pl.id)}
+                            disabled={pl.alreadyInSession}
+                            className={cn(
+                              "w-full text-left p-3 rounded-lg border transition-colors",
+                              pl.alreadyInSession ? "opacity-50 cursor-not-allowed bg-muted/20" : poolSelection.has(pl.id) ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                            )}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <div className={cn(
+                                  "h-4 w-4 rounded border flex items-center justify-center",
+                                  poolSelection.has(pl.id) ? "bg-primary border-primary" : "border-muted-foreground/30"
+                                )}>
+                                  {poolSelection.has(pl.id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                                </div>
+                                <span className="font-medium text-sm">{pl.name}</span>
+                              </div>
+                              {pl.alreadyInSession && <Badge variant="secondary" className="text-xs">Already added</Badge>}
+                            </div>
+                            {(pl.title || pl.company) && (
+                              <div className="text-xs text-muted-foreground ml-6">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
+                            )}
+                            {Array.isArray(pl.expertise_tags) && pl.expertise_tags.length > 0 && (
+                              <div className="flex flex-wrap gap-1 mt-1 ml-6">
+                                {pl.expertise_tags.slice(0, 5).map((t: string, i: number) => (
+                                  <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
+                                ))}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                      <Button onClick={addSelectedFromPool} disabled={poolSelection.size === 0} className="w-full">
+                        Add {poolSelection.size} Lead{poolSelection.size !== 1 ? "s" : ""}
+                      </Button>
                     </div>
                   )}
                 </DialogContent>
