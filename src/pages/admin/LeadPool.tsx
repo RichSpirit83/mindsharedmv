@@ -225,7 +225,35 @@ export default function LeadPool() {
     }
   };
 
-  return (
+  const handlePasteImport = async (parsed: ParsedLead[]) => {
+    if (parsed.length === 0) return;
+    setImporting(true);
+    try {
+      const rows = parsed.map((l) => ({
+        name: l.name,
+        company: l.company,
+        title: l.title,
+        email: l.email,
+        website: l.website,
+        linkedin_url: l.linkedin_url,
+        expertise_tags: l.expertise_tags as any,
+        background: l.background,
+      }));
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await (supabase.from("lead_pool" as any).insert(rows.slice(i, i + 100)) as any);
+        if (error) throw error;
+      }
+      queryClient.invalidateQueries({ queryKey: ["lead_pool"] });
+      setPasteDialogOpen(false);
+      toast({ title: `Imported ${rows.length} leads` });
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
