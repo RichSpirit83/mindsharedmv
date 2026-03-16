@@ -16,6 +16,7 @@ import UserManagement from "@/pages/admin/UserManagement";
 import PresentationView from "@/pages/admin/PresentationView";
 import PublicAttendeeView from "@/pages/PublicAttendeeView";
 import Login from "@/pages/Login";
+import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
