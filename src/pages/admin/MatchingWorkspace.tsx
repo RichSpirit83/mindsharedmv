@@ -606,6 +606,9 @@ export default function MatchingWorkspace() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate(`/admin/session/${sessionId}`)}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Session Config
+            </Button>
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
