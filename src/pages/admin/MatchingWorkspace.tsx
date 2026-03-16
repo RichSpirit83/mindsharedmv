@@ -38,6 +38,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
   "bg-table-blue", "bg-table-teal", "bg-table-green", "bg-table-yellow",
