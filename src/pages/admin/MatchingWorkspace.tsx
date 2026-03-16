@@ -346,6 +346,22 @@ export default function MatchingWorkspace() {
     navigate(`/admin/leads/${sessionId}`);
   };
 
+  const handleLeadDragEnd = useCallback((result: DropResult) => {
+    const { source, destination } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
+    const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+    setTables((prev) => {
+      const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
+      const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
+      next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
+      next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
+      next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+      return next;
+    });
+  }, []);
+
   const openProfile = (data: Record<string, string>) => {
     setSelectedProfile(data);
     setProfileOpen(true);
