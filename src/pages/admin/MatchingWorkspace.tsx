@@ -76,6 +76,7 @@ interface TableGroup {
   shared_challenges: string[];
   companies: CompanyChip[];
   assigned_leads: LeadChip[];
+  round_number: number;
 }
 
 export default function MatchingWorkspace() {
