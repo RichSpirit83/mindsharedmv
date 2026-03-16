@@ -608,13 +608,13 @@ export default function MatchingWorkspace() {
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="w-full justify-between">
-                <span className="inline-flex items-center gap-2">
-                  <Settings2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-heading font-semibold text-sm">Matching Settings</span>
-                </span>
-                <Badge variant="secondary" className="text-xs font-mono capitalize">
-                  {sessionConfig?.grouping_priority || "hybrid"}
-                </Badge>
+                 <span className="inline-flex items-center gap-2">
+                   <Settings2 className="h-4 w-4 text-muted-foreground" />
+                   <span className="font-heading font-semibold text-sm">Round {activeRound} Settings</span>
+                 </span>
+                 <Badge variant="secondary" className="text-xs font-mono capitalize">
+                   {activeRoundSettings.grouping_priority}
+                 </Badge>
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" align="end" className="w-80 p-0">
