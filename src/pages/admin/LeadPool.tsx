@@ -79,6 +79,7 @@ export default function LeadPool() {
   const [csvStep, setCsvStep] = useState<"mapping" | "preview">("mapping");
   const [importing, setImporting] = useState(false);
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [linkedinDialogOpen, setLinkedinDialogOpen] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["lead_pool"],
