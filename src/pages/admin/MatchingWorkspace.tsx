@@ -402,100 +402,100 @@ export default function MatchingWorkspace() {
     toast.info("Generating PDF...");
     try {
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth(); // 297
-      const pageH = pdf.internal.pageSize.getHeight(); // 210
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
       const margin = 8;
 
-      // Title
-      pdf.setFontSize(11);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(30, 30, 30);
-      const title = sessionConfig?.session_name || "Matching Workspace";
-      const dateStr = sessionConfig?.session_date ? ` — ${sessionConfig.session_date}` : "";
-      pdf.text(`${title}${dateStr}`, margin, margin + 4);
+      // Group tables by round
+      const rounds = Array.from(new Set(tables.map((t) => t.round_number))).sort((a, b) => a - b);
 
-      const topOffset = margin + 8;
-      const availW = pageW - margin * 2;
-      const availH = pageH - topOffset - margin;
+      rounds.forEach((round, roundIdx) => {
+        if (roundIdx > 0) pdf.addPage();
+        const roundTables = tables.filter((t) => t.round_number === round);
 
-      // Grid layout
-      const count = tables.length;
-      const cols = count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : count <= 9 ? 3 : 4;
-      const rows = Math.ceil(count / cols);
-      const cellW = availW / cols;
-      const cellH = availH / rows;
-      const pad = 2;
-
-      tables.forEach((table, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = margin + col * cellW + pad;
-        const y = topOffset + row * cellH + pad;
-        const innerW = cellW - pad * 2;
-        let cy = y;
-
-        // Table header
-        pdf.setFontSize(8);
+        // Title
+        pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(20, 20, 20);
-        pdf.text(`Table ${table.table_number}${table.table_name ? ` — ${table.table_name}` : ""}`, x, cy + 3);
-        cy += 4;
+        pdf.setTextColor(30, 30, 30);
+        const title = sessionConfig?.session_name || "Matching Workspace";
+        const dateStr = sessionConfig?.session_date ? ` — ${sessionConfig.session_date}` : "";
+        const roundLabel = rounds.length > 1 ? ` — Round ${round}` : "";
+        pdf.text(`${title}${dateStr}${roundLabel}`, margin, margin + 4);
 
-        // Theme
-        if (table.theme) {
-          pdf.setFontSize(6);
-          pdf.setFont("helvetica", "italic");
-          pdf.setTextColor(100, 100, 100);
-          const themeLines = pdf.splitTextToSize(table.theme, innerW);
-          pdf.text(themeLines.slice(0, 2), x, cy + 2.5);
-          cy += themeLines.slice(0, 2).length * 2.5;
-        }
+        const topOffset = margin + 8;
+        const availW = pageW - margin * 2;
+        const availH = pageH - topOffset - margin;
 
-        cy += 1;
+        const count = roundTables.length;
+        const cols = count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : count <= 9 ? 3 : 4;
+        const rows = Math.ceil(count / cols);
+        const cellW = availW / cols;
+        const cellH = availH / rows;
+        const pad = 2;
 
-        // Leads
-        if (table.assigned_leads && table.assigned_leads.length > 0) {
+        roundTables.forEach((table, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = margin + col * cellW + pad;
+          const y = topOffset + row * cellH + pad;
+          const innerW = cellW - pad * 2;
+          let cy = y;
+
+          pdf.setFontSize(8);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(20, 20, 20);
+          pdf.text(`Table ${table.table_number}${table.table_name ? ` — ${table.table_name}` : ""}`, x, cy + 3);
+          cy += 4;
+
+          if (table.theme) {
+            pdf.setFontSize(6);
+            pdf.setFont("helvetica", "italic");
+            pdf.setTextColor(100, 100, 100);
+            const themeLines = pdf.splitTextToSize(table.theme, innerW);
+            pdf.text(themeLines.slice(0, 2), x, cy + 2.5);
+            cy += themeLines.slice(0, 2).length * 2.5;
+          }
+          cy += 1;
+
+          if (table.assigned_leads && table.assigned_leads.length > 0) {
+            pdf.setFontSize(6);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(0, 90, 160);
+            pdf.text("TABLE HEAD", x, cy + 2.5);
+            cy += 3;
+            pdf.setFont("helvetica", "normal");
+            pdf.setTextColor(40, 40, 40);
+            table.assigned_leads.forEach((lead) => {
+              if (cy + 2.5 > y + cellH - pad) return;
+              const txt = `${lead.name}${lead.company ? ` (${lead.company})` : ""}`;
+              pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.5);
+              cy += 2.8;
+            });
+          }
+          cy += 1.5;
+
           pdf.setFontSize(6);
           pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(0, 90, 160);
-          pdf.text("TABLE HEAD", x, cy + 2.5);
+          pdf.setTextColor(0, 120, 60);
+          pdf.text("COMPANIES", x, cy + 2.5);
           cy += 3;
+
           pdf.setFont("helvetica", "normal");
           pdf.setTextColor(40, 40, 40);
-          table.assigned_leads.forEach((lead) => {
+          pdf.setFontSize(5.5);
+          table.companies.forEach((c) => {
             if (cy + 2.5 > y + cellH - pad) return;
-            const txt = `${lead.name}${lead.company ? ` (${lead.company})` : ""}`;
-            pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.5);
-            cy += 2.8;
+            const name = c.company_name || "Unknown";
+            const founder = [c.first_name, c.last_name].filter(Boolean).join(" ");
+            const txt = founder ? `${name} — ${founder}` : name;
+            pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.2);
+            cy += 2.5;
           });
-        }
 
-        cy += 1.5;
-
-        // Companies header
-        pdf.setFontSize(6);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(0, 120, 60);
-        pdf.text("COMPANIES", x, cy + 2.5);
-        cy += 3;
-
-        // Company list
-        pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(40, 40, 40);
-        pdf.setFontSize(5.5);
-        table.companies.forEach((c) => {
-          if (cy + 2.5 > y + cellH - pad) return;
-          const name = c.company_name || "Unknown";
-          const founder = [c.first_name, c.last_name].filter(Boolean).join(" ");
-          const txt = founder ? `${name} — ${founder}` : name;
-          pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.2);
-          cy += 2.5;
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.2);
+          pdf.rect(margin + col * cellW, topOffset + row * cellH, cellW, cellH);
         });
-
-        // Cell border
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.2);
-        pdf.rect(margin + col * cellW, topOffset + row * cellH, cellW, cellH);
       });
 
       pdf.save(`${sessionConfig?.session_name || "matching"}-workspace.pdf`);
