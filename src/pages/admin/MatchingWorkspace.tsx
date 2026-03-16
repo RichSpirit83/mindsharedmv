@@ -30,6 +30,8 @@ import {
   Loader2,
   Monitor,
   Settings2,
+  Download,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
