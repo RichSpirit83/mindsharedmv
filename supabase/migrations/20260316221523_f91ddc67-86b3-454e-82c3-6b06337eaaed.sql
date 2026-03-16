@@ -1,0 +1,1 @@
+ALTER TABLE public.breakout_sessions ADD COLUMN round_settings jsonb NOT NULL DEFAULT '{}'::jsonb;

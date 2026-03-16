@@ -9,7 +9,7 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { companies, sessionConfig, leads } = await req.json();
+    const { companies, sessionConfig, leads, previousRoundTables } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
@@ -25,7 +25,7 @@ serve(async (req) => {
         ? sessionConfig.avoidCompetitors
         : true;
     const leadMatchingMode = sessionConfig?.leadMatchingMode || "flexible";
-
+    const shuffleMode = sessionConfig?.shuffleMode || "both";
     const hybridRule = allowStageMixing
       ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges."
       : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges.";
@@ -66,6 +66,22 @@ serve(async (req) => {
       ? "- Direct competitors should NOT be at the same table"
       : "- Competitors MAY be seated together (intentional competitive-intelligence setup)";
 
+    // Build shuffle constraint from previous round
+    let shuffleConstraint = "";
+    if (previousRoundTables && previousRoundTables.length > 0 && shuffleMode !== "both") {
+      if (shuffleMode === "founders") {
+        const leadAssignments = previousRoundTables.map((t: any) =>
+          `Table ${t.table_number} ("${t.table_name}"): leads = [${(t.assigned_leads || []).map((l: any) => l.name).join(", ")}]`
+        ).join("\n");
+        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Founders Only): The following lead-to-table assignments from the previous round MUST be preserved exactly. Only reshuffle the companies across tables.\nPrevious round lead assignments:\n${leadAssignments}\n`;
+      } else if (shuffleMode === "leads") {
+        const companyAssignments = previousRoundTables.map((t: any) =>
+          `Table ${t.table_number}: companies = [${(t.companies || []).map((c: any) => c.company_name).join(", ")}]`
+        ).join("\n");
+        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Leads Only): The following company-to-table assignments from the previous round MUST be preserved exactly. Only reassign leads across tables.\nPrevious round company assignments:\n${companyAssignments}\n`;
+      }
+    }
+
     const companyList = companies.map((c: any, i: number) => {
       const parts = [`#${i + 1} ${c.company_name || "Unknown"}`];
       if (c.first_name) parts.push(`Contact: ${c.first_name} ${c.last_name || ""}`);
@@ -85,7 +101,7 @@ serve(async (req) => {
 GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
 
 ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
-
+${shuffleConstraint}
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
 ${competitorRule}

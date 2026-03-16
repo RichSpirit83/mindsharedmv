@@ -182,6 +182,23 @@ export default function MatchingWorkspace() {
     return [];
   };
 
+  // Get per-round settings, falling back to session-level defaults
+  const getRoundSettings = (round: number) => {
+    const rs = (sessionConfig?.round_settings as Record<string, any>) || {};
+    const roundKey = String(round);
+    return {
+      grouping_priority: rs[roundKey]?.grouping_priority ?? sessionConfig?.grouping_priority ?? "hybrid",
+      allow_stage_mixing: rs[roundKey]?.allow_stage_mixing ?? sessionConfig?.allow_stage_mixing ?? true,
+      num_tables: rs[roundKey]?.num_tables ?? sessionConfig?.num_tables ?? 5,
+      target_per_table: rs[roundKey]?.target_per_table ?? sessionConfig?.target_per_table ?? 6,
+      avoid_competitors: rs[roundKey]?.avoid_competitors ?? sessionConfig?.avoid_competitors ?? true,
+      lead_matching_mode: rs[roundKey]?.lead_matching_mode ?? sessionConfig?.lead_matching_mode ?? "flexible",
+      shuffle_mode: rs[roundKey]?.shuffle_mode ?? "both",
+    };
+  };
+
+  const activeRoundSettings = getRoundSettings(activeRound);
+
   const updateMatchingSettings = async (
     patch: Partial<{
       grouping_priority: string;
@@ -190,12 +207,23 @@ export default function MatchingWorkspace() {
       target_per_table: number;
       avoid_competitors: boolean;
       lead_matching_mode: string;
+      shuffle_mode: string;
     }>
   ) => {
     if (!sessionId) return;
+    const currentRoundSettings = (sessionConfig?.round_settings as Record<string, any>) || {};
+    const roundKey = String(activeRound);
+    const updatedRoundSettings = {
+      ...currentRoundSettings,
+      [roundKey]: {
+        ...(currentRoundSettings[roundKey] || {}),
+        ...patch,
+      },
+    };
+
     const { data, error } = await supabase
       .from("breakout_sessions")
-      .update(patch as any)
+      .update({ round_settings: updatedRoundSettings } as any)
       .eq("id", sessionId)
       .select("*")
       .single();
@@ -212,13 +240,15 @@ export default function MatchingWorkspace() {
   const generateMatches = async () => {
     setIsGenerating(true);
     try {
+      const rs = getRoundSettings(activeRound);
       const sessionConfigForAi = {
-        numTables: sessionConfig?.num_tables ?? undefined,
-        targetPerTable: sessionConfig?.target_per_table ?? undefined,
-        groupingPriority: sessionConfig?.grouping_priority ?? undefined,
-        allowStageMixing: sessionConfig?.allow_stage_mixing ?? undefined,
-        avoidCompetitors: sessionConfig?.avoid_competitors ?? true,
-        leadMatchingMode: sessionConfig?.lead_matching_mode ?? "flexible",
+        numTables: rs.num_tables,
+        targetPerTable: rs.target_per_table,
+        groupingPriority: rs.grouping_priority,
+        allowStageMixing: rs.allow_stage_mixing,
+        avoidCompetitors: rs.avoid_competitors,
+        leadMatchingMode: rs.lead_matching_mode,
+        shuffleMode: rs.shuffle_mode,
       };
 
       const leadsForAi = (leads || []).map((l: any) => ({
@@ -229,8 +259,14 @@ export default function MatchingWorkspace() {
         background: l.background ?? "",
       }));
 
+      // For shuffle modes, pass previous round's tables as context
+      let previousRoundTables: TableGroup[] | undefined;
+      if (activeRound > 1 && rs.shuffle_mode !== "both") {
+        previousRoundTables = tables.filter((t) => t.round_number === activeRound - 1);
+      }
+
       const { data, error } = await supabase.functions.invoke("generate-matches", {
-        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi },
+        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi, previousRoundTables },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
@@ -572,48 +608,48 @@ export default function MatchingWorkspace() {
           <Popover>
             <PopoverTrigger asChild>
               <Button variant="outline" size="sm" className="w-full justify-between">
-                <span className="inline-flex items-center gap-2">
-                  <Settings2 className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-heading font-semibold text-sm">Matching Settings</span>
-                </span>
-                <Badge variant="secondary" className="text-xs font-mono capitalize">
-                  {sessionConfig?.grouping_priority || "hybrid"}
-                </Badge>
+                 <span className="inline-flex items-center gap-2">
+                   <Settings2 className="h-4 w-4 text-muted-foreground" />
+                   <span className="font-heading font-semibold text-sm">Round {activeRound} Settings</span>
+                 </span>
+                 <Badge variant="secondary" className="text-xs font-mono capitalize">
+                   {activeRoundSettings.grouping_priority}
+                 </Badge>
               </Button>
             </PopoverTrigger>
             <PopoverContent side="right" align="end" className="w-80 p-0">
-              <div className="px-4 py-3 border-b">
-                <h3 className="font-heading font-semibold text-sm">Matching Settings</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Changes apply on next generation</p>
-              </div>
+               <div className="px-4 py-3 border-b">
+                 <h3 className="font-heading font-semibold text-sm">Round {activeRound} Settings</h3>
+                 <p className="text-xs text-muted-foreground mt-0.5">Changes apply on next generation</p>
+               </div>
 
               {/* TABLE STRUCTURE */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Table Structure</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Number of Tables</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={sessionConfig?.num_tables ?? 5}
-                      onChange={(e) => updateMatchingSettings({ num_tables: parseInt(e.target.value) || 5 })}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Target per Table</Label>
-                    <Input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={sessionConfig?.target_per_table ?? 6}
-                      onChange={(e) => updateMatchingSettings({ target_per_table: parseInt(e.target.value) || 6 })}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                </div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="space-y-1.5">
+                     <Label className="text-xs">Number of Tables</Label>
+                     <Input
+                       type="number"
+                       min={1}
+                       max={20}
+                       value={activeRoundSettings.num_tables}
+                       onChange={(e) => updateMatchingSettings({ num_tables: parseInt(e.target.value) || 5 })}
+                       className="h-8 text-sm"
+                     />
+                   </div>
+                   <div className="space-y-1.5">
+                     <Label className="text-xs">Target per Table</Label>
+                     <Input
+                       type="number"
+                       min={2}
+                       max={20}
+                       value={activeRoundSettings.target_per_table}
+                       onChange={(e) => updateMatchingSettings({ target_per_table: parseInt(e.target.value) || 6 })}
+                       className="h-8 text-sm"
+                     />
+                   </div>
+                 </div>
               </div>
 
               <Separator />
@@ -621,33 +657,33 @@ export default function MatchingWorkspace() {
               {/* GROUPING */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Grouping</p>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Priority</Label>
-                  <Select
-                    value={sessionConfig?.grouping_priority || "hybrid"}
-                    onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sector">Sector</SelectItem>
-                      <SelectItem value="stage">Stage</SelectItem>
-                      <SelectItem value="need">Need</SelectItem>
-                      <SelectItem value="hybrid">Hybrid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-xs">Allow Stage Mixing</Label>
-                    <p className="text-xs text-muted-foreground">Mix early &amp; growth-stage companies</p>
-                  </div>
-                  <Switch
-                    checked={!!sessionConfig?.allow_stage_mixing}
-                    onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
-                  />
-                </div>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Priority</Label>
+                   <Select
+                     value={activeRoundSettings.grouping_priority}
+                     onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue placeholder="Select priority" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="sector">Sector</SelectItem>
+                       <SelectItem value="stage">Stage</SelectItem>
+                       <SelectItem value="need">Need</SelectItem>
+                       <SelectItem value="hybrid">Hybrid</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <Label className="text-xs">Allow Stage Mixing</Label>
+                     <p className="text-xs text-muted-foreground">Mix early &amp; growth-stage companies</p>
+                   </div>
+                   <Switch
+                     checked={activeRoundSettings.allow_stage_mixing}
+                     onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
+                   />
+                 </div>
               </div>
 
               <Separator />
@@ -655,44 +691,74 @@ export default function MatchingWorkspace() {
               {/* AI BEHAVIOR */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Behavior</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-xs">Avoid Direct Competitors</Label>
-                    <p className="text-xs text-muted-foreground">Prevent rival companies from sitting together</p>
-                  </div>
-                  <Switch
-                    checked={sessionConfig?.avoid_competitors !== false}
-                    onCheckedChange={(checked) => updateMatchingSettings({ avoid_competitors: checked })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Lead Matching</Label>
-                  <Select
-                    value={sessionConfig?.lead_matching_mode || "flexible"}
-                    onValueChange={(v) => updateMatchingSettings({ lead_matching_mode: v })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="flexible">Flexible</SelectItem>
-                      <SelectItem value="strict">Strict</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {sessionConfig?.lead_matching_mode === "strict"
-                      ? "Lead expertise must directly match the table theme."
-                      : "AI prefers matching lead expertise to theme but can override."}
-                  </p>
-                </div>
-              </div>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <Label className="text-xs">Avoid Direct Competitors</Label>
+                     <p className="text-xs text-muted-foreground">Prevent rival companies from sitting together</p>
+                   </div>
+                   <Switch
+                     checked={activeRoundSettings.avoid_competitors}
+                     onCheckedChange={(checked) => updateMatchingSettings({ avoid_competitors: checked })}
+                   />
+                 </div>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Lead Matching</Label>
+                   <Select
+                     value={activeRoundSettings.lead_matching_mode}
+                     onValueChange={(v) => updateMatchingSettings({ lead_matching_mode: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="flexible">Flexible</SelectItem>
+                       <SelectItem value="strict">Strict</SelectItem>
+                     </SelectContent>
+                   </Select>
+                   <p className="text-xs text-muted-foreground">
+                     {activeRoundSettings.lead_matching_mode === "strict"
+                       ? "Lead expertise must directly match the table theme."
+                       : "AI prefers matching lead expertise to theme but can override."}
+                   </p>
+                 </div>
+               </div>
 
-              <div className="px-4 py-2.5 border-t bg-muted/30">
-                <p className="text-xs text-muted-foreground">
-                  Leads loaded: <span className="text-foreground font-medium">{leads.length}</span>
-                </p>
-              </div>
-            </PopoverContent>
+               <Separator />
+
+               {/* MULTI-ROUND SHUFFLE */}
+               <div className="px-4 py-3 space-y-3">
+                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Multi-Round Shuffle</p>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Shuffle Mode</Label>
+                   <Select
+                     value={activeRoundSettings.shuffle_mode}
+                     onValueChange={(v) => updateMatchingSettings({ shuffle_mode: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="both">Founders &amp; Leads</SelectItem>
+                       <SelectItem value="founders">Founders Only</SelectItem>
+                       <SelectItem value="leads">Leads Only</SelectItem>
+                     </SelectContent>
+                   </Select>
+                   <p className="text-xs text-muted-foreground">
+                     {activeRoundSettings.shuffle_mode === "founders"
+                       ? "Leads stay at their tables; only founders are reshuffled."
+                       : activeRoundSettings.shuffle_mode === "leads"
+                       ? "Founders stay at their tables; only leads are reassigned."
+                       : "Both founders and leads are fully reshuffled."}
+                   </p>
+                 </div>
+               </div>
+
+               <div className="px-4 py-2.5 border-t bg-muted/30">
+                 <p className="text-xs text-muted-foreground">
+                   Leads loaded: <span className="text-foreground font-medium">{leads.length}</span>
+                 </p>
+               </div>
+             </PopoverContent>
           </Popover>
         </div>
       </div>
@@ -706,24 +772,27 @@ export default function MatchingWorkspace() {
             {sessionConfig?.session_name && (
               <p className="text-xs text-muted-foreground mb-1">{sessionConfig.session_name}</p>
             )}
-            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-              Tables are grouped using a <span className="font-semibold">{sessionConfig?.grouping_priority || "hybrid"}</span> approach
-              {sessionConfig?.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
-              {sessionConfig?.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
-              {sessionConfig?.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
-              {(!sessionConfig?.grouping_priority || sessionConfig?.grouping_priority === "hybrid") && " — balancing sector alignment, stage diversity, and shared challenges"}
-              .{" "}
-              {sessionConfig?.allow_stage_mixing !== false
-                ? "Early and later-stage companies may be mixed for cross-stage mentorship."
-                : "Companies are kept at similar stages within each table."}
-              {" "}
-              {sessionConfig?.avoid_competitors !== false
-                ? "Direct competitors are kept apart."
-                : "Competitors may be seated together for competitive-intelligence exchange."}
-              {leads.length > 0 && (
-                <>{" "}Leads are matched <span className="font-semibold">{sessionConfig?.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables where their expertise aligns with founders' needs ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {sessionConfig?.num_tables || "all"} tables).</>
-              )}
-            </p>
+             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+               <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
+               {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
+               {activeRoundSettings.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
+               {activeRoundSettings.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
+               {activeRoundSettings.grouping_priority === "hybrid" && " — balancing sector alignment, stage diversity, and shared challenges"}
+               .{" "}
+               {activeRoundSettings.allow_stage_mixing
+                 ? "Early and later-stage companies may be mixed for cross-stage mentorship."
+                 : "Companies are kept at similar stages within each table."}
+               {" "}
+               {activeRoundSettings.avoid_competitors
+                 ? "Direct competitors are kept apart."
+                 : "Competitors may be seated together for competitive-intelligence exchange."}
+               {leads.length > 0 && (
+                 <>{" "}Leads are matched <span className="font-semibold">{activeRoundSettings.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables where their expertise aligns with founders' needs ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {activeRoundSettings.num_tables} tables).</>
+               )}
+               {activeRound > 1 && (
+                 <>{" "}Shuffle: <span className="font-semibold">{activeRoundSettings.shuffle_mode === "founders" ? "founders only" : activeRoundSettings.shuffle_mode === "leads" ? "leads only" : "both"}</span>.</>
+               )}
+             </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(`/admin/session/${sessionId}`)}>
