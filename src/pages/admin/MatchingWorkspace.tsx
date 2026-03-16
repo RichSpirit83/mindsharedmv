@@ -636,7 +636,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, colorClass, onCompanyClick }: { table: TableGroup; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
@@ -661,6 +661,66 @@ function TableCard({ table, colorClass, onCompanyClick }: { table: TableGroup; c
             ))}
           </div>
         )}
+
+        {/* Assigned Leads - Droppable */}
+        {table.assigned_leads && table.assigned_leads.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Leads</p>
+            <Droppable droppableId={`leads-${tableIndex}`}>
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={cn(
+                    "space-y-1 min-h-[32px] rounded p-1 transition-colors",
+                    snapshot.isDraggingOver && "bg-primary/10 ring-1 ring-primary/30"
+                  )}
+                >
+                  {table.assigned_leads.map((lead, li) => (
+                    <Draggable key={`${tableIndex}-lead-${li}`} draggableId={`${tableIndex}-lead-${li}-${lead.name}`} index={li}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className={cn(
+                            "text-xs flex items-center justify-between p-1.5 rounded bg-primary/10 border border-primary/20 cursor-grab",
+                            snapshot.isDragging && "shadow-lg ring-2 ring-primary/40"
+                          )}
+                        >
+                          <span className="font-medium text-primary">{lead.name}</span>
+                          {lead.title && <span className="text-muted-foreground truncate ml-2">{lead.title}</span>}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </div>
+        )}
+
+        {/* Empty lead drop zone when no leads assigned */}
+        {(!table.assigned_leads || table.assigned_leads.length === 0) && (
+          <Droppable droppableId={`leads-${tableIndex}`}>
+            {(provided, snapshot) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className={cn(
+                  "min-h-[32px] rounded p-1 transition-colors border border-dashed border-muted-foreground/20",
+                  snapshot.isDraggingOver && "bg-primary/10 ring-1 ring-primary/30"
+                )}
+              >
+                <p className="text-xs text-muted-foreground/50 text-center py-1">Drop lead here</p>
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        )}
+
+        {/* Companies */}
         {table.companies.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
         ) : (
