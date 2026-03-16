@@ -15,6 +15,7 @@ import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
+import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 
 const LEAD_POOL_FIELDS = [
   "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
