@@ -38,17 +38,29 @@ serve(async (req) => {
     };
 
     const leadsInfo = (leads || [])
-      .map((l: any) => {
+      .map((l: any, idx: number) => {
         const tags = (l.expertiseTags || []).join(", ");
         const strengths = l.networkStrengths ? ` — strengths: ${l.networkStrengths}` : "";
         const notes = l.notes ? ` — notes: ${l.notes}` : "";
-        return `Lead: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${strengths}${notes}`;
+        const bg = l.background ? ` — background: ${l.background.slice(0, 200)}` : "";
+        return `Lead #${idx + 1}: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${bg}${strengths}${notes}`;
       })
       .join("\n");
 
+    const numLeads = (leads || []).length;
+    const leadsPerTable = numLeads > 0 ? Math.max(1, Math.round(numLeads / numTables)) : 0;
+
+    const leadDistributionInstruction = numLeads > 0
+      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Assign approximately ${leadsPerTable} lead(s) per table. Every lead MUST be assigned. Distribute leads as evenly as possible. Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables.`
+      : "";
+
+    const leadAlignmentInstruction = numLeads > 0
+      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.`
+      : "";
+
     const leadMatchingInstruction = leadMatchingMode === "strict"
-      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme. If no lead matches a table's theme, leave that table without a suggested lead."
-      : "When choosing a suggested lead, prefer leads whose expertise tags align with the table theme and shared challenges, but you may use your best judgment.";
+      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme."
+      : "When choosing leads for each table, prefer leads whose expertise tags and background align with the table theme and founders' shared challenges, but you may use your best judgment.";
 
     const competitorRule = avoidCompetitors
       ? "- Direct competitors should NOT be at the same table"
