@@ -750,6 +750,7 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: T
         )}
 
         {/* Companies */}
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-2">Companies</p>
         {table.companies.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
         ) : (
