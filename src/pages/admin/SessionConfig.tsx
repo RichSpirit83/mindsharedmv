@@ -834,7 +834,20 @@ export default function SessionConfig() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {/* Paste Import */}
+              <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
+                <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
+              </Button>
+              {/* CSV Import for Leads */}
+              <div>
+                <input type="file" accept=".csv" className="hidden" id="lead-csv-import" onChange={handleLeadCsvFile} />
+                <Button variant="outline" size="sm" asChild>
+                  <label htmlFor="lead-csv-import" className="cursor-pointer">
+                    <Upload className="h-4 w-4 mr-1" /> Import CSV
+                  </label>
+                </Button>
+              </div>
               <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
