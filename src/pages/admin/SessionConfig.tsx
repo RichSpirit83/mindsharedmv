@@ -837,6 +837,10 @@ export default function SessionConfig() {
           <div className="flex items-center justify-between">
             <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
             <div className="flex gap-2 flex-wrap">
+              {/* LinkedIn Import */}
+              <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
+                <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
+              </Button>
               {/* Paste Import */}
               <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
                 <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
