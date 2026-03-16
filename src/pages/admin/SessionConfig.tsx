@@ -495,10 +495,11 @@ export default function SessionConfig() {
     { value: "hybrid", label: "Hybrid AI-Optimized", desc: "Let AI balance all factors" },
   ];
 
-  // Filter pool leads that aren't already added
-  const availablePoolLeads = leadPool.filter(
-    (pl: any) => !leads.some((l) => l.name === pl.name && l.linkedinUrl === (pl.linkedin_url || ""))
-  );
+  // Annotate pool leads with "already in session" status
+  const annotatedPoolLeads = leadPool.map((pl: any) => ({
+    ...pl,
+    alreadyInSession: leads.some((l) => l.name === pl.name && l.linkedinUrl === (pl.linkedin_url || "")),
+  }));
 
   return (
     <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
