@@ -495,6 +495,105 @@ export default function SessionConfig() {
     navigate(`/admin/match/${sessionId}`);
   };
 
+  // Lead CSV import
+  const LEAD_IMPORT_FIELDS = ["name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background"];
+  const LEAD_FIELD_ALIASES: Record<string, string[]> = {
+    name: ["name", "full name", "fullname"],
+    company: ["company", "company name", "companyname", "organization"],
+    title: ["title", "job title", "jobtitle", "position", "role"],
+    email: ["email", "e-mail", "emailaddress"],
+    website: ["website", "url", "company website", "site"],
+    linkedin_url: ["linkedin", "linkedin url", "linkedinurl", "linkedin profile"],
+    expertise_tags: ["expertise", "tags", "expertise tags", "skills"],
+    background: ["background", "notes", "bio", "summary"],
+  };
+
+  const autoMapLeadHeaders = (headers: string[]) => {
+    const mapping: Record<string, string> = {};
+    for (const field of LEAD_IMPORT_FIELDS) {
+      const aliases = LEAD_FIELD_ALIASES[field] || [field];
+      for (const h of headers) {
+        const norm = h.toLowerCase().replace(/[\s_\-\/]+/g, "").trim();
+        for (const alias of aliases) {
+          if (norm === alias.replace(/[\s_\-\/]+/g, "")) { mapping[field] = h; break; }
+        }
+        if (mapping[field]) break;
+      }
+    }
+    return mapping;
+  };
+
+  const handleLeadCsvFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true,
+      complete: (results) => {
+        const headers = results.meta.fields || [];
+        setLeadCsvHeaders(headers);
+        setLeadCsvData(results.data as Record<string, string>[]);
+        setLeadCsvMapping(autoMapLeadHeaders(headers));
+        setLeadCsvStep("mapping");
+        setLeadCsvDialogOpen(true);
+      },
+      error: () => toast.error("Failed to parse CSV"),
+    });
+    e.target.value = "";
+  }, []);
+
+  const confirmLeadCsvMapping = () => {
+    if (!leadCsvMapping.name) { toast.error("Name field is required"); return; }
+    setLeadCsvStep("preview");
+  };
+
+  const executeLeadCsvImport = async () => {
+    const newLeads: TableLead[] = leadCsvData.map((row) => {
+      const tagsRaw = leadCsvMapping.expertise_tags ? row[leadCsvMapping.expertise_tags] : "";
+      const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(Boolean) : [];
+      return {
+        id: crypto.randomUUID(),
+        name: row[leadCsvMapping.name] || "",
+        company: leadCsvMapping.company ? row[leadCsvMapping.company] || "" : "",
+        title: leadCsvMapping.title ? row[leadCsvMapping.title] || "" : "",
+        email: leadCsvMapping.email ? row[leadCsvMapping.email] || "" : "",
+        website: leadCsvMapping.website ? row[leadCsvMapping.website] || "" : "",
+        linkedinUrl: leadCsvMapping.linkedin_url ? row[leadCsvMapping.linkedin_url] || "" : "",
+        expertiseTags: tags,
+        background: leadCsvMapping.background ? row[leadCsvMapping.background] || "" : "",
+      };
+    }).filter(l => l.name);
+
+    setLeads((prev) => [...prev, ...newLeads]);
+    setNumLeads((prev) => prev + newLeads.length);
+    setLeadCsvDialogOpen(false);
+    setLeadCsvData([]);
+    toast.success(`Added ${newLeads.length} leads`);
+
+    // Sync to lead pool
+    for (const l of newLeads) { await syncToLeadPool(l); }
+  };
+
+  const handleLeadPasteImport = async (parsed: ParsedLead[]) => {
+    const newLeads: TableLead[] = parsed.map((l) => ({
+      id: crypto.randomUUID(),
+      name: l.name,
+      company: l.company || "",
+      title: l.title || "",
+      email: l.email || "",
+      website: l.website || "",
+      linkedinUrl: l.linkedin_url || "",
+      expertiseTags: l.expertise_tags,
+      background: l.background || "",
+    }));
+    setLeads((prev) => [...prev, ...newLeads]);
+    setNumLeads((prev) => prev + newLeads.length);
+    setLeadPasteDialogOpen(false);
+    toast.success(`Added ${newLeads.length} leads`);
+
+    // Sync to lead pool
+    for (const l of newLeads) { await syncToLeadPool(l); }
+  };
+
   const groupingOptions: { value: GroupingPriority; label: string; desc: string }[] = [
     { value: "sector", label: "Sector / Industry", desc: "Recommended — groups by market" },
     { value: "stage", label: "Stage", desc: "Early / Growth / Scale" },
