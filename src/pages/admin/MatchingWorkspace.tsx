@@ -396,6 +396,7 @@ export default function MatchingWorkspace() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] animate-fade-in">
       <FounderProfileDialog open={profileOpen} onOpenChange={setProfileOpen} data={selectedProfile} />
+      <LeadProfileDialog open={leadProfileOpen} onOpenChange={setLeadProfileOpen} lead={selectedLead} />
 
       {/* Left Panel */}
       <div className="w-80 border-r bg-card flex flex-col">
