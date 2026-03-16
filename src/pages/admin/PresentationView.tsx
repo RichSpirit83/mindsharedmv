@@ -17,6 +17,7 @@ interface TableDisplay {
   suggested_lead: string;
   leads: LeadDisplay[];
   companies: { company_name: string; first_name: string; last_name?: string }[];
+  round_number: number;
 }
 
 const TABLE_ACCENTS = [
@@ -76,6 +77,7 @@ export default function PresentationView() {
             theme: t.theme || "",
             suggested_lead: t.suggested_lead || "",
             leads,
+            round_number: (t as any).round_number ?? 1,
             companies: tableAssignments.map((a) => {
               const m = ((a as any).breakout_companies?.mapped_data || {}) as Record<string, string>;
               return { company_name: m.company_name || "", first_name: m.first_name || "", last_name: m.last_name || "" };
@@ -172,7 +174,19 @@ export default function PresentationView() {
   }
 
   const prompts = (session?.prompts as string[]) || [];
-  const gridCols = tables.length <= 4 ? "grid-cols-2" : tables.length <= 6 ? "grid-cols-3" : "grid-cols-4";
+
+  // Group tables by round
+  const rounds = Array.from(new Set(tables.map((t) => t.round_number))).sort((a, b) => a - b);
+  const tablesByRound = rounds.map((r) => tables.filter((t) => t.round_number === r));
+  const hasMultipleRounds = rounds.length > 1;
+
+  // Build slide labels: Round 1 Tables, Round 2 Tables, ..., Prompts, Timer
+  const slideLabels = [
+    ...rounds.map((r) => hasMultipleRounds ? `Round ${r}` : "Tables"),
+    "Prompts",
+    "Timer",
+  ];
+
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
   return (
@@ -189,64 +203,72 @@ export default function PresentationView() {
       <div className="flex-1 flex flex-col min-h-0 px-8 pb-6">
         <div className="flex-1 overflow-hidden" ref={emblaRef}>
           <div className="flex h-full">
-            {/* Slide 1: Table Assignments */}
-            <div className="min-w-0 shrink-0 grow-0 basis-full h-full overflow-auto px-2">
-              <div className={`grid ${gridCols} gap-5 auto-rows-min`}>
-                {tables.map((table, i) => {
-                  const accent = TABLE_ACCENTS[i % TABLE_ACCENTS.length];
-                  return (
-                    <div
-                      key={table.table_number}
-                      className="rounded-2xl bg-white/[0.06] backdrop-blur border border-white/10 p-5 flex flex-col"
-                      style={{ borderTopColor: accent, borderTopWidth: 3 }}
-                    >
-                      <div className="mb-3">
-                        <div className="flex items-baseline gap-3 mb-1">
-                          <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                          <h2 className="text-lg font-bold leading-tight">{table.table_name}</h2>
-                        </div>
-                        <p className="text-xs text-white/40">{table.theme}</p>
-                      </div>
-                      {table.leads.length > 0 ? (
-                        <div className="mb-3">
-                          <div className="space-y-1.5 mt-1">
-                            {table.leads.map((lead, li) => (
-                              <div key={li} className="flex items-start gap-2">
-                                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30 mt-0.5">
-                                  {li === 0 ? "Head" : "Lead"}
-                                </span>
-                                <div>
-                                  <span className={`text-sm font-semibold ${li === 0 ? "" : "text-white/70"}`} style={li === 0 ? { color: accent } : undefined}>
-                                    {lead.name}
-                                  </span>
-                                  {lead.title && <p className="text-xs text-white/50">{lead.title}{lead.company ? `, ${lead.company}` : ""}</p>}
-                                </div>
+            {/* Table slides - one per round */}
+            {tablesByRound.map((roundTables, ri) => {
+              const gridCols = roundTables.length <= 4 ? "grid-cols-2" : roundTables.length <= 6 ? "grid-cols-3" : "grid-cols-4";
+              return (
+                <div key={`round-${rounds[ri]}`} className="min-w-0 shrink-0 grow-0 basis-full h-full overflow-auto px-2">
+                  {hasMultipleRounds && (
+                    <h2 className="text-xl font-bold text-white/60 uppercase tracking-wider mb-4 text-center">Round {rounds[ri]}</h2>
+                  )}
+                  <div className={`grid ${gridCols} gap-5 auto-rows-min`}>
+                    {roundTables.map((table, i) => {
+                      const accent = TABLE_ACCENTS[i % TABLE_ACCENTS.length];
+                      return (
+                        <div
+                          key={table.table_number}
+                          className="rounded-2xl bg-white/[0.06] backdrop-blur border border-white/10 p-5 flex flex-col"
+                          style={{ borderTopColor: accent, borderTopWidth: 3 }}
+                        >
+                          <div className="mb-3">
+                            <div className="flex items-baseline gap-3 mb-1">
+                              <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
+                              <h2 className="text-lg font-bold leading-tight">{table.table_name}</h2>
+                            </div>
+                            <p className="text-xs text-white/40">{table.theme}</p>
+                          </div>
+                          {table.leads.length > 0 ? (
+                            <div className="mb-3">
+                              <div className="space-y-1.5 mt-1">
+                                {table.leads.map((lead, li) => (
+                                  <div key={li} className="flex items-start gap-2">
+                                    <span className="text-[10px] font-semibold uppercase tracking-wider text-white/50 mt-0.5">
+                                      {li === 0 ? "Head" : "Lead"}
+                                    </span>
+                                    <div>
+                                      <span className={`text-sm font-semibold ${li === 0 ? "" : "text-white/70"}`} style={li === 0 ? { color: accent } : undefined}>
+                                        {lead.name}
+                                      </span>
+                                      {lead.title && <p className="text-xs text-white/50">{lead.title}{lead.company ? `, ${lead.company}` : ""}</p>}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          ) : table.suggested_lead ? (
+                            <div className="mb-3 flex items-center gap-2">
+                              <span className="text-[10px] font-semibold uppercase tracking-wider text-white/50">Lead</span>
+                              <span className="text-sm font-semibold" style={{ color: accent }}>{table.suggested_lead}</span>
+                            </div>
+                          ) : null}
+                          <div className="mb-2 text-xs text-white/30 font-medium">{table.companies.length} participants</div>
+                          <div className="space-y-1 flex-1">
+                            {table.companies.map((c, ci) => (
+                              <div key={ci} className="flex items-center justify-between text-sm py-1 px-2 rounded bg-white/[0.04]">
+                                <span className="font-medium text-white/90">{c.first_name} {c.last_name}</span>
+                                <span className="text-white/40 text-xs truncate ml-2 max-w-[45%] text-right">{c.company_name}</span>
                               </div>
                             ))}
                           </div>
                         </div>
-                      ) : table.suggested_lead ? (
-                        <div className="mb-3 flex items-center gap-2">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Lead</span>
-                          <span className="text-sm font-semibold" style={{ color: accent }}>{table.suggested_lead}</span>
-                        </div>
-                      ) : null}
-                      <div className="mb-2 text-xs text-white/30 font-medium">{table.companies.length} participants</div>
-                      <div className="space-y-1 flex-1">
-                        {table.companies.map((c, ci) => (
-                          <div key={ci} className="flex items-center justify-between text-sm py-1 px-2 rounded bg-white/[0.04]">
-                            <span className="font-medium text-white/90">{c.first_name} {c.last_name}</span>
-                            <span className="text-white/40 text-xs truncate ml-2 max-w-[45%] text-right">{c.company_name}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
 
-            {/* Slide 2: Session Prompts */}
+            {/* Prompts Slide */}
             <div className="min-w-0 shrink-0 grow-0 basis-full h-full overflow-auto px-2 flex items-center justify-center">
               <div className="max-w-4xl w-full space-y-8">
                 <h2 className="text-2xl font-bold text-center text-white/80 uppercase tracking-wider mb-8">Discussion Prompts</h2>
@@ -265,7 +287,7 @@ export default function PresentationView() {
               </div>
             </div>
 
-            {/* Slide 3: Timer */}
+            {/* Timer Slide */}
             <div className="min-w-0 shrink-0 grow-0 basis-full h-full flex items-center justify-center">
               <div className="text-center space-y-8">
                 {session?.breakout_start && session?.breakout_end && (
@@ -306,7 +328,7 @@ export default function PresentationView() {
             <ChevronLeft className="h-5 w-5" />
           </button>
           <div className="flex gap-2">
-            {["Tables", "Prompts", "Timer"].map((label, i) => (
+            {slideLabels.map((label, i) => (
               <button
                 key={i}
                 onClick={() => emblaApi?.scrollTo(i)}

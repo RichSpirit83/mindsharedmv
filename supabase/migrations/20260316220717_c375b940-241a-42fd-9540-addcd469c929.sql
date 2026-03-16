@@ -1,0 +1,1 @@
+ALTER TABLE public.breakout_tables ADD COLUMN round_number integer NOT NULL DEFAULT 1;

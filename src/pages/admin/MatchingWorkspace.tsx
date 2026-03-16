@@ -32,6 +32,7 @@ import {
   Settings2,
   Download,
   ArrowLeft,
+  Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +77,7 @@ interface TableGroup {
   shared_challenges: string[];
   companies: CompanyChip[];
   assigned_leads: LeadChip[];
+  round_number: number;
 }
 
 export default function MatchingWorkspace() {
@@ -95,6 +97,7 @@ export default function MatchingWorkspace() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
   const [leadProfileOpen, setLeadProfileOpen] = useState(false);
+  const [activeRound, setActiveRound] = useState(1);
 
   // Load from DB
   useEffect(() => {
@@ -155,6 +158,7 @@ export default function MatchingWorkspace() {
             rationale: t.rationale || "",
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
+            round_number: (t as any).round_number ?? 1,
             assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
               const lead = (dbLeads || []).find((l: any) => l.name === name);
               return lead
@@ -236,9 +240,10 @@ export default function MatchingWorkspace() {
         (fullCompanyData || []).map((fd: any) => [normalizeCompany(fd?.company_name || ""), fd])
       );
 
-      // Add mapped_data to company chips
+      // Add mapped_data and round_number to company chips
       const enrichedTables: TableGroup[] = (data.tables || []).map((t: any) => ({
         ...t,
+        round_number: activeRound,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
@@ -251,9 +256,13 @@ export default function MatchingWorkspace() {
         }),
       }));
 
-      setTables(enrichedTables);
+      // Merge with tables from other rounds
+      setTables((prev) => {
+        const otherRounds = prev.filter((t) => t.round_number !== activeRound);
+        return [...otherRounds, ...enrichedTables].sort((a, b) => a.round_number - b.round_number || a.table_number - b.table_number);
+      });
       setHasGenerated(true);
-      toast.success(`Generated ${enrichedTables.length} table groupings`);
+      toast.success(`Generated ${enrichedTables.length} table groupings for Round ${activeRound}`);
 
       await saveTablesToDb(enrichedTables);
     } catch (err: any) {
@@ -321,7 +330,8 @@ export default function MatchingWorkspace() {
           suggested_lead: (table.assigned_leads || []).map((l: any) => l.name).join(", ") || table.suggested_lead,
           rationale: table.rationale,
           shared_challenges: table.shared_challenges as any,
-        })
+          round_number: table.round_number ?? 1,
+        } as any)
         .select()
         .single();
 
@@ -392,100 +402,100 @@ export default function MatchingWorkspace() {
     toast.info("Generating PDF...");
     try {
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth(); // 297
-      const pageH = pdf.internal.pageSize.getHeight(); // 210
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
       const margin = 8;
 
-      // Title
-      pdf.setFontSize(11);
-      pdf.setFont("helvetica", "bold");
-      pdf.setTextColor(30, 30, 30);
-      const title = sessionConfig?.session_name || "Matching Workspace";
-      const dateStr = sessionConfig?.session_date ? ` — ${sessionConfig.session_date}` : "";
-      pdf.text(`${title}${dateStr}`, margin, margin + 4);
+      // Group tables by round
+      const rounds = Array.from(new Set(tables.map((t) => t.round_number))).sort((a, b) => a - b);
 
-      const topOffset = margin + 8;
-      const availW = pageW - margin * 2;
-      const availH = pageH - topOffset - margin;
+      rounds.forEach((round, roundIdx) => {
+        if (roundIdx > 0) pdf.addPage();
+        const roundTables = tables.filter((t) => t.round_number === round);
 
-      // Grid layout
-      const count = tables.length;
-      const cols = count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : count <= 9 ? 3 : 4;
-      const rows = Math.ceil(count / cols);
-      const cellW = availW / cols;
-      const cellH = availH / rows;
-      const pad = 2;
-
-      tables.forEach((table, i) => {
-        const col = i % cols;
-        const row = Math.floor(i / cols);
-        const x = margin + col * cellW + pad;
-        const y = topOffset + row * cellH + pad;
-        const innerW = cellW - pad * 2;
-        let cy = y;
-
-        // Table header
-        pdf.setFontSize(8);
+        // Title
+        pdf.setFontSize(11);
         pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(20, 20, 20);
-        pdf.text(`Table ${table.table_number}${table.table_name ? ` — ${table.table_name}` : ""}`, x, cy + 3);
-        cy += 4;
+        pdf.setTextColor(30, 30, 30);
+        const title = sessionConfig?.session_name || "Matching Workspace";
+        const dateStr = sessionConfig?.session_date ? ` — ${sessionConfig.session_date}` : "";
+        const roundLabel = rounds.length > 1 ? ` — Round ${round}` : "";
+        pdf.text(`${title}${dateStr}${roundLabel}`, margin, margin + 4);
 
-        // Theme
-        if (table.theme) {
-          pdf.setFontSize(6);
-          pdf.setFont("helvetica", "italic");
-          pdf.setTextColor(100, 100, 100);
-          const themeLines = pdf.splitTextToSize(table.theme, innerW);
-          pdf.text(themeLines.slice(0, 2), x, cy + 2.5);
-          cy += themeLines.slice(0, 2).length * 2.5;
-        }
+        const topOffset = margin + 8;
+        const availW = pageW - margin * 2;
+        const availH = pageH - topOffset - margin;
 
-        cy += 1;
+        const count = roundTables.length;
+        const cols = count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : count <= 9 ? 3 : 4;
+        const rows = Math.ceil(count / cols);
+        const cellW = availW / cols;
+        const cellH = availH / rows;
+        const pad = 2;
 
-        // Leads
-        if (table.assigned_leads && table.assigned_leads.length > 0) {
+        roundTables.forEach((table, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          const x = margin + col * cellW + pad;
+          const y = topOffset + row * cellH + pad;
+          const innerW = cellW - pad * 2;
+          let cy = y;
+
+          pdf.setFontSize(8);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(20, 20, 20);
+          pdf.text(`Table ${table.table_number}${table.table_name ? ` — ${table.table_name}` : ""}`, x, cy + 3);
+          cy += 4;
+
+          if (table.theme) {
+            pdf.setFontSize(6);
+            pdf.setFont("helvetica", "italic");
+            pdf.setTextColor(100, 100, 100);
+            const themeLines = pdf.splitTextToSize(table.theme, innerW);
+            pdf.text(themeLines.slice(0, 2), x, cy + 2.5);
+            cy += themeLines.slice(0, 2).length * 2.5;
+          }
+          cy += 1;
+
+          if (table.assigned_leads && table.assigned_leads.length > 0) {
+            pdf.setFontSize(6);
+            pdf.setFont("helvetica", "bold");
+            pdf.setTextColor(0, 90, 160);
+            pdf.text("TABLE HEAD", x, cy + 2.5);
+            cy += 3;
+            pdf.setFont("helvetica", "normal");
+            pdf.setTextColor(40, 40, 40);
+            table.assigned_leads.forEach((lead) => {
+              if (cy + 2.5 > y + cellH - pad) return;
+              const txt = `${lead.name}${lead.company ? ` (${lead.company})` : ""}`;
+              pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.5);
+              cy += 2.8;
+            });
+          }
+          cy += 1.5;
+
           pdf.setFontSize(6);
           pdf.setFont("helvetica", "bold");
-          pdf.setTextColor(0, 90, 160);
-          pdf.text("TABLE HEAD", x, cy + 2.5);
+          pdf.setTextColor(0, 120, 60);
+          pdf.text("COMPANIES", x, cy + 2.5);
           cy += 3;
+
           pdf.setFont("helvetica", "normal");
           pdf.setTextColor(40, 40, 40);
-          table.assigned_leads.forEach((lead) => {
+          pdf.setFontSize(5.5);
+          table.companies.forEach((c) => {
             if (cy + 2.5 > y + cellH - pad) return;
-            const txt = `${lead.name}${lead.company ? ` (${lead.company})` : ""}`;
-            pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.5);
-            cy += 2.8;
+            const name = c.company_name || "Unknown";
+            const founder = [c.first_name, c.last_name].filter(Boolean).join(" ");
+            const txt = founder ? `${name} — ${founder}` : name;
+            pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.2);
+            cy += 2.5;
           });
-        }
 
-        cy += 1.5;
-
-        // Companies header
-        pdf.setFontSize(6);
-        pdf.setFont("helvetica", "bold");
-        pdf.setTextColor(0, 120, 60);
-        pdf.text("COMPANIES", x, cy + 2.5);
-        cy += 3;
-
-        // Company list
-        pdf.setFont("helvetica", "normal");
-        pdf.setTextColor(40, 40, 40);
-        pdf.setFontSize(5.5);
-        table.companies.forEach((c) => {
-          if (cy + 2.5 > y + cellH - pad) return;
-          const name = c.company_name || "Unknown";
-          const founder = [c.first_name, c.last_name].filter(Boolean).join(" ");
-          const txt = founder ? `${name} — ${founder}` : name;
-          pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.2);
-          cy += 2.5;
+          pdf.setDrawColor(200, 200, 200);
+          pdf.setLineWidth(0.2);
+          pdf.rect(margin + col * cellW, topOffset + row * cellH, cellW, cellH);
         });
-
-        // Cell border
-        pdf.setDrawColor(200, 200, 200);
-        pdf.setLineWidth(0.2);
-        pdf.rect(margin + col * cellW, topOffset + row * cellH, cellW, cellH);
       });
 
       pdf.save(`${sessionConfig?.session_name || "matching"}-workspace.pdf`);
@@ -724,10 +734,41 @@ export default function MatchingWorkspace() {
             </Button>
             <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={generateMatches}>
               <Sparkles className="h-4 w-4 mr-1" />
-              {isGenerating ? "Generating..." : "Generate Matches"}
+              {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
             </Button>
           </div>
         </div>
+
+        {/* Round Tabs */}
+        {(() => {
+          const allRounds = Array.from(new Set(tables.map((t) => t.round_number))).sort((a, b) => a - b);
+          const maxRound = allRounds.length > 0 ? Math.max(...allRounds) : 0;
+          const displayRounds = allRounds.length > 0 ? allRounds : [1];
+          return (
+            <div className="px-4 pt-3 pb-1 border-b bg-card flex items-center gap-1.5">
+              {displayRounds.map((round) => (
+                <button
+                  key={round}
+                  onClick={() => setActiveRound(round)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                    activeRound === round
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  Round {round}
+                </button>
+              ))}
+              <button
+                onClick={() => setActiveRound(maxRound + 1)}
+                className="px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors inline-flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Round
+              </button>
+            </div>
+          );
+        })()}
 
         <div className="flex-1 overflow-auto p-6">
           {isGenerating ? (
@@ -746,33 +787,37 @@ export default function MatchingWorkspace() {
                 </Card>
               ))}
             </div>
-          ) : !hasGenerated ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <Shuffle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-                <h3 className="font-heading text-lg font-semibold mb-2">Ready to Match</h3>
-                <p className="text-muted-foreground text-sm">
-                  {companies.length > 0
-                    ? `${companies.length} companies loaded. Click "Generate Matches" to create optimized table groupings.`
-                    : 'Configure your session and upload company data first.'}
-                </p>
+          ) : (() => {
+            const roundTables = tables.filter((t) => t.round_number === activeRound);
+            return roundTables.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <Shuffle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+                  <h3 className="font-heading text-lg font-semibold mb-2">Round {activeRound}</h3>
+                  <p className="text-muted-foreground text-sm">
+                    No tables generated for this round yet. Click "Generate Round {activeRound}" to create table groupings.
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <DragDropContext onDragEnd={handleLeadDragEnd}>
-              <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {tables.map((table, i) => (
-                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
-                ))}
-              </div>
-            </DragDropContext>
-          )}
+            ) : (
+              <DragDropContext onDragEnd={handleLeadDragEnd}>
+                <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {roundTables.map((table, i) => {
+                    const globalIndex = tables.indexOf(table);
+                    return (
+                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
+                    );
+                  })}
+                </div>
+              </DragDropContext>
+            );
+          })()}
         </div>
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
             <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
-              {isGenerating ? "Regenerating..." : "Regenerate All"}
+              {isGenerating ? "Regenerating..." : `Regenerate Round ${activeRound}`}
             </Button>
             <Button variant="outline" onClick={handleDownloadPdf} disabled={tables.length === 0}>
               <Download className="h-4 w-4 mr-1" /> Download PDF
