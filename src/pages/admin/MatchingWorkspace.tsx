@@ -691,44 +691,74 @@ export default function MatchingWorkspace() {
               {/* AI BEHAVIOR */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">AI Behavior</p>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-xs">Avoid Direct Competitors</Label>
-                    <p className="text-xs text-muted-foreground">Prevent rival companies from sitting together</p>
-                  </div>
-                  <Switch
-                    checked={sessionConfig?.avoid_competitors !== false}
-                    onCheckedChange={(checked) => updateMatchingSettings({ avoid_competitors: checked })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Lead Matching</Label>
-                  <Select
-                    value={sessionConfig?.lead_matching_mode || "flexible"}
-                    onValueChange={(v) => updateMatchingSettings({ lead_matching_mode: v })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="flexible">Flexible</SelectItem>
-                      <SelectItem value="strict">Strict</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <p className="text-xs text-muted-foreground">
-                    {sessionConfig?.lead_matching_mode === "strict"
-                      ? "Lead expertise must directly match the table theme."
-                      : "AI prefers matching lead expertise to theme but can override."}
-                  </p>
-                </div>
-              </div>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <Label className="text-xs">Avoid Direct Competitors</Label>
+                     <p className="text-xs text-muted-foreground">Prevent rival companies from sitting together</p>
+                   </div>
+                   <Switch
+                     checked={activeRoundSettings.avoid_competitors}
+                     onCheckedChange={(checked) => updateMatchingSettings({ avoid_competitors: checked })}
+                   />
+                 </div>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Lead Matching</Label>
+                   <Select
+                     value={activeRoundSettings.lead_matching_mode}
+                     onValueChange={(v) => updateMatchingSettings({ lead_matching_mode: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="flexible">Flexible</SelectItem>
+                       <SelectItem value="strict">Strict</SelectItem>
+                     </SelectContent>
+                   </Select>
+                   <p className="text-xs text-muted-foreground">
+                     {activeRoundSettings.lead_matching_mode === "strict"
+                       ? "Lead expertise must directly match the table theme."
+                       : "AI prefers matching lead expertise to theme but can override."}
+                   </p>
+                 </div>
+               </div>
 
-              <div className="px-4 py-2.5 border-t bg-muted/30">
-                <p className="text-xs text-muted-foreground">
-                  Leads loaded: <span className="text-foreground font-medium">{leads.length}</span>
-                </p>
-              </div>
-            </PopoverContent>
+               <Separator />
+
+               {/* MULTI-ROUND SHUFFLE */}
+               <div className="px-4 py-3 space-y-3">
+                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Multi-Round Shuffle</p>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Shuffle Mode</Label>
+                   <Select
+                     value={activeRoundSettings.shuffle_mode}
+                     onValueChange={(v) => updateMatchingSettings({ shuffle_mode: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="both">Founders &amp; Leads</SelectItem>
+                       <SelectItem value="founders">Founders Only</SelectItem>
+                       <SelectItem value="leads">Leads Only</SelectItem>
+                     </SelectContent>
+                   </Select>
+                   <p className="text-xs text-muted-foreground">
+                     {activeRoundSettings.shuffle_mode === "founders"
+                       ? "Leads stay at their tables; only founders are reshuffled."
+                       : activeRoundSettings.shuffle_mode === "leads"
+                       ? "Founders stay at their tables; only leads are reassigned."
+                       : "Both founders and leads are fully reshuffled."}
+                   </p>
+                 </div>
+               </div>
+
+               <div className="px-4 py-2.5 border-t bg-muted/30">
+                 <p className="text-xs text-muted-foreground">
+                   Leads loaded: <span className="text-foreground font-medium">{leads.length}</span>
+                 </p>
+               </div>
+             </PopoverContent>
           </Popover>
         </div>
       </div>
