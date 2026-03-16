@@ -38,17 +38,29 @@ serve(async (req) => {
     };
 
     const leadsInfo = (leads || [])
-      .map((l: any) => {
+      .map((l: any, idx: number) => {
         const tags = (l.expertiseTags || []).join(", ");
         const strengths = l.networkStrengths ? ` — strengths: ${l.networkStrengths}` : "";
         const notes = l.notes ? ` — notes: ${l.notes}` : "";
-        return `Lead: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${strengths}${notes}`;
+        const bg = l.background ? ` — background: ${l.background.slice(0, 200)}` : "";
+        return `Lead #${idx + 1}: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${bg}${strengths}${notes}`;
       })
       .join("\n");
 
+    const numLeads = (leads || []).length;
+    const leadsPerTable = numLeads > 0 ? Math.max(1, Math.round(numLeads / numTables)) : 0;
+
+    const leadDistributionInstruction = numLeads > 0
+      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Assign approximately ${leadsPerTable} lead(s) per table. Every lead MUST be assigned. Distribute leads as evenly as possible. Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables.`
+      : "";
+
+    const leadAlignmentInstruction = numLeads > 0
+      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.`
+      : "";
+
     const leadMatchingInstruction = leadMatchingMode === "strict"
-      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme. If no lead matches a table's theme, leave that table without a suggested lead."
-      : "When choosing a suggested lead, prefer leads whose expertise tags align with the table theme and shared challenges, but you may use your best judgment.";
+      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme."
+      : "When choosing leads for each table, prefer leads whose expertise tags and background align with the table theme and founders' shared challenges, but you may use your best judgment.";
 
     const competitorRule = avoidCompetitors
       ? "- Direct competitors should NOT be at the same table"
@@ -81,7 +93,7 @@ ${competitorRule}
 - Tables should foster productive peer conversation
 ${allowStageMixing ? "" : "- Keep companies at similar stages within each table (avoid stage mixing)"}
 
-${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\n\n${leadMatchingInstruction}` : ""}`;
+${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributionInstruction}\n${leadAlignmentInstruction}\n\n${leadMatchingInstruction}` : ""}`;
 
     const userPrompt = `Assign these ${companies.length} companies to ${numTables} tables:\n\n${companyList}`;
 
@@ -117,8 +129,8 @@ ${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\
                         table_name: { type: "string", description: "Short memorable name for the table theme" },
                         theme: { type: "string", description: "One-sentence theme description" },
                         stage_mix: { type: "string", description: "e.g. 'Early-stage mix' or 'Growth-stage'" },
-                        suggested_lead: { type: "string", description: "Name of suggested table lead or empty" },
-                        rationale: { type: "string", description: "Why these companies are grouped together" },
+                        suggested_lead: { type: "string", description: "Name of primary suggested table lead or empty" },
+                        rationale: { type: "string", description: "Why these companies are grouped together and why these leads are a good fit" },
                         shared_challenges: {
                           type: "array",
                           items: { type: "string" },
@@ -129,8 +141,13 @@ ${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\
                           items: { type: "number" },
                           description: "1-based indices of companies assigned to this table",
                         },
+                        assigned_lead_indices: {
+                          type: "array",
+                          items: { type: "number" },
+                          description: "1-based indices of leads assigned to this table",
+                        },
                       },
-                      required: ["table_number", "table_name", "theme", "stage_mix", "rationale", "shared_challenges", "company_indices"],
+                      required: ["table_number", "table_name", "theme", "stage_mix", "rationale", "shared_challenges", "company_indices", "assigned_lead_indices"],
                       additionalProperties: false,
                     },
                   },
@@ -186,6 +203,10 @@ ${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\
           stage: c.stage || c.sales_stage || "",
           revenue: c.revenue || "",
         } : null;
+      }).filter(Boolean),
+      assigned_leads: (table.assigned_lead_indices || []).map((idx: number) => {
+        const l = (leads || [])[idx - 1];
+        return l ? { name: l.name, company: l.company, title: l.title, expertiseTags: l.expertiseTags || [] } : null;
       }).filter(Boolean),
     }));
 

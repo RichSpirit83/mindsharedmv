@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -50,6 +51,13 @@ interface CompanyChip {
   mapped_data?: Record<string, string>;
 }
 
+interface LeadChip {
+  name: string;
+  company?: string;
+  title?: string;
+  expertiseTags?: string[];
+}
+
 interface TableGroup {
   table_number: number;
   table_name: string;
@@ -59,6 +67,7 @@ interface TableGroup {
   rationale: string;
   shared_challenges: string[];
   companies: CompanyChip[];
+  assigned_leads: LeadChip[];
 }
 
 export default function MatchingWorkspace() {
@@ -136,6 +145,7 @@ export default function MatchingWorkspace() {
             rationale: t.rationale || "",
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
+            assigned_leads: [], // Will be populated from AI response on regeneration
           };
         });
         setTables(tableGroups);
@@ -212,12 +222,13 @@ export default function MatchingWorkspace() {
       );
 
       // Add mapped_data to company chips
-      const enrichedTables = (data.tables || []).map((t: any) => ({
+      const enrichedTables: TableGroup[] = (data.tables || []).map((t: any) => ({
         ...t,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
+        assigned_leads: t.assigned_leads || [],
       }));
 
       setTables(enrichedTables);
@@ -334,6 +345,22 @@ export default function MatchingWorkspace() {
     toast.success("Session finalized!");
     navigate(`/admin/leads/${sessionId}`);
   };
+
+  const handleLeadDragEnd = useCallback((result: DropResult) => {
+    const { source, destination } = result;
+    if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
+    const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
+    const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+    setTables((prev) => {
+      const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
+      const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
+      next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
+      next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
+      next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+      return next;
+    });
+  }, []);
 
   const openProfile = (data: Record<string, string>) => {
     setSelectedProfile(data);
@@ -581,11 +608,13 @@ export default function MatchingWorkspace() {
               </div>
             </div>
           ) : (
-            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-              {tables.map((table, i) => (
-                <TableCard key={table.table_number} table={table} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} />
-              ))}
-            </div>
+            <DragDropContext onDragEnd={handleLeadDragEnd}>
+              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                {tables.map((table, i) => (
+                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} />
+                ))}
+              </div>
+            </DragDropContext>
           )}
         </div>
 
@@ -607,7 +636,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, colorClass, onCompanyClick }: { table: TableGroup; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
@@ -632,6 +661,66 @@ function TableCard({ table, colorClass, onCompanyClick }: { table: TableGroup; c
             ))}
           </div>
         )}
+
+        {/* Assigned Leads - Droppable */}
+        {table.assigned_leads && table.assigned_leads.length > 0 && (
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Leads</p>
+            <Droppable droppableId={`leads-${tableIndex}`}>
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={cn(
+                    "space-y-1 min-h-[32px] rounded p-1 transition-colors",
+                    snapshot.isDraggingOver && "bg-primary/10 ring-1 ring-primary/30"
+                  )}
+                >
+                  {table.assigned_leads.map((lead, li) => (
+                    <Draggable key={`${tableIndex}-lead-${li}`} draggableId={`${tableIndex}-lead-${li}-${lead.name}`} index={li}>
+                      {(provided, snapshot) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className={cn(
+                            "text-xs flex items-center justify-between p-1.5 rounded bg-primary/10 border border-primary/20 cursor-grab",
+                            snapshot.isDragging && "shadow-lg ring-2 ring-primary/40"
+                          )}
+                        >
+                          <span className="font-medium text-primary">{lead.name}</span>
+                          {lead.title && <span className="text-muted-foreground truncate ml-2">{lead.title}</span>}
+                        </div>
+                      )}
+                    </Draggable>
+                  ))}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </div>
+        )}
+
+        {/* Empty lead drop zone when no leads assigned */}
+        {(!table.assigned_leads || table.assigned_leads.length === 0) && (
+          <Droppable droppableId={`leads-${tableIndex}`}>
+            {(provided, snapshot) => (
+              <div
+                ref={provided.innerRef}
+                {...provided.droppableProps}
+                className={cn(
+                  "min-h-[32px] rounded p-1 transition-colors border border-dashed border-muted-foreground/20",
+                  snapshot.isDraggingOver && "bg-primary/10 ring-1 ring-primary/30"
+                )}
+              >
+                <p className="text-xs text-muted-foreground/50 text-center py-1">Drop lead here</p>
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        )}
+
+        {/* Companies */}
         {table.companies.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
         ) : (
