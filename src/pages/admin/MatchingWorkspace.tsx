@@ -35,6 +35,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
+import LeadProfileDialog from "@/components/LeadProfileDialog";
 
 const TABLE_COLORS = [
   "bg-table-blue", "bg-table-teal", "bg-table-green", "bg-table-yellow",
@@ -56,6 +57,10 @@ interface LeadChip {
   company?: string;
   title?: string;
   expertiseTags?: string[];
+  background?: string;
+  email?: string;
+  linkedinUrl?: string;
+  website?: string;
 }
 
 interface TableGroup {
@@ -85,6 +90,8 @@ export default function MatchingWorkspace() {
   const [loading, setLoading] = useState(true);
   const [selectedProfile, setSelectedProfile] = useState<Record<string, string> | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
+  const [leadProfileOpen, setLeadProfileOpen] = useState(false);
 
   // Load from DB
   useEffect(() => {
@@ -148,7 +155,7 @@ export default function MatchingWorkspace() {
             assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
               const lead = (dbLeads || []).find((l: any) => l.name === name);
               return lead
-                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [] }
+                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [], background: lead.background || "", email: lead.email || "", linkedinUrl: lead.linkedin_url || "", website: lead.website || "" }
                 : { name, company: "", title: "", expertiseTags: [] };
             }),
           };
@@ -233,7 +240,12 @@ export default function MatchingWorkspace() {
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
-        assigned_leads: t.assigned_leads || [],
+        assigned_leads: (t.assigned_leads || []).map((al: any) => {
+          const dbLead = leads.find((l: any) => l.name === al.name);
+          return dbLead
+            ? { ...al, company: dbLead.company || al.company || "", background: dbLead.background || "", email: dbLead.email || "", linkedinUrl: dbLead.linkedin_url || "", website: dbLead.website || "", expertiseTags: (dbLead.expertise_tags as string[]) || al.expertiseTags || [] }
+            : al;
+        }),
       }));
 
       setTables(enrichedTables);
@@ -389,6 +401,7 @@ export default function MatchingWorkspace() {
   return (
     <div className="flex h-[calc(100vh-3.5rem)] animate-fade-in">
       <FounderProfileDialog open={profileOpen} onOpenChange={setProfileOpen} data={selectedProfile} />
+      <LeadProfileDialog open={leadProfileOpen} onOpenChange={setLeadProfileOpen} lead={selectedLead} />
 
       {/* Left Panel */}
       <div className="w-80 border-r bg-card flex flex-col">
@@ -634,7 +647,7 @@ export default function MatchingWorkspace() {
             <DragDropContext onDragEnd={handleLeadDragEnd}>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {tables.map((table, i) => (
-                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} />
+                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
                 ))}
               </div>
             </DragDropContext>
@@ -659,7 +672,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
@@ -713,10 +726,12 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: T
                               : "bg-primary/10 border border-primary/20",
                             snapshot.isDragging && "shadow-lg ring-2 ring-primary/40"
                           )}
+                          onClick={(e) => { e.stopPropagation(); onLeadClick(lead); }}
                         >
                           <div className="flex items-center gap-1.5">
                             {li === 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/40 text-primary">Head</Badge>}
                             <span className="font-medium text-primary">{lead.name}</span>
+                            {lead.company && <span className="text-muted-foreground">· {lead.company}</span>}
                           </div>
                           {lead.title && <span className="text-muted-foreground truncate ml-2">{lead.title}</span>}
                         </div>
