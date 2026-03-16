@@ -145,7 +145,12 @@ export default function MatchingWorkspace() {
             rationale: t.rationale || "",
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
-            assigned_leads: [], // Will be populated from AI response on regeneration
+            assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
+              const lead = (dbLeads || []).find((l: any) => l.name === name);
+              return lead
+                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [] }
+                : { name, company: "", title: "", expertiseTags: [] };
+            }),
           };
         });
         setTables(tableGroups);
@@ -298,7 +303,7 @@ export default function MatchingWorkspace() {
           table_name: table.table_name,
           theme: table.theme,
           stage_mix: table.stage_mix,
-          suggested_lead: table.suggested_lead,
+          suggested_lead: (table.assigned_leads || []).map((l: any) => l.name).join(", ") || table.suggested_lead,
           rationale: table.rationale,
           shared_challenges: table.shared_challenges as any,
         })

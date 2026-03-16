@@ -4,11 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 
+interface LeadDisplay {
+  name: string;
+  company?: string;
+  title?: string;
+}
+
 interface TableDisplay {
   table_number: number;
   table_name: string;
   theme: string;
   suggested_lead: string;
+  leads: LeadDisplay[];
   companies: { company_name: string; first_name: string; last_name?: string }[];
 }
 
@@ -51,17 +58,24 @@ export default function PresentationView() {
       setSession(s);
 
       const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
+      const { data: dbLeads } = await supabase.from("breakout_leads").select("*").eq("session_id", sessionId);
       if (dbTables) {
         const tableIds = dbTables.map((t) => t.id);
         const { data: assignments } = await supabase.from("breakout_table_assignments").select("*, breakout_companies(*)").in("table_id", tableIds);
 
         const display: TableDisplay[] = dbTables.map((t) => {
           const tableAssignments = (assignments || []).filter((a) => a.table_id === t.id);
+          const leadNames = (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean);
+          const leads: LeadDisplay[] = leadNames.map((name: string) => {
+            const lead = (dbLeads || []).find((l: any) => l.name === name);
+            return lead ? { name: lead.name, company: lead.company || "", title: lead.title || "" } : { name };
+          });
           return {
             table_number: t.table_number,
             table_name: t.table_name || "",
             theme: t.theme || "",
             suggested_lead: t.suggested_lead || "",
+            leads,
             companies: tableAssignments.map((a) => {
               const m = ((a as any).breakout_companies?.mapped_data || {}) as Record<string, string>;
               return { company_name: m.company_name || "", first_name: m.first_name || "", last_name: m.last_name || "" };
@@ -193,12 +207,24 @@ export default function PresentationView() {
                         </div>
                         <p className="text-xs text-white/40">{table.theme}</p>
                       </div>
-                      {table.suggested_lead && (
+                      {table.leads.length > 0 ? (
+                        <div className="mb-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Table Lead{table.leads.length > 1 ? "s" : ""}</span>
+                          <div className="space-y-1 mt-1">
+                            {table.leads.map((lead, li) => (
+                              <div key={li} className="flex items-center gap-2">
+                                <span className="text-sm font-semibold" style={{ color: accent }}>{lead.name}</span>
+                                {lead.title && <span className="text-xs text-white/30">{lead.title}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : table.suggested_lead ? (
                         <div className="mb-3 flex items-center gap-2">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Lead</span>
                           <span className="text-sm font-semibold" style={{ color: accent }}>{table.suggested_lead}</span>
                         </div>
-                      )}
+                      ) : null}
                       <div className="mb-2 text-xs text-white/30 font-medium">{table.companies.length} participants</div>
                       <div className="space-y-1 flex-1">
                         {table.companies.map((c, ci) => (
