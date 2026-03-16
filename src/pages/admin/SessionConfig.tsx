@@ -1034,6 +1034,13 @@ export default function SessionConfig() {
         onImport={handleLeadPasteImport}
       />
 
+      {/* Lead LinkedIn Dialog */}
+      <BulkLinkedInDialog
+        open={leadLinkedinDialogOpen}
+        onOpenChange={setLeadLinkedinDialogOpen}
+        onImport={handleLeadPasteImport}
+      />
+
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
