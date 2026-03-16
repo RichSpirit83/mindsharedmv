@@ -991,6 +991,43 @@ export default function SessionConfig() {
         </CardContent>
       </Card>
 
+      {/* Lead CSV Import Dialog */}
+      <Dialog open={leadCsvDialogOpen} onOpenChange={(open) => { setLeadCsvDialogOpen(open); if (!open) { setLeadCsvData([]); setLeadCsvHeaders([]); setLeadCsvMapping({}); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {leadCsvStep === "mapping" ? "Map CSV Columns to Lead Fields" : `Preview Import (${leadCsvData.length} leads)`}
+            </DialogTitle>
+          </DialogHeader>
+          {leadCsvStep === "mapping" ? (
+            <ColumnMapper
+              csvHeaders={leadCsvHeaders}
+              canonicalFields={LEAD_IMPORT_FIELDS}
+              mapping={leadCsvMapping}
+              onMappingChange={setLeadCsvMapping}
+              onConfirm={confirmLeadCsvMapping}
+            />
+          ) : (
+            <div className="space-y-4">
+              <CsvPreviewTable data={leadCsvData} mapping={leadCsvMapping} />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setLeadCsvStep("mapping")}>Back to Mapping</Button>
+                <Button onClick={executeLeadCsvImport}>
+                  Import {leadCsvData.length} Leads
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lead Paste Dialog */}
+      <PasteLeadsDialog
+        open={leadPasteDialogOpen}
+        onOpenChange={setLeadPasteDialogOpen}
+        onImport={handleLeadPasteImport}
+      />
+
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
