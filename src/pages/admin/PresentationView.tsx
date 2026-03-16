@@ -4,11 +4,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 
+interface LeadDisplay {
+  name: string;
+  company?: string;
+  title?: string;
+}
+
 interface TableDisplay {
   table_number: number;
   table_name: string;
   theme: string;
   suggested_lead: string;
+  leads: LeadDisplay[];
   companies: { company_name: string; first_name: string; last_name?: string }[];
 }
 
