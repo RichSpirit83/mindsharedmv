@@ -194,9 +194,10 @@ export default function MatchingWorkspace() {
 
       const leadsForAi = (leads || []).map((l: any) => ({
         name: l.name ?? "",
+        company: l.company ?? "",
+        title: l.title ?? "",
         expertiseTags: toStringArray(l.expertise_tags),
-        networkStrengths: l.network_strengths ?? "",
-        notes: l.notes ?? "",
+        background: l.background ?? "",
       }));
 
       const { data, error } = await supabase.functions.invoke("generate-matches", {

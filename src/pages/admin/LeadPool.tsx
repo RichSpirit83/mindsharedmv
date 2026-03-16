@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -17,8 +17,11 @@ type LeadPoolEntry = {
   name: string;
   linkedin_url: string | null;
   expertise_tags: string[];
-  network_strengths: string | null;
-  notes: string | null;
+  background: string | null;
+  company: string | null;
+  title: string | null;
+  email: string | null;
+  website: string | null;
   created_at: string;
 };
 
@@ -27,7 +30,7 @@ export default function LeadPool() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<LeadPoolEntry | null>(null);
   const [form, setForm] = useState({
-    name: "", linkedin_url: "", expertise_tags: "", network_strengths: "", notes: "",
+    name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "",
   });
 
   const { data: leads = [], isLoading } = useQuery({
@@ -55,8 +58,11 @@ export default function LeadPool() {
         name: lead.name,
         linkedin_url: lead.linkedin_url || null,
         expertise_tags: tags,
-        network_strengths: lead.network_strengths || null,
-        notes: lead.notes || null,
+        background: lead.background || null,
+        company: lead.company || null,
+        title: lead.title || null,
+        email: lead.email || null,
+        website: lead.website || null,
       };
 
       if (lead.id) {
@@ -88,7 +94,7 @@ export default function LeadPool() {
     },
   });
 
-  const resetForm = () => setForm({ name: "", linkedin_url: "", expertise_tags: "", network_strengths: "", notes: "" });
+  const resetForm = () => setForm({ name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "" });
 
   const openEdit = (lead: LeadPoolEntry) => {
     setEditingLead(lead);
@@ -96,8 +102,11 @@ export default function LeadPool() {
       name: lead.name,
       linkedin_url: lead.linkedin_url || "",
       expertise_tags: lead.expertise_tags.join(", "),
-      network_strengths: lead.network_strengths || "",
-      notes: lead.notes || "",
+      background: lead.background || "",
+      company: lead.company || "",
+      title: lead.title || "",
+      email: lead.email || "",
+      website: lead.website || "",
     });
     setDialogOpen(true);
   };
@@ -133,25 +142,39 @@ export default function LeadPool() {
               }}
               className="space-y-4"
             >
-              <div className="space-y-2">
-                <Label>Name *</Label>
-                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label>Name *</Label>
+                  <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                </div>
+                <div className="space-y-2">
+                  <Label>Company</Label>
+                  <Input value={form.company} onChange={(e) => setForm({ ...form, company: e.target.value })} placeholder="Company name" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Title</Label>
+                  <Input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="Job title" />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email</Label>
+                  <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="email@company.com" />
+                </div>
               </div>
               <div className="space-y-2">
                 <Label>LinkedIn URL</Label>
                 <Input value={form.linkedin_url} onChange={(e) => setForm({ ...form, linkedin_url: e.target.value })} placeholder="https://linkedin.com/in/..." />
               </div>
               <div className="space-y-2">
+                <Label>Website</Label>
+                <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} placeholder="https://company.com" />
+              </div>
+              <div className="space-y-2">
                 <Label>Expertise Tags</Label>
                 <Input value={form.expertise_tags} onChange={(e) => setForm({ ...form, expertise_tags: e.target.value })} placeholder="fintech, AI, growth (comma-separated)" />
               </div>
               <div className="space-y-2">
-                <Label>Network Strengths</Label>
-                <Input value={form.network_strengths} onChange={(e) => setForm({ ...form, network_strengths: e.target.value })} placeholder="Strong VC network, enterprise sales..." />
-              </div>
-              <div className="space-y-2">
-                <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={3} />
+                <Label>Background / Notes</Label>
+                <Textarea value={form.background} onChange={(e) => setForm({ ...form, background: e.target.value })} rows={3} />
               </div>
               <Button type="submit" className="w-full" disabled={saveMutation.isPending}>
                 {saveMutation.isPending ? "Saving…" : editingLead ? "Update Lead" : "Add Lead"}
@@ -174,8 +197,9 @@ export default function LeadPool() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
+                  <TableHead>Company / Title</TableHead>
                   <TableHead>Expertise</TableHead>
-                  <TableHead>Network Strengths</TableHead>
+                  <TableHead>Background</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -189,6 +213,16 @@ export default function LeadPool() {
                           LinkedIn
                         </a>
                       )}
+                      {lead.email && <div className="text-xs text-muted-foreground">{lead.email}</div>}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {lead.company && <div className="font-medium">{lead.company}</div>}
+                      {lead.title && <div className="text-muted-foreground text-xs">{lead.title}</div>}
+                      {lead.website && (
+                        <a href={lead.website} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                          {lead.website.replace(/^https?:\/\//, '').slice(0, 30)}
+                        </a>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
@@ -197,7 +231,7 @@ export default function LeadPool() {
                         ))}
                       </div>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{lead.network_strengths}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[200px] truncate">{lead.background}</TableCell>
                     <TableCell>
                       <div className="flex gap-1">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(lead)}>
