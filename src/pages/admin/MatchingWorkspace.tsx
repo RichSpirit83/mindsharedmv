@@ -664,6 +664,9 @@ export default function MatchingWorkspace() {
             <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : "Regenerate All"}
             </Button>
+            <Button variant="outline" onClick={handleDownloadPdf} disabled={tables.length === 0}>
+              <Download className="h-4 w-4 mr-1" /> Download PDF
+            </Button>
             <Button variant="outline" onClick={() => window.open(`/admin/present/${sessionId}`, '_blank')}>
               <Monitor className="h-4 w-4 mr-1" /> Present
             </Button>
