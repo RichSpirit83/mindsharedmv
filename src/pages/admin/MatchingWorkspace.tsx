@@ -255,9 +255,13 @@ export default function MatchingWorkspace() {
         }),
       }));
 
-      setTables(enrichedTables);
+      // Merge with tables from other rounds
+      setTables((prev) => {
+        const otherRounds = prev.filter((t) => t.round_number !== activeRound);
+        return [...otherRounds, ...enrichedTables].sort((a, b) => a.round_number - b.round_number || a.table_number - b.table_number);
+      });
       setHasGenerated(true);
-      toast.success(`Generated ${enrichedTables.length} table groupings`);
+      toast.success(`Generated ${enrichedTables.length} table groupings for Round ${activeRound}`);
 
       await saveTablesToDb(enrichedTables);
     } catch (err: any) {
