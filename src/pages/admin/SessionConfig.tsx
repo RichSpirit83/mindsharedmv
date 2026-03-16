@@ -397,10 +397,37 @@ export default function SessionConfig() {
       background: poolLead.background || "",
       linkedinUrl: poolLead.linkedin_url || "",
     };
-    setLeads((prev) => [...prev, newLead]);
-    setNumLeads((prev) => prev + 1);
+    return newLead;
+  };
+
+  const addSelectedFromPool = () => {
+    const availablePool = annotatedPoolLeads.filter((pl: any) => !pl.alreadyInSession);
+    const selected = availablePool.filter((pl: any) => poolSelection.has(pl.id));
+    if (selected.length === 0) return;
+    const newLeads = selected.map((pl: any) => addFromPool(pl));
+    setLeads((prev) => [...prev, ...newLeads]);
+    setNumLeads((prev) => prev + newLeads.length);
+    setPoolSelection(new Set());
     setPoolDialogOpen(false);
-    toast.success(`Added ${newLead.name} from lead pool`);
+    toast.success(`Added ${newLeads.length} lead${newLeads.length > 1 ? "s" : ""} from pool`);
+  };
+
+  const togglePoolSelection = (id: string) => {
+    setPoolSelection((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAllPool = () => {
+    const available = annotatedPoolLeads.filter((pl: any) => !pl.alreadyInSession);
+    if (poolSelection.size === available.length) {
+      setPoolSelection(new Set());
+    } else {
+      setPoolSelection(new Set(available.map((pl: any) => pl.id)));
+    }
   };
 
   const autoMapHeaders = (headers: string[]) => {
