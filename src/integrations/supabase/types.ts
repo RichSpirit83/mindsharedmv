@@ -198,6 +198,7 @@ export type Database = {
           created_at: string
           id: string
           rationale: string | null
+          round_number: number
           session_id: string
           shared_challenges: Json | null
           stage_mix: string | null
@@ -211,6 +212,7 @@ export type Database = {
           created_at?: string
           id?: string
           rationale?: string | null
+          round_number?: number
           session_id: string
           shared_challenges?: Json | null
           stage_mix?: string | null
@@ -224,6 +226,7 @@ export type Database = {
           created_at?: string
           id?: string
           rationale?: string | null
+          round_number?: number
           session_id?: string
           shared_challenges?: Json | null
           stage_mix?: string | null
