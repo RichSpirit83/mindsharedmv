@@ -93,7 +93,7 @@ ${competitorRule}
 - Tables should foster productive peer conversation
 ${allowStageMixing ? "" : "- Keep companies at similar stages within each table (avoid stage mixing)"}
 
-${leadsInfo ? `TABLE LEADS (assign one per table where possible):\n${leadsInfo}\n\n${leadMatchingInstruction}` : ""}`;
+${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributionInstruction}\n${leadAlignmentInstruction}\n\n${leadMatchingInstruction}` : ""}`;
 
     const userPrompt = `Assign these ${companies.length} companies to ${numTables} tables:\n\n${companyList}`;
 
