@@ -145,7 +145,12 @@ export default function MatchingWorkspace() {
             rationale: t.rationale || "",
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
-            assigned_leads: [], // Will be populated from AI response on regeneration
+            assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
+              const lead = (dbLeads || []).find((l: any) => l.name === name);
+              return lead
+                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [] }
+                : { name, company: "", title: "", expertiseTags: [] };
+            }),
           };
         });
         setTables(tableGroups);
