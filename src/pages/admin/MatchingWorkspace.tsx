@@ -787,27 +787,31 @@ export default function MatchingWorkspace() {
                 </Card>
               ))}
             </div>
-          ) : !hasGenerated ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <Shuffle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
-                <h3 className="font-heading text-lg font-semibold mb-2">Ready to Match</h3>
-                <p className="text-muted-foreground text-sm">
-                  {companies.length > 0
-                    ? `${companies.length} companies loaded. Click "Generate Matches" to create optimized table groupings.`
-                    : 'Configure your session and upload company data first.'}
-                </p>
+          ) : (() => {
+            const roundTables = tables.filter((t) => t.round_number === activeRound);
+            return roundTables.length === 0 ? (
+              <div className="flex items-center justify-center h-full">
+                <div className="text-center max-w-md">
+                  <Shuffle className="h-12 w-12 text-muted-foreground/40 mx-auto mb-4" />
+                  <h3 className="font-heading text-lg font-semibold mb-2">Round {activeRound}</h3>
+                  <p className="text-muted-foreground text-sm">
+                    No tables generated for this round yet. Click "Generate Round {activeRound}" to create table groupings.
+                  </p>
+                </div>
               </div>
-            </div>
-          ) : (
-            <DragDropContext onDragEnd={handleLeadDragEnd}>
-              <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-                {tables.map((table, i) => (
-                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
-                ))}
-              </div>
-            </DragDropContext>
-          )}
+            ) : (
+              <DragDropContext onDragEnd={handleLeadDragEnd}>
+                <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                  {roundTables.map((table, i) => {
+                    const globalIndex = tables.indexOf(table);
+                    return (
+                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
+                    );
+                  })}
+                </div>
+              </DragDropContext>
+            );
+          })()}
         </div>
 
         {hasGenerated && (
