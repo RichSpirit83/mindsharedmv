@@ -101,7 +101,7 @@ serve(async (req) => {
 GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
 
 ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
-
+${shuffleConstraint}
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
 ${competitorRule}
