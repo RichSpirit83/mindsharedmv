@@ -734,10 +734,41 @@ export default function MatchingWorkspace() {
             </Button>
             <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={generateMatches}>
               <Sparkles className="h-4 w-4 mr-1" />
-              {isGenerating ? "Generating..." : "Generate Matches"}
+              {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
             </Button>
           </div>
         </div>
+
+        {/* Round Tabs */}
+        {(() => {
+          const allRounds = Array.from(new Set(tables.map((t) => t.round_number))).sort((a, b) => a - b);
+          const maxRound = allRounds.length > 0 ? Math.max(...allRounds) : 0;
+          const displayRounds = allRounds.length > 0 ? allRounds : [1];
+          return (
+            <div className="px-4 pt-3 pb-1 border-b bg-card flex items-center gap-1.5">
+              {displayRounds.map((round) => (
+                <button
+                  key={round}
+                  onClick={() => setActiveRound(round)}
+                  className={cn(
+                    "px-3 py-1.5 rounded-md text-xs font-medium transition-colors",
+                    activeRound === round
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                  )}
+                >
+                  Round {round}
+                </button>
+              ))}
+              <button
+                onClick={() => setActiveRound(maxRound + 1)}
+                className="px-2 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted/80 transition-colors inline-flex items-center gap-1"
+              >
+                <Plus className="h-3 w-3" /> Add Round
+              </button>
+            </div>
+          );
+        })()}
 
         <div className="flex-1 overflow-auto p-6">
           {isGenerating ? (
