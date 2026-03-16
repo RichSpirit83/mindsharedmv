@@ -51,7 +51,7 @@ serve(async (req) => {
     const leadsPerTable = numLeads > 0 ? Math.max(1, Math.round(numLeads / numTables)) : 0;
 
     const leadDistributionInstruction = numLeads > 0
-      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Assign approximately ${leadsPerTable} lead(s) per table. Every lead MUST be assigned. Distribute leads as evenly as possible. Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables.`
+      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Assign approximately ${leadsPerTable} lead(s) per table. Every lead MUST be assigned. Distribute leads as evenly as possible. Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables. The FIRST lead index in each table's list will be designated as the "Table Head" — choose the lead whose expertise is the strongest match for that table's theme.`
       : "";
 
     const leadAlignmentInstruction = numLeads > 0
