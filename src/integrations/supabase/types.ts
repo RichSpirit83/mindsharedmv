@@ -48,37 +48,46 @@ export type Database = {
       }
       breakout_leads: {
         Row: {
+          background: string | null
+          company: string | null
           created_at: string
+          email: string | null
           expertise_tags: Json | null
           id: string
           linkedin_url: string | null
           name: string | null
-          network_strengths: string | null
-          notes: string | null
           profile_pdf_url: string | null
           session_id: string
+          title: string | null
+          website: string | null
         }
         Insert: {
+          background?: string | null
+          company?: string | null
           created_at?: string
+          email?: string | null
           expertise_tags?: Json | null
           id?: string
           linkedin_url?: string | null
           name?: string | null
-          network_strengths?: string | null
-          notes?: string | null
           profile_pdf_url?: string | null
           session_id: string
+          title?: string | null
+          website?: string | null
         }
         Update: {
+          background?: string | null
+          company?: string | null
           created_at?: string
+          email?: string | null
           expertise_tags?: Json | null
           id?: string
           linkedin_url?: string | null
           name?: string | null
-          network_strengths?: string | null
-          notes?: string | null
           profile_pdf_url?: string | null
           session_id?: string
+          title?: string | null
+          website?: string | null
         }
         Relationships: [
           {
@@ -232,6 +241,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      lead_pool: {
+        Row: {
+          background: string | null
+          company: string | null
+          created_at: string
+          email: string | null
+          expertise_tags: Json | null
+          id: string
+          linkedin_url: string | null
+          name: string
+          title: string | null
+          website: string | null
+        }
+        Insert: {
+          background?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          expertise_tags?: Json | null
+          id?: string
+          linkedin_url?: string | null
+          name: string
+          title?: string | null
+          website?: string | null
+        }
+        Update: {
+          background?: string | null
+          company?: string | null
+          created_at?: string
+          email?: string | null
+          expertise_tags?: Json | null
+          id?: string
+          linkedin_url?: string | null
+          name?: string
+          title?: string | null
+          website?: string | null
+        }
+        Relationships: []
       }
       user_roles: {
         Row: {
