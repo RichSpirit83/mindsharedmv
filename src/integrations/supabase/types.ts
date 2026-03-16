@@ -112,6 +112,7 @@ export type Database = {
           lead_matching_mode: string | null
           num_tables: number | null
           prompts: Json | null
+          round_settings: Json
           session_date: string | null
           session_format: string | null
           session_name: string
@@ -131,6 +132,7 @@ export type Database = {
           lead_matching_mode?: string | null
           num_tables?: number | null
           prompts?: Json | null
+          round_settings?: Json
           session_date?: string | null
           session_format?: string | null
           session_name?: string
@@ -150,6 +152,7 @@ export type Database = {
           lead_matching_mode?: string | null
           num_tables?: number | null
           prompts?: Json | null
+          round_settings?: Json
           session_date?: string | null
           session_format?: string | null
           session_name?: string
