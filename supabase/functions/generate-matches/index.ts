@@ -66,6 +66,22 @@ serve(async (req) => {
       ? "- Direct competitors should NOT be at the same table"
       : "- Competitors MAY be seated together (intentional competitive-intelligence setup)";
 
+    // Build shuffle constraint from previous round
+    let shuffleConstraint = "";
+    if (previousRoundTables && previousRoundTables.length > 0 && shuffleMode !== "both") {
+      if (shuffleMode === "founders") {
+        const leadAssignments = previousRoundTables.map((t: any) =>
+          `Table ${t.table_number} ("${t.table_name}"): leads = [${(t.assigned_leads || []).map((l: any) => l.name).join(", ")}]`
+        ).join("\n");
+        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Founders Only): The following lead-to-table assignments from the previous round MUST be preserved exactly. Only reshuffle the companies across tables.\nPrevious round lead assignments:\n${leadAssignments}\n`;
+      } else if (shuffleMode === "leads") {
+        const companyAssignments = previousRoundTables.map((t: any) =>
+          `Table ${t.table_number}: companies = [${(t.companies || []).map((c: any) => c.company_name).join(", ")}]`
+        ).join("\n");
+        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Leads Only): The following company-to-table assignments from the previous round MUST be preserved exactly. Only reassign leads across tables.\nPrevious round company assignments:\n${companyAssignments}\n`;
+      }
+    }
+
     const companyList = companies.map((c: any, i: number) => {
       const parts = [`#${i + 1} ${c.company_name || "Unknown"}`];
       if (c.first_name) parts.push(`Contact: ${c.first_name} ${c.last_name || ""}`);
