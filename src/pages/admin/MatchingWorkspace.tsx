@@ -667,7 +667,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
