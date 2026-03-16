@@ -264,6 +264,11 @@ export default function LeadPool() {
           <Badge variant="secondary">{leads.length} leads</Badge>
         </div>
         <div className="flex gap-2">
+          {/* LinkedIn Import */}
+          <Button variant="outline" onClick={() => setLinkedinDialogOpen(true)}>
+            <Linkedin className="mr-2 h-4 w-4" /> Import LinkedIn
+          </Button>
+
           {/* Paste Import */}
           <Button variant="outline" onClick={() => setPasteDialogOpen(true)}>
             <ClipboardPaste className="mr-2 h-4 w-4" /> Paste List
