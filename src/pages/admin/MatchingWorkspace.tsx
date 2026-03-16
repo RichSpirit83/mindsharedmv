@@ -239,9 +239,10 @@ export default function MatchingWorkspace() {
         (fullCompanyData || []).map((fd: any) => [normalizeCompany(fd?.company_name || ""), fd])
       );
 
-      // Add mapped_data to company chips
+      // Add mapped_data and round_number to company chips
       const enrichedTables: TableGroup[] = (data.tables || []).map((t: any) => ({
         ...t,
+        round_number: activeRound,
         companies: (t.companies || []).map((c: any) => ({
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
