@@ -642,7 +642,7 @@ export default function MatchingWorkspace() {
             <DragDropContext onDragEnd={handleLeadDragEnd}>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {tables.map((table, i) => (
-                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} />
+                  <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
                 ))}
               </div>
             </DragDropContext>
