@@ -96,6 +96,7 @@ export default function MatchingWorkspace() {
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
   const [leadProfileOpen, setLeadProfileOpen] = useState(false);
+  const [activeRound, setActiveRound] = useState(1);
 
   // Load from DB
   useEffect(() => {
