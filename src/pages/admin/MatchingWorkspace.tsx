@@ -90,6 +90,8 @@ export default function MatchingWorkspace() {
   const [loading, setLoading] = useState(true);
   const [selectedProfile, setSelectedProfile] = useState<Record<string, string> | null>(null);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
+  const [leadProfileOpen, setLeadProfileOpen] = useState(false);
 
   // Load from DB
   useEffect(() => {
