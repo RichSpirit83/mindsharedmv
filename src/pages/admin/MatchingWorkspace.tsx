@@ -329,7 +329,8 @@ export default function MatchingWorkspace() {
           suggested_lead: (table.assigned_leads || []).map((l: any) => l.name).join(", ") || table.suggested_lead,
           rationale: table.rationale,
           shared_challenges: table.shared_challenges as any,
-        })
+          round_number: table.round_number ?? 1,
+        } as any)
         .select()
         .single();
 
