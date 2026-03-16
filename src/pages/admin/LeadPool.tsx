@@ -9,12 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
+import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 
 const LEAD_POOL_FIELDS = [
   "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
@@ -78,6 +79,7 @@ export default function LeadPool() {
   const [csvStep, setCsvStep] = useState<"mapping" | "preview">("mapping");
   const [importing, setImporting] = useState(false);
   const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
+  const [linkedinDialogOpen, setLinkedinDialogOpen] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["lead_pool"],
@@ -262,6 +264,11 @@ export default function LeadPool() {
           <Badge variant="secondary">{leads.length} leads</Badge>
         </div>
         <div className="flex gap-2">
+          {/* LinkedIn Import */}
+          <Button variant="outline" onClick={() => setLinkedinDialogOpen(true)}>
+            <Linkedin className="mr-2 h-4 w-4" /> Import LinkedIn
+          </Button>
+
           {/* Paste Import */}
           <Button variant="outline" onClick={() => setPasteDialogOpen(true)}>
             <ClipboardPaste className="mr-2 h-4 w-4" /> Paste List
@@ -437,6 +444,12 @@ export default function LeadPool() {
       <PasteLeadsDialog
         open={pasteDialogOpen}
         onOpenChange={setPasteDialogOpen}
+        onImport={handlePasteImport}
+      />
+
+      <BulkLinkedInDialog
+        open={linkedinDialogOpen}
+        onOpenChange={setLinkedinDialogOpen}
         onImport={handlePasteImport}
       />
     </div>

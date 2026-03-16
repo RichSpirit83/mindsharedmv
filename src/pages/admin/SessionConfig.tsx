@@ -21,6 +21,7 @@ import ColumnMapper from "@/components/ColumnMapper";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
+import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
@@ -148,6 +149,7 @@ export default function SessionConfig() {
   const [saving, setSaving] = useState(false);
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
+  const [leadLinkedinDialogOpen, setLeadLinkedinDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
@@ -835,6 +837,10 @@ export default function SessionConfig() {
           <div className="flex items-center justify-between">
             <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
             <div className="flex gap-2 flex-wrap">
+              {/* LinkedIn Import */}
+              <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
+                <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
+              </Button>
               {/* Paste Import */}
               <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
                 <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
@@ -1025,6 +1031,13 @@ export default function SessionConfig() {
       <PasteLeadsDialog
         open={leadPasteDialogOpen}
         onOpenChange={setLeadPasteDialogOpen}
+        onImport={handleLeadPasteImport}
+      />
+
+      {/* Lead LinkedIn Dialog */}
+      <BulkLinkedInDialog
+        open={leadLinkedinDialogOpen}
+        onOpenChange={setLeadLinkedinDialogOpen}
         onImport={handleLeadPasteImport}
       />
 
