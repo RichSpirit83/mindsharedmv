@@ -657,33 +657,33 @@ export default function MatchingWorkspace() {
               {/* GROUPING */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Grouping</p>
-                <div className="space-y-1.5">
-                  <Label className="text-xs">Priority</Label>
-                  <Select
-                    value={sessionConfig?.grouping_priority || "hybrid"}
-                    onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
-                  >
-                    <SelectTrigger className="h-8 text-sm">
-                      <SelectValue placeholder="Select priority" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="sector">Sector</SelectItem>
-                      <SelectItem value="stage">Stage</SelectItem>
-                      <SelectItem value="need">Need</SelectItem>
-                      <SelectItem value="hybrid">Hybrid</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-xs">Allow Stage Mixing</Label>
-                    <p className="text-xs text-muted-foreground">Mix early &amp; growth-stage companies</p>
-                  </div>
-                  <Switch
-                    checked={!!sessionConfig?.allow_stage_mixing}
-                    onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
-                  />
-                </div>
+                 <div className="space-y-1.5">
+                   <Label className="text-xs">Priority</Label>
+                   <Select
+                     value={activeRoundSettings.grouping_priority}
+                     onValueChange={(v) => updateMatchingSettings({ grouping_priority: v })}
+                   >
+                     <SelectTrigger className="h-8 text-sm">
+                       <SelectValue placeholder="Select priority" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="sector">Sector</SelectItem>
+                       <SelectItem value="stage">Stage</SelectItem>
+                       <SelectItem value="need">Need</SelectItem>
+                       <SelectItem value="hybrid">Hybrid</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <Label className="text-xs">Allow Stage Mixing</Label>
+                     <p className="text-xs text-muted-foreground">Mix early &amp; growth-stage companies</p>
+                   </div>
+                   <Switch
+                     checked={activeRoundSettings.allow_stage_mixing}
+                     onCheckedChange={(checked) => updateMatchingSettings({ allow_stage_mixing: checked })}
+                   />
+                 </div>
               </div>
 
               <Separator />
