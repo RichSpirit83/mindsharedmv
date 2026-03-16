@@ -772,24 +772,27 @@ export default function MatchingWorkspace() {
             {sessionConfig?.session_name && (
               <p className="text-xs text-muted-foreground mb-1">{sessionConfig.session_name}</p>
             )}
-            <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-              Tables are grouped using a <span className="font-semibold">{sessionConfig?.grouping_priority || "hybrid"}</span> approach
-              {sessionConfig?.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
-              {sessionConfig?.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
-              {sessionConfig?.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
-              {(!sessionConfig?.grouping_priority || sessionConfig?.grouping_priority === "hybrid") && " — balancing sector alignment, stage diversity, and shared challenges"}
-              .{" "}
-              {sessionConfig?.allow_stage_mixing !== false
-                ? "Early and later-stage companies may be mixed for cross-stage mentorship."
-                : "Companies are kept at similar stages within each table."}
-              {" "}
-              {sessionConfig?.avoid_competitors !== false
-                ? "Direct competitors are kept apart."
-                : "Competitors may be seated together for competitive-intelligence exchange."}
-              {leads.length > 0 && (
-                <>{" "}Leads are matched <span className="font-semibold">{sessionConfig?.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables where their expertise aligns with founders' needs ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {sessionConfig?.num_tables || "all"} tables).</>
-              )}
-            </p>
+             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
+               <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
+               {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
+               {activeRoundSettings.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
+               {activeRoundSettings.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
+               {activeRoundSettings.grouping_priority === "hybrid" && " — balancing sector alignment, stage diversity, and shared challenges"}
+               .{" "}
+               {activeRoundSettings.allow_stage_mixing
+                 ? "Early and later-stage companies may be mixed for cross-stage mentorship."
+                 : "Companies are kept at similar stages within each table."}
+               {" "}
+               {activeRoundSettings.avoid_competitors
+                 ? "Direct competitors are kept apart."
+                 : "Competitors may be seated together for competitive-intelligence exchange."}
+               {leads.length > 0 && (
+                 <>{" "}Leads are matched <span className="font-semibold">{activeRoundSettings.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables where their expertise aligns with founders' needs ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {activeRoundSettings.num_tables} tables).</>
+               )}
+               {activeRound > 1 && (
+                 <>{" "}Shuffle: <span className="font-semibold">{activeRoundSettings.shuffle_mode === "founders" ? "founders only" : activeRoundSettings.shuffle_mode === "leads" ? "leads only" : "both"}</span>.</>
+               )}
+             </p>
           </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate(`/admin/session/${sessionId}`)}>
