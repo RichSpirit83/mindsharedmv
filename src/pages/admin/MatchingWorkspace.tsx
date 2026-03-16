@@ -182,6 +182,23 @@ export default function MatchingWorkspace() {
     return [];
   };
 
+  // Get per-round settings, falling back to session-level defaults
+  const getRoundSettings = (round: number) => {
+    const rs = (sessionConfig?.round_settings as Record<string, any>) || {};
+    const roundKey = String(round);
+    return {
+      grouping_priority: rs[roundKey]?.grouping_priority ?? sessionConfig?.grouping_priority ?? "hybrid",
+      allow_stage_mixing: rs[roundKey]?.allow_stage_mixing ?? sessionConfig?.allow_stage_mixing ?? true,
+      num_tables: rs[roundKey]?.num_tables ?? sessionConfig?.num_tables ?? 5,
+      target_per_table: rs[roundKey]?.target_per_table ?? sessionConfig?.target_per_table ?? 6,
+      avoid_competitors: rs[roundKey]?.avoid_competitors ?? sessionConfig?.avoid_competitors ?? true,
+      lead_matching_mode: rs[roundKey]?.lead_matching_mode ?? sessionConfig?.lead_matching_mode ?? "flexible",
+      shuffle_mode: rs[roundKey]?.shuffle_mode ?? "both",
+    };
+  };
+
+  const activeRoundSettings = getRoundSettings(activeRound);
+
   const updateMatchingSettings = async (
     patch: Partial<{
       grouping_priority: string;
@@ -190,12 +207,23 @@ export default function MatchingWorkspace() {
       target_per_table: number;
       avoid_competitors: boolean;
       lead_matching_mode: string;
+      shuffle_mode: string;
     }>
   ) => {
     if (!sessionId) return;
+    const currentRoundSettings = (sessionConfig?.round_settings as Record<string, any>) || {};
+    const roundKey = String(activeRound);
+    const updatedRoundSettings = {
+      ...currentRoundSettings,
+      [roundKey]: {
+        ...(currentRoundSettings[roundKey] || {}),
+        ...patch,
+      },
+    };
+
     const { data, error } = await supabase
       .from("breakout_sessions")
-      .update(patch as any)
+      .update({ round_settings: updatedRoundSettings } as any)
       .eq("id", sessionId)
       .select("*")
       .single();
