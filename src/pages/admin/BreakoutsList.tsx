@@ -167,18 +167,27 @@ export default function BreakoutsList() {
                     {session.session_name || "Untitled"}
                   </h3>
                   <div className="flex items-center gap-1">
-                    <Badge className={STATUS_COLORS[session.status] || STATUS_COLORS.draft}>
-                      {session.status}
-                    </Badge>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                      onClick={(e) => deleteSession(session.id, e)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5 text-destructive" />
-                    </Button>
-                  </div>
+                     <Badge className={STATUS_COLORS[session.status] || STATUS_COLORS.draft}>
+                       {session.status}
+                     </Badge>
+                     <Button
+                       variant="ghost"
+                       size="icon"
+                       className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                       onClick={(e) => cloneSession(session.id, e)}
+                       title="Clone session"
+                     >
+                       <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+                     </Button>
+                     <Button
+                       variant="ghost"
+                       size="icon"
+                       className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                       onClick={(e) => deleteSession(session.id, e)}
+                     >
+                       <Trash2 className="h-3.5 w-3.5 text-destructive" />
+                     </Button>
+                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-xs text-muted-foreground">
                   {session.session_date && (
