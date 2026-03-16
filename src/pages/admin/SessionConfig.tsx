@@ -147,6 +147,12 @@ export default function SessionConfig() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
+  const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
+  const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
+  const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
+  const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
+  const [leadCsvMapping, setLeadCsvMapping] = useState<Record<string, string>>({});
+  const [leadCsvStep, setLeadCsvStep] = useState<"mapping" | "preview">("mapping");
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
