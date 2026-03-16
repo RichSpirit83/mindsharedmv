@@ -446,6 +446,12 @@ export default function LeadPool() {
         onOpenChange={setPasteDialogOpen}
         onImport={handlePasteImport}
       />
+
+      <BulkLinkedInDialog
+        open={linkedinDialogOpen}
+        onOpenChange={setLinkedinDialogOpen}
+        onImport={handlePasteImport}
+      />
     </div>
   );
 }
