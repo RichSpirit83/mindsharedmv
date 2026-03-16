@@ -209,11 +209,15 @@ export default function PresentationView() {
                       </div>
                       {table.leads.length > 0 ? (
                         <div className="mb-3">
-                          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Table Lead{table.leads.length > 1 ? "s" : ""}</span>
-                          <div className="space-y-1 mt-1">
+                          <div className="space-y-1.5 mt-1">
                             {table.leads.map((lead, li) => (
                               <div key={li} className="flex items-center gap-2">
-                                <span className="text-sm font-semibold" style={{ color: accent }}>{lead.name}</span>
+                                <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">
+                                  {li === 0 ? "Head" : "Lead"}
+                                </span>
+                                <span className={`text-sm font-semibold ${li === 0 ? "" : "text-white/70"}`} style={li === 0 ? { color: accent } : undefined}>
+                                  {lead.name}
+                                </span>
                                 {lead.title && <span className="text-xs text-white/30">{lead.title}</span>}
                               </div>
                             ))}
