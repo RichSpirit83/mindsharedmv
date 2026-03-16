@@ -240,7 +240,12 @@ export default function MatchingWorkspace() {
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
-        assigned_leads: t.assigned_leads || [],
+        assigned_leads: (t.assigned_leads || []).map((al: any) => {
+          const dbLead = leads.find((l: any) => l.name === al.name);
+          return dbLead
+            ? { ...al, company: dbLead.company || al.company || "", background: dbLead.background || "", email: dbLead.email || "", linkedinUrl: dbLead.linkedin_url || "", website: dbLead.website || "", expertiseTags: (dbLead.expertise_tags as string[]) || al.expertiseTags || [] }
+            : al;
+        }),
       }));
 
       setTables(enrichedTables);
