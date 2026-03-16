@@ -240,13 +240,15 @@ export default function MatchingWorkspace() {
   const generateMatches = async () => {
     setIsGenerating(true);
     try {
+      const rs = getRoundSettings(activeRound);
       const sessionConfigForAi = {
-        numTables: sessionConfig?.num_tables ?? undefined,
-        targetPerTable: sessionConfig?.target_per_table ?? undefined,
-        groupingPriority: sessionConfig?.grouping_priority ?? undefined,
-        allowStageMixing: sessionConfig?.allow_stage_mixing ?? undefined,
-        avoidCompetitors: sessionConfig?.avoid_competitors ?? true,
-        leadMatchingMode: sessionConfig?.lead_matching_mode ?? "flexible",
+        numTables: rs.num_tables,
+        targetPerTable: rs.target_per_table,
+        groupingPriority: rs.grouping_priority,
+        allowStageMixing: rs.allow_stage_mixing,
+        avoidCompetitors: rs.avoid_competitors,
+        leadMatchingMode: rs.lead_matching_mode,
+        shuffleMode: rs.shuffle_mode,
       };
 
       const leadsForAi = (leads || []).map((l: any) => ({
@@ -257,8 +259,14 @@ export default function MatchingWorkspace() {
         background: l.background ?? "",
       }));
 
+      // For shuffle modes, pass previous round's tables as context
+      let previousRoundTables: TableGroup[] | undefined;
+      if (activeRound > 1 && rs.shuffle_mode !== "both") {
+        previousRoundTables = tables.filter((t) => t.round_number === activeRound - 1);
+      }
+
       const { data, error } = await supabase.functions.invoke("generate-matches", {
-        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi },
+        body: { companies: fullCompanyData, sessionConfig: sessionConfigForAi, leads: leadsForAi, previousRoundTables },
       });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
