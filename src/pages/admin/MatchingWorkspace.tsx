@@ -626,30 +626,30 @@ export default function MatchingWorkspace() {
               {/* TABLE STRUCTURE */}
               <div className="px-4 py-3 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Table Structure</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Number of Tables</Label>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={20}
-                      value={sessionConfig?.num_tables ?? 5}
-                      onChange={(e) => updateMatchingSettings({ num_tables: parseInt(e.target.value) || 5 })}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs">Target per Table</Label>
-                    <Input
-                      type="number"
-                      min={2}
-                      max={20}
-                      value={sessionConfig?.target_per_table ?? 6}
-                      onChange={(e) => updateMatchingSettings({ target_per_table: parseInt(e.target.value) || 6 })}
-                      className="h-8 text-sm"
-                    />
-                  </div>
-                </div>
+                 <div className="grid grid-cols-2 gap-3">
+                   <div className="space-y-1.5">
+                     <Label className="text-xs">Number of Tables</Label>
+                     <Input
+                       type="number"
+                       min={1}
+                       max={20}
+                       value={activeRoundSettings.num_tables}
+                       onChange={(e) => updateMatchingSettings({ num_tables: parseInt(e.target.value) || 5 })}
+                       className="h-8 text-sm"
+                     />
+                   </div>
+                   <div className="space-y-1.5">
+                     <Label className="text-xs">Target per Table</Label>
+                     <Input
+                       type="number"
+                       min={2}
+                       max={20}
+                       value={activeRoundSettings.target_per_table}
+                       onChange={(e) => updateMatchingSettings({ target_per_table: parseInt(e.target.value) || 6 })}
+                       className="h-8 text-sm"
+                     />
+                   </div>
+                 </div>
               </div>
 
               <Separator />
