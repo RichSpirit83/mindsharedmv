@@ -721,10 +721,12 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick 
                               : "bg-primary/10 border border-primary/20",
                             snapshot.isDragging && "shadow-lg ring-2 ring-primary/40"
                           )}
+                          onClick={(e) => { e.stopPropagation(); onLeadClick(lead); }}
                         >
                           <div className="flex items-center gap-1.5">
                             {li === 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/40 text-primary">Head</Badge>}
                             <span className="font-medium text-primary">{lead.name}</span>
+                            {lead.company && <span className="text-muted-foreground">· {lead.company}</span>}
                           </div>
                           {lead.title && <span className="text-muted-foreground truncate ml-2">{lead.title}</span>}
                         </div>
