@@ -688,7 +688,7 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: T
         {/* Assigned Leads - Droppable */}
         {table.assigned_leads && table.assigned_leads.length > 0 && (
           <div>
-            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Leads</p>
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Table Lead{table.assigned_leads.length > 1 ? "s" : ""}</p>
             <Droppable droppableId={`leads-${tableIndex}`}>
               {(provided, snapshot) => (
                 <div
@@ -707,11 +707,17 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: T
                           {...provided.draggableProps}
                           {...provided.dragHandleProps}
                           className={cn(
-                            "text-xs flex items-center justify-between p-1.5 rounded bg-primary/10 border border-primary/20 cursor-grab",
+                            "text-xs flex items-center justify-between p-1.5 rounded cursor-grab",
+                            li === 0
+                              ? "bg-primary/20 border border-primary/30 ring-1 ring-primary/10"
+                              : "bg-primary/10 border border-primary/20",
                             snapshot.isDragging && "shadow-lg ring-2 ring-primary/40"
                           )}
                         >
-                          <span className="font-medium text-primary">{lead.name}</span>
+                          <div className="flex items-center gap-1.5">
+                            {li === 0 && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 border-primary/40 text-primary">Head</Badge>}
+                            <span className="font-medium text-primary">{lead.name}</span>
+                          </div>
                           {lead.title && <span className="text-muted-foreground truncate ml-2">{lead.title}</span>}
                         </div>
                       )}
@@ -744,6 +750,7 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick }: { table: T
         )}
 
         {/* Companies */}
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-2">Companies</p>
         {table.companies.length === 0 ? (
           <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
         ) : (
