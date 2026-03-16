@@ -207,12 +207,24 @@ export default function PresentationView() {
                         </div>
                         <p className="text-xs text-white/40">{table.theme}</p>
                       </div>
-                      {table.suggested_lead && (
+                      {table.leads.length > 0 ? (
+                        <div className="mb-3">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Table Lead{table.leads.length > 1 ? "s" : ""}</span>
+                          <div className="space-y-1 mt-1">
+                            {table.leads.map((lead, li) => (
+                              <div key={li} className="flex items-center gap-2">
+                                <span className="text-sm font-semibold" style={{ color: accent }}>{lead.name}</span>
+                                {lead.title && <span className="text-xs text-white/30">{lead.title}</span>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : table.suggested_lead ? (
                         <div className="mb-3 flex items-center gap-2">
                           <span className="text-[10px] font-semibold uppercase tracking-wider text-white/30">Lead</span>
                           <span className="text-sm font-semibold" style={{ color: accent }}>{table.suggested_lead}</span>
                         </div>
-                      )}
+                      ) : null}
                       <div className="mb-2 text-xs text-white/30 font-medium">{table.companies.length} participants</div>
                       <div className="space-y-1 flex-1">
                         {table.companies.map((c, ci) => (
