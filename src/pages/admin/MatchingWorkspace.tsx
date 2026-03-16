@@ -387,24 +387,107 @@ export default function MatchingWorkspace() {
     setProfileOpen(true);
   };
 
-  const handleDownloadPdf = async () => {
-    const el = document.getElementById("matching-tables-grid");
-    if (!el) return;
+  const handleDownloadPdf = () => {
+    if (tables.length === 0) { toast.error("No tables to export"); return; }
     toast.info("Generating PDF...");
     try {
-      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
-      const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-      const pageW = pdf.internal.pageSize.getWidth();
-      const pageH = pdf.internal.pageSize.getHeight();
-      const margin = 10;
+      const pageW = pdf.internal.pageSize.getWidth(); // 297
+      const pageH = pdf.internal.pageSize.getHeight(); // 210
+      const margin = 8;
+
+      // Title
+      pdf.setFontSize(11);
+      pdf.setFont("helvetica", "bold");
+      pdf.setTextColor(30, 30, 30);
+      const title = sessionConfig?.session_name || "Matching Workspace";
+      const dateStr = sessionConfig?.session_date ? ` — ${sessionConfig.session_date}` : "";
+      pdf.text(`${title}${dateStr}`, margin, margin + 4);
+
+      const topOffset = margin + 8;
       const availW = pageW - margin * 2;
-      const availH = pageH - margin * 2;
-      const imgRatio = canvas.width / canvas.height;
-      let w = availW;
-      let h = w / imgRatio;
-      if (h > availH) { h = availH; w = h * imgRatio; }
-      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      const availH = pageH - topOffset - margin;
+
+      // Grid layout
+      const count = tables.length;
+      const cols = count <= 2 ? count : count <= 4 ? 2 : count <= 6 ? 3 : count <= 9 ? 3 : 4;
+      const rows = Math.ceil(count / cols);
+      const cellW = availW / cols;
+      const cellH = availH / rows;
+      const pad = 2;
+
+      tables.forEach((table, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const x = margin + col * cellW + pad;
+        const y = topOffset + row * cellH + pad;
+        const innerW = cellW - pad * 2;
+        let cy = y;
+
+        // Table header
+        pdf.setFontSize(8);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(20, 20, 20);
+        pdf.text(`Table ${table.table_number}${table.table_name ? ` — ${table.table_name}` : ""}`, x, cy + 3);
+        cy += 4;
+
+        // Theme
+        if (table.theme) {
+          pdf.setFontSize(6);
+          pdf.setFont("helvetica", "italic");
+          pdf.setTextColor(100, 100, 100);
+          const themeLines = pdf.splitTextToSize(table.theme, innerW);
+          pdf.text(themeLines.slice(0, 2), x, cy + 2.5);
+          cy += themeLines.slice(0, 2).length * 2.5;
+        }
+
+        cy += 1;
+
+        // Leads
+        if (table.assigned_leads && table.assigned_leads.length > 0) {
+          pdf.setFontSize(6);
+          pdf.setFont("helvetica", "bold");
+          pdf.setTextColor(0, 90, 160);
+          pdf.text("TABLE HEAD", x, cy + 2.5);
+          cy += 3;
+          pdf.setFont("helvetica", "normal");
+          pdf.setTextColor(40, 40, 40);
+          table.assigned_leads.forEach((lead) => {
+            if (cy + 2.5 > y + cellH - pad) return;
+            const txt = `${lead.name}${lead.company ? ` (${lead.company})` : ""}`;
+            pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.5);
+            cy += 2.8;
+          });
+        }
+
+        cy += 1.5;
+
+        // Companies header
+        pdf.setFontSize(6);
+        pdf.setFont("helvetica", "bold");
+        pdf.setTextColor(0, 120, 60);
+        pdf.text("COMPANIES", x, cy + 2.5);
+        cy += 3;
+
+        // Company list
+        pdf.setFont("helvetica", "normal");
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFontSize(5.5);
+        table.companies.forEach((c) => {
+          if (cy + 2.5 > y + cellH - pad) return;
+          const name = c.company_name || "Unknown";
+          const founder = [c.first_name, c.last_name].filter(Boolean).join(" ");
+          const txt = founder ? `${name} — ${founder}` : name;
+          pdf.text(pdf.splitTextToSize(txt, innerW)[0] || txt, x, cy + 2.2);
+          cy += 2.5;
+        });
+
+        // Cell border
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.2);
+        pdf.rect(margin + col * cellW, topOffset + row * cellH, cellW, cellH);
+      });
+
       pdf.save(`${sessionConfig?.session_name || "matching"}-workspace.pdf`);
       toast.success("PDF downloaded");
     } catch (err) {
