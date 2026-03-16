@@ -58,6 +58,54 @@ export default function BreakoutsList() {
     navigate(`/admin/session/${data.id}`);
   };
 
+  const cloneSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const session = sessions.find((s) => s.id === id);
+    if (!session) return;
+
+    // Get full session data
+    const { data: full } = await supabase.from("breakout_sessions").select("*").eq("id", id).single();
+    if (!full) { toast.error("Failed to load session"); return; }
+
+    const { data: newSession, error } = await supabase
+      .from("breakout_sessions")
+      .insert({
+        session_name: `${full.session_name} (Copy)`,
+        session_date: full.session_date,
+        breakout_start: full.breakout_start,
+        breakout_end: full.breakout_end,
+        num_tables: full.num_tables,
+        target_per_table: full.target_per_table,
+        grouping_priority: full.grouping_priority,
+        allow_stage_mixing: full.allow_stage_mixing,
+        session_format: full.session_format,
+        prompts: full.prompts as any,
+        column_mapping: full.column_mapping as any,
+        avoid_competitors: full.avoid_competitors,
+        lead_matching_mode: full.lead_matching_mode,
+      })
+      .select()
+      .single();
+    if (error || !newSession) { toast.error("Failed to clone session"); return; }
+
+    // Clone companies
+    const { data: companies } = await supabase.from("breakout_companies").select("*").eq("session_id", id);
+    if (companies && companies.length > 0) {
+      const rows = companies.map((c) => ({ session_id: newSession.id, raw_data: c.raw_data, mapped_data: c.mapped_data }));
+      await supabase.from("breakout_companies").insert(rows as any);
+    }
+
+    // Clone leads
+    const { data: leads } = await supabase.from("breakout_leads").select("*").eq("session_id", id);
+    if (leads && leads.length > 0) {
+      const rows = leads.map((l) => ({ session_id: newSession.id, name: l.name, company: l.company, title: l.title, email: l.email, website: l.website, linkedin_url: l.linkedin_url, expertise_tags: l.expertise_tags, background: l.background }));
+      await supabase.from("breakout_leads").insert(rows as any);
+    }
+
+    toast.success("Session cloned");
+    fetchSessions();
+  };
+
   const deleteSession = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     const { error } = await supabase.from("breakout_sessions").delete().eq("id", id);
