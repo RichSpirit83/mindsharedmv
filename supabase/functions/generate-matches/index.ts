@@ -25,7 +25,7 @@ serve(async (req) => {
         ? sessionConfig.avoidCompetitors
         : true;
     const leadMatchingMode = sessionConfig?.leadMatchingMode || "flexible";
-
+    const shuffleMode = sessionConfig?.shuffleMode || "both";
     const hybridRule = allowStageMixing
       ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges."
       : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges.";
