@@ -51,6 +51,13 @@ interface CompanyChip {
   mapped_data?: Record<string, string>;
 }
 
+interface LeadChip {
+  name: string;
+  company?: string;
+  title?: string;
+  expertiseTags?: string[];
+}
+
 interface TableGroup {
   table_number: number;
   table_name: string;
@@ -60,6 +67,7 @@ interface TableGroup {
   rationale: string;
   shared_challenges: string[];
   companies: CompanyChip[];
+  assigned_leads: LeadChip[];
 }
 
 export default function MatchingWorkspace() {
