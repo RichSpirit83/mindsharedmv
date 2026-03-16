@@ -30,12 +30,16 @@ import {
   Loader2,
   Monitor,
   Settings2,
+  Download,
+  ArrowLeft,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
   "bg-table-blue", "bg-table-teal", "bg-table-green", "bg-table-yellow",
@@ -384,6 +388,32 @@ export default function MatchingWorkspace() {
     setProfileOpen(true);
   };
 
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById("matching-tables-grid");
+    if (!el) return;
+    toast.info("Generating PDF...");
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const availW = pageW - margin * 2;
+      const availH = pageH - margin * 2;
+      const imgRatio = canvas.width / canvas.height;
+      let w = availW;
+      let h = w / imgRatio;
+      if (h > availH) { h = availH; w = h * imgRatio; }
+      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      pdf.save(`${sessionConfig?.session_name || "matching"}-workspace.pdf`);
+      toast.success("PDF downloaded");
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   const filteredCompanies = companies.filter(
     (c) =>
       c.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -604,6 +634,9 @@ export default function MatchingWorkspace() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate(`/admin/session/${sessionId}`)}>
+              <ArrowLeft className="h-4 w-4 mr-1" /> Session Config
+            </Button>
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
@@ -645,7 +678,7 @@ export default function MatchingWorkspace() {
             </div>
           ) : (
             <DragDropContext onDragEnd={handleLeadDragEnd}>
-              <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+              <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                 {tables.map((table, i) => (
                   <TableCard key={table.table_number} table={table} tableIndex={i} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
                 ))}
@@ -658,6 +691,9 @@ export default function MatchingWorkspace() {
           <div className="p-4 border-t bg-card flex justify-end gap-2">
             <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : "Regenerate All"}
+            </Button>
+            <Button variant="outline" onClick={handleDownloadPdf} disabled={tables.length === 0}>
+              <Download className="h-4 w-4 mr-1" /> Download PDF
             </Button>
             <Button variant="outline" onClick={() => window.open(`/admin/present/${sessionId}`, '_blank')}>
               <Monitor className="h-4 w-4 mr-1" /> Present
