@@ -9,11 +9,12 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Edit2, Users, Upload } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
+import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 
 const LEAD_POOL_FIELDS = [
   "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
@@ -76,6 +77,7 @@ export default function LeadPool() {
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({});
   const [csvStep, setCsvStep] = useState<"mapping" | "preview">("mapping");
   const [importing, setImporting] = useState(false);
+  const [pasteDialogOpen, setPasteDialogOpen] = useState(false);
 
   const { data: leads = [], isLoading } = useQuery({
     queryKey: ["lead_pool"],
@@ -223,6 +225,34 @@ export default function LeadPool() {
     }
   };
 
+  const handlePasteImport = async (parsed: ParsedLead[]) => {
+    if (parsed.length === 0) return;
+    setImporting(true);
+    try {
+      const rows = parsed.map((l) => ({
+        name: l.name,
+        company: l.company,
+        title: l.title,
+        email: l.email,
+        website: l.website,
+        linkedin_url: l.linkedin_url,
+        expertise_tags: l.expertise_tags as any,
+        background: l.background,
+      }));
+      for (let i = 0; i < rows.length; i += 100) {
+        const { error } = await (supabase.from("lead_pool" as any).insert(rows.slice(i, i + 100)) as any);
+        if (error) throw error;
+      }
+      queryClient.invalidateQueries({ queryKey: ["lead_pool"] });
+      setPasteDialogOpen(false);
+      toast({ title: `Imported ${rows.length} leads` });
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -232,6 +262,11 @@ export default function LeadPool() {
           <Badge variant="secondary">{leads.length} leads</Badge>
         </div>
         <div className="flex gap-2">
+          {/* Paste Import */}
+          <Button variant="outline" onClick={() => setPasteDialogOpen(true)}>
+            <ClipboardPaste className="mr-2 h-4 w-4" /> Paste List
+          </Button>
+
           {/* CSV Import */}
           <div>
             <input type="file" accept=".csv" className="hidden" id="csv-lead-import" onChange={handleCsvFile} />
@@ -398,6 +433,12 @@ export default function LeadPool() {
           )}
         </CardContent>
       </Card>
+
+      <PasteLeadsDialog
+        open={pasteDialogOpen}
+        onOpenChange={setPasteDialogOpen}
+        onImport={handlePasteImport}
+      />
     </div>
   );
 }

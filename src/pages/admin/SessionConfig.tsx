@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -20,6 +20,7 @@ import CsvPreviewTable from "@/components/CsvPreviewTable";
 import ColumnMapper from "@/components/ColumnMapper";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
@@ -146,6 +147,12 @@ export default function SessionConfig() {
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
+  const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
+  const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
+  const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
+  const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
+  const [leadCsvMapping, setLeadCsvMapping] = useState<Record<string, string>>({});
+  const [leadCsvStep, setLeadCsvStep] = useState<"mapping" | "preview">("mapping");
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
@@ -488,6 +495,105 @@ export default function SessionConfig() {
     navigate(`/admin/match/${sessionId}`);
   };
 
+  // Lead CSV import
+  const LEAD_IMPORT_FIELDS = ["name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background"];
+  const LEAD_FIELD_ALIASES: Record<string, string[]> = {
+    name: ["name", "full name", "fullname"],
+    company: ["company", "company name", "companyname", "organization"],
+    title: ["title", "job title", "jobtitle", "position", "role"],
+    email: ["email", "e-mail", "emailaddress"],
+    website: ["website", "url", "company website", "site"],
+    linkedin_url: ["linkedin", "linkedin url", "linkedinurl", "linkedin profile"],
+    expertise_tags: ["expertise", "tags", "expertise tags", "skills"],
+    background: ["background", "notes", "bio", "summary"],
+  };
+
+  const autoMapLeadHeaders = (headers: string[]) => {
+    const mapping: Record<string, string> = {};
+    for (const field of LEAD_IMPORT_FIELDS) {
+      const aliases = LEAD_FIELD_ALIASES[field] || [field];
+      for (const h of headers) {
+        const norm = h.toLowerCase().replace(/[\s_\-\/]+/g, "").trim();
+        for (const alias of aliases) {
+          if (norm === alias.replace(/[\s_\-\/]+/g, "")) { mapping[field] = h; break; }
+        }
+        if (mapping[field]) break;
+      }
+    }
+    return mapping;
+  };
+
+  const handleLeadCsvFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true, skipEmptyLines: true,
+      complete: (results) => {
+        const headers = results.meta.fields || [];
+        setLeadCsvHeaders(headers);
+        setLeadCsvData(results.data as Record<string, string>[]);
+        setLeadCsvMapping(autoMapLeadHeaders(headers));
+        setLeadCsvStep("mapping");
+        setLeadCsvDialogOpen(true);
+      },
+      error: () => toast.error("Failed to parse CSV"),
+    });
+    e.target.value = "";
+  }, []);
+
+  const confirmLeadCsvMapping = () => {
+    if (!leadCsvMapping.name) { toast.error("Name field is required"); return; }
+    setLeadCsvStep("preview");
+  };
+
+  const executeLeadCsvImport = async () => {
+    const newLeads: TableLead[] = leadCsvData.map((row) => {
+      const tagsRaw = leadCsvMapping.expertise_tags ? row[leadCsvMapping.expertise_tags] : "";
+      const tags = tagsRaw ? tagsRaw.split(",").map(t => t.trim()).filter(Boolean) : [];
+      return {
+        id: crypto.randomUUID(),
+        name: row[leadCsvMapping.name] || "",
+        company: leadCsvMapping.company ? row[leadCsvMapping.company] || "" : "",
+        title: leadCsvMapping.title ? row[leadCsvMapping.title] || "" : "",
+        email: leadCsvMapping.email ? row[leadCsvMapping.email] || "" : "",
+        website: leadCsvMapping.website ? row[leadCsvMapping.website] || "" : "",
+        linkedinUrl: leadCsvMapping.linkedin_url ? row[leadCsvMapping.linkedin_url] || "" : "",
+        expertiseTags: tags,
+        background: leadCsvMapping.background ? row[leadCsvMapping.background] || "" : "",
+      };
+    }).filter(l => l.name);
+
+    setLeads((prev) => [...prev, ...newLeads]);
+    setNumLeads((prev) => prev + newLeads.length);
+    setLeadCsvDialogOpen(false);
+    setLeadCsvData([]);
+    toast.success(`Added ${newLeads.length} leads`);
+
+    // Sync to lead pool
+    for (const l of newLeads) { await syncToLeadPool(l); }
+  };
+
+  const handleLeadPasteImport = async (parsed: ParsedLead[]) => {
+    const newLeads: TableLead[] = parsed.map((l) => ({
+      id: crypto.randomUUID(),
+      name: l.name,
+      company: l.company || "",
+      title: l.title || "",
+      email: l.email || "",
+      website: l.website || "",
+      linkedinUrl: l.linkedin_url || "",
+      expertiseTags: l.expertise_tags,
+      background: l.background || "",
+    }));
+    setLeads((prev) => [...prev, ...newLeads]);
+    setNumLeads((prev) => prev + newLeads.length);
+    setLeadPasteDialogOpen(false);
+    toast.success(`Added ${newLeads.length} leads`);
+
+    // Sync to lead pool
+    for (const l of newLeads) { await syncToLeadPool(l); }
+  };
+
   const groupingOptions: { value: GroupingPriority; label: string; desc: string }[] = [
     { value: "sector", label: "Sector / Industry", desc: "Recommended — groups by market" },
     { value: "stage", label: "Stage", desc: "Early / Growth / Scale" },
@@ -728,7 +834,20 @@ export default function SessionConfig() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              {/* Paste Import */}
+              <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
+                <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
+              </Button>
+              {/* CSV Import for Leads */}
+              <div>
+                <input type="file" accept=".csv" className="hidden" id="lead-csv-import" onChange={handleLeadCsvFile} />
+                <Button variant="outline" size="sm" asChild>
+                  <label htmlFor="lead-csv-import" className="cursor-pointer">
+                    <Upload className="h-4 w-4 mr-1" /> Import CSV
+                  </label>
+                </Button>
+              </div>
               <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm">
@@ -871,6 +990,43 @@ export default function SessionConfig() {
           ))}
         </CardContent>
       </Card>
+
+      {/* Lead CSV Import Dialog */}
+      <Dialog open={leadCsvDialogOpen} onOpenChange={(open) => { setLeadCsvDialogOpen(open); if (!open) { setLeadCsvData([]); setLeadCsvHeaders([]); setLeadCsvMapping({}); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>
+              {leadCsvStep === "mapping" ? "Map CSV Columns to Lead Fields" : `Preview Import (${leadCsvData.length} leads)`}
+            </DialogTitle>
+          </DialogHeader>
+          {leadCsvStep === "mapping" ? (
+            <ColumnMapper
+              csvHeaders={leadCsvHeaders}
+              canonicalFields={LEAD_IMPORT_FIELDS}
+              mapping={leadCsvMapping}
+              onMappingChange={setLeadCsvMapping}
+              onConfirm={confirmLeadCsvMapping}
+            />
+          ) : (
+            <div className="space-y-4">
+              <CsvPreviewTable data={leadCsvData} mapping={leadCsvMapping} />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setLeadCsvStep("mapping")}>Back to Mapping</Button>
+                <Button onClick={executeLeadCsvImport}>
+                  Import {leadCsvData.length} Leads
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Lead Paste Dialog */}
+      <PasteLeadsDialog
+        open={leadPasteDialogOpen}
+        onOpenChange={setLeadPasteDialogOpen}
+        onImport={handleLeadPasteImport}
+      />
 
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
