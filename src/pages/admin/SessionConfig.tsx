@@ -155,6 +155,7 @@ export default function SessionConfig() {
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
   const [leadCsvMapping, setLeadCsvMapping] = useState<Record<string, string>>({});
   const [leadCsvStep, setLeadCsvStep] = useState<"mapping" | "preview">("mapping");
+  const [poolSelection, setPoolSelection] = useState<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
 
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
