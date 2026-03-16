@@ -56,6 +56,10 @@ interface LeadChip {
   company?: string;
   title?: string;
   expertiseTags?: string[];
+  background?: string;
+  email?: string;
+  linkedinUrl?: string;
+  website?: string;
 }
 
 interface TableGroup {
