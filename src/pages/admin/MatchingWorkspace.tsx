@@ -145,6 +145,7 @@ export default function MatchingWorkspace() {
             rationale: t.rationale || "",
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
+            assigned_leads: [], // Will be populated from AI response on regeneration
           };
         });
         setTables(tableGroups);
