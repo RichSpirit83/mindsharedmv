@@ -155,7 +155,7 @@ export default function MatchingWorkspace() {
             assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
               const lead = (dbLeads || []).find((l: any) => l.name === name);
               return lead
-                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [] }
+                ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [], background: lead.background || "", email: lead.email || "", linkedinUrl: lead.linkedin_url || "", website: lead.website || "" }
                 : { name, company: "", title: "", expertiseTags: [] };
             }),
           };
