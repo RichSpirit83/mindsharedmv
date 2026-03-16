@@ -113,6 +113,28 @@ export default function Login() {
                 {submitting ? "Please wait…" : tab === "signin" ? "Sign In" : "Request Access"}
                 {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
+              {tab === "signin" && (
+                <button
+                  type="button"
+                  className="w-full text-xs text-muted-foreground hover:text-foreground text-center"
+                  onClick={async () => {
+                    if (!email.trim()) {
+                      toast({ title: "Enter your email first", variant: "destructive" });
+                      return;
+                    }
+                    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+                      redirectTo: `${window.location.origin}/reset-password`,
+                    });
+                    if (error) {
+                      toast({ title: "Error", description: error.message, variant: "destructive" });
+                    } else {
+                      toast({ title: "Check your email", description: "A password reset link has been sent." });
+                    }
+                  }}
+                >
+                  Forgot password?
+                </button>
+              )}
               {tab === "signup" && (
                 <p className="text-xs text-muted-foreground text-center">
                   New accounts require admin approval before access is granted.
