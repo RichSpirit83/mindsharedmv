@@ -204,6 +204,10 @@ ${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributi
           revenue: c.revenue || "",
         } : null;
       }).filter(Boolean),
+      assigned_leads: (table.assigned_lead_indices || []).map((idx: number) => {
+        const l = (leads || [])[idx - 1];
+        return l ? { name: l.name, company: l.company, title: l.title, expertiseTags: l.expertiseTags || [] } : null;
+      }).filter(Boolean),
     }));
 
     console.log(`Generated ${tables.length} tables`);
