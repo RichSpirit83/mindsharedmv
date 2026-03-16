@@ -433,6 +433,12 @@ export default function LeadPool() {
           )}
         </CardContent>
       </Card>
+
+      <PasteLeadsDialog
+        open={pasteDialogOpen}
+        onOpenChange={setPasteDialogOpen}
+        onImport={handlePasteImport}
+      />
     </div>
   );
 }
