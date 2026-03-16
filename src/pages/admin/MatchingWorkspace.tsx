@@ -388,6 +388,32 @@ export default function MatchingWorkspace() {
     setProfileOpen(true);
   };
 
+  const handleDownloadPdf = async () => {
+    const el = document.getElementById("matching-tables-grid");
+    if (!el) return;
+    toast.info("Generating PDF...");
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true, backgroundColor: "#ffffff" });
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const margin = 10;
+      const availW = pageW - margin * 2;
+      const availH = pageH - margin * 2;
+      const imgRatio = canvas.width / canvas.height;
+      let w = availW;
+      let h = w / imgRatio;
+      if (h > availH) { h = availH; w = h * imgRatio; }
+      pdf.addImage(imgData, "PNG", margin, margin, w, h);
+      pdf.save(`${sessionConfig?.session_name || "matching"}-workspace.pdf`);
+      toast.success("PDF downloaded");
+    } catch (err) {
+      console.error("PDF generation failed:", err);
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   const filteredCompanies = companies.filter(
     (c) =>
       c.company_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
