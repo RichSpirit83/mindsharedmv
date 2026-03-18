@@ -253,7 +253,7 @@ export default function SessionConfig() {
       if (csvData.length > 0) {
         const { error: deleteError } = await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
         if (deleteError) {
-          toast({ title: "Error clearing old company data", description: deleteError.message, variant: "destructive" });
+          toast.error("Error clearing old company data: " + deleteError.message);
           throw deleteError;
         }
         const companyRows = csvData.map((row) => {
