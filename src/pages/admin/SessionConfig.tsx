@@ -1096,7 +1096,7 @@ export default function SessionConfig() {
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
         </Button>
-        <Button disabled={csvData.length === 0 || !sessionName} onClick={handleContinue}>
+        <Button disabled={(csvData.length === 0 && leads.length === 0) || !sessionName} onClick={handleContinue}>
           Continue to Matching →
         </Button>
       </div>
