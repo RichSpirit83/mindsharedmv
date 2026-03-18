@@ -267,7 +267,7 @@ export default function SessionConfig() {
           const batch = companyRows.slice(i, i + 20);
           const { error: insertError } = await supabase.from("breakout_companies").insert(batch);
           if (insertError) {
-            toast({ title: "Error saving company data", description: `Batch ${Math.floor(i / 20) + 1} failed: ${insertError.message}`, variant: "destructive" });
+            toast.error(`Error saving company data (batch ${Math.floor(i / 20) + 1}): ${insertError.message}`);
             throw insertError;
           }
         }
