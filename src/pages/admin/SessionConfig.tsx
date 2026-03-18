@@ -251,7 +251,11 @@ export default function SessionConfig() {
 
       // Save companies
       if (csvData.length > 0) {
-        await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
+        const { error: deleteError } = await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
+        if (deleteError) {
+          toast.error("Error clearing old company data: " + deleteError.message);
+          throw deleteError;
+        }
         const companyRows = csvData.map((row) => {
           const mapped: Record<string, string> = {};
           for (const [canonical, csvCol] of Object.entries(columnMapping)) {
@@ -259,8 +263,13 @@ export default function SessionConfig() {
           }
           return { session_id: sessionId, raw_data: row as any, mapped_data: mapped as any };
         });
-        for (let i = 0; i < companyRows.length; i += 100) {
-          await supabase.from("breakout_companies").insert(companyRows.slice(i, i + 100));
+        for (let i = 0; i < companyRows.length; i += 20) {
+          const batch = companyRows.slice(i, i + 20);
+          const { error: insertError } = await supabase.from("breakout_companies").insert(batch);
+          if (insertError) {
+            toast.error(`Error saving company data (batch ${Math.floor(i / 20) + 1}): ${insertError.message}`);
+            throw insertError;
+          }
         }
       }
 
