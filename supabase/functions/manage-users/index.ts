@@ -64,7 +64,7 @@ serve(async (req) => {
 
     if (action === "delete") {
       if (!userId) throw new Error("userId is required");
-      if (userId === caller.id) throw new Error("Cannot delete your own account");
+      if (callerId && userId === callerId) throw new Error("Cannot delete your own account");
       await adminClient.from("user_roles").delete().eq("user_id", userId);
       const { error } = await adminClient.auth.admin.deleteUser(userId);
       if (error) throw error;
