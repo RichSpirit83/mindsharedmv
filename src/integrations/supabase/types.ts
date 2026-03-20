@@ -290,6 +290,27 @@ export type Database = {
         }
         Relationships: []
       }
+      prompt_pool: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          prompt_text: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          prompt_text: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          prompt_text?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string

@@ -11,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste, BookmarkPlus, Library } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -119,6 +119,153 @@ function computeSpeedRounds(breakoutStart: string, breakoutEnd: string) {
 
 function emptyLead(): TableLead {
   return { id: crypto.randomUUID(), name: "", company: "", title: "", email: "", website: "", expertiseTags: [], background: "", linkedinUrl: "" };
+}
+
+function EngagementPromptsCard({
+  prompts, setPrompts, promptMode, setPromptMode, csvData, columnMapping, isGeneratingPrompts, generatePrompts,
+}: {
+  prompts: string[];
+  setPrompts: React.Dispatch<React.SetStateAction<string[]>>;
+  promptMode: PromptMode;
+  setPromptMode: (m: PromptMode) => void;
+  csvData: Record<string, string>[];
+  columnMapping: Record<string, string>;
+  isGeneratingPrompts: boolean;
+  generatePrompts: () => void;
+}) {
+  const [poolPrompts, setPoolPrompts] = useState<{ id: string; label: string; prompt_text: string }[]>([]);
+  const [loadDialogOpen, setLoadDialogOpen] = useState(false);
+  const [saveLabel, setSaveLabel] = useState("");
+  const [savingIdx, setSavingIdx] = useState<number | null>(null);
+
+  // Fetch pool prompts when load dialog opens
+  useEffect(() => {
+    if (loadDialogOpen) {
+      supabase.from("prompt_pool" as any).select("*").order("created_at", { ascending: false }).then(({ data }: any) => {
+        setPoolPrompts((data || []) as any);
+      });
+    }
+  }, [loadDialogOpen]);
+
+  const saveToPool = async (idx: number) => {
+    const label = saveLabel.trim() || `Prompt ${idx + 1}`;
+    const { error } = await (supabase.from("prompt_pool" as any).insert({ label, prompt_text: prompts[idx] }) as any);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Saved "${label}" to prompt pool`);
+    setSavingIdx(null);
+    setSaveLabel("");
+  };
+
+  const deleteFromPool = async (id: string) => {
+    await (supabase.from("prompt_pool" as any).delete().eq("id", id) as any);
+    setPoolPrompts((prev) => prev.filter((p) => p.id !== id));
+    toast.success("Removed from pool");
+  };
+
+  const loadFromPool = (text: string) => {
+    // Find first empty prompt slot, or append
+    const emptyIdx = prompts.findIndex((p) => !p.trim());
+    if (emptyIdx >= 0) {
+      setPrompts((prev) => prev.map((p, i) => i === emptyIdx ? text : p));
+    } else {
+      setPrompts((prev) => [...prev, text]);
+    }
+    toast.success("Loaded prompt");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setLoadDialogOpen(true)}>
+              <Library className="h-4 w-4 mr-1" /> Prompt Pool
+            </Button>
+            <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
+            <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
+              <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {promptMode === "generate" && (
+          <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {csvData.length === 0 ? "Upload company data first." : `Generate prompts from ${csvData.length} companies' data.`}
+            </p>
+            <Button onClick={generatePrompts} disabled={csvData.length === 0 || isGeneratingPrompts}>
+              {isGeneratingPrompts ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</> : <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>}
+            </Button>
+          </div>
+        )}
+        {prompts.map((prompt, i) => (
+          <div key={i}>
+            <div className="flex items-center justify-between mb-1">
+              <Label>Prompt {i + 1}</Label>
+              {prompt.trim() && (
+                savingIdx === i ? (
+                  <div className="flex items-center gap-1">
+                    <Input
+                      value={saveLabel}
+                      onChange={(e) => setSaveLabel(e.target.value)}
+                      placeholder="Label (optional)"
+                      className="h-7 text-xs w-40"
+                      onKeyDown={(e) => { if (e.key === "Enter") saveToPool(i); }}
+                      autoFocus
+                    />
+                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => saveToPool(i)}>
+                      <Check className="h-3 w-3" />
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-7 px-2" onClick={() => { setSavingIdx(null); setSaveLabel(""); }}>
+                      ✕
+                    </Button>
+                  </div>
+                ) : (
+                  <Button size="sm" variant="ghost" className="h-7 text-xs text-muted-foreground" onClick={() => setSavingIdx(i)}>
+                    <BookmarkPlus className="h-3 w-3 mr-1" /> Save to Pool
+                  </Button>
+                )
+              )}
+            </div>
+            <Textarea value={prompt} onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))} className="min-h-[80px]" />
+          </div>
+        ))}
+      </CardContent>
+
+      {/* Load from Pool Dialog */}
+      <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
+        <DialogContent className="sm:max-w-lg max-h-[70vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Prompt Pool</DialogTitle>
+          </DialogHeader>
+          {poolPrompts.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No saved prompts yet. Save prompts from any session to reuse them later.</p>
+          ) : (
+            <div className="space-y-3">
+              {poolPrompts.map((p) => (
+                <div key={p.id} className="p-3 rounded-lg border bg-muted/30 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">{p.label}</span>
+                    <div className="flex gap-1">
+                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => { loadFromPool(p.prompt_text); setLoadDialogOpen(false); }}>
+                        Use
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => deleteFromPool(p.id)}>
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{p.prompt_text}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
 }
 
 export default function SessionConfig() {
@@ -806,37 +953,16 @@ export default function SessionConfig() {
       </Card>
 
       {/* Engagement Prompts */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
-            <div className="flex gap-2">
-              <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
-              <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
-                <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {promptMode === "generate" && (
-            <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {csvData.length === 0 ? "Upload company data first." : `Generate prompts from ${csvData.length} companies' data.`}
-              </p>
-              <Button onClick={generatePrompts} disabled={csvData.length === 0 || isGeneratingPrompts}>
-                {isGeneratingPrompts ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</> : <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>}
-              </Button>
-            </div>
-          )}
-          {prompts.map((prompt, i) => (
-            <div key={i}>
-              <Label>Prompt {i + 1}</Label>
-              <Textarea value={prompt} onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))} className="mt-1.5 min-h-[80px]" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <EngagementPromptsCard
+        prompts={prompts}
+        setPrompts={setPrompts}
+        promptMode={promptMode}
+        setPromptMode={setPromptMode}
+        csvData={csvData}
+        columnMapping={columnMapping}
+        isGeneratingPrompts={isGeneratingPrompts}
+        generatePrompts={generatePrompts}
+      />
 
       {/* CSV Upload */}
       <Card>
