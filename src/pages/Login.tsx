@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Navigate } from "react-router-dom";
-import { LayoutDashboard, ArrowRight, Lock } from "lucide-react";
+import { LayoutDashboard, ArrowRight, Lock, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,6 +15,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [tab, setTab] = useState<string>("signin");
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
 
   if (loading) {
     return (
@@ -75,6 +76,25 @@ export default function Login() {
     setSubmitting(false);
   };
 
+  const handleMagicLink = async () => {
+    if (!email.trim()) {
+      toast({ title: "Enter your email first", variant: "destructive" });
+      return;
+    }
+    setSubmitting(true);
+    const { error } = await supabase.auth.signInWithOtp({
+      email: email.trim(),
+      options: { emailRedirectTo: window.location.origin },
+    });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      setMagicLinkSent(true);
+      toast({ title: "Check your email", description: "A login link has been sent to your inbox." });
+    }
+    setSubmitting(false);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
@@ -88,61 +108,93 @@ export default function Login() {
           <CardDescription>Sign in to access the breakout engine</CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="grid w-full grid-cols-2 mb-4">
-              <TabsTrigger value="signin">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <Input
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                autoFocus
-              />
-              <Input
-                type="password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-              />
-              <Button type="submit" className="w-full" disabled={submitting}>
-                {submitting ? "Please wait…" : tab === "signin" ? "Sign In" : "Request Access"}
-                {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
+          {magicLinkSent ? (
+            <div className="text-center space-y-4">
+              <div className="flex justify-center">
+                <div className="rounded-xl bg-primary/10 p-3">
+                  <Mail className="h-8 w-8 text-primary" />
+                </div>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                We sent a login link to <span className="font-medium text-foreground">{email}</span>. Check your inbox and click the link to sign in.
+              </p>
+              <Button variant="outline" size="sm" onClick={() => setMagicLinkSent(false)}>
+                Back to login
               </Button>
-              {tab === "signin" && (
-                <button
-                  type="button"
-                  className="w-full text-xs text-muted-foreground hover:text-foreground text-center"
-                  onClick={async () => {
-                    if (!email.trim()) {
-                      toast({ title: "Enter your email first", variant: "destructive" });
-                      return;
-                    }
-                    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-                      redirectTo: `${window.location.origin}/reset-password`,
-                    });
-                    if (error) {
-                      toast({ title: "Error", description: error.message, variant: "destructive" });
-                    } else {
-                      toast({ title: "Check your email", description: "A password reset link has been sent." });
-                    }
-                  }}
-                >
-                  Forgot password?
-                </button>
-              )}
-              {tab === "signup" && (
-                <p className="text-xs text-muted-foreground text-center">
-                  New accounts require admin approval before access is granted.
-                </p>
-              )}
-            </form>
-          </Tabs>
+            </div>
+          ) : (
+            <Tabs value={tab} onValueChange={setTab}>
+              <TabsList className="grid w-full grid-cols-2 mb-4">
+                <TabsTrigger value="signin">Sign In</TabsTrigger>
+                <TabsTrigger value="signup">Sign Up</TabsTrigger>
+              </TabsList>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <Input
+                  type="email"
+                  placeholder="you@company.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoFocus
+                />
+                <Input
+                  type="password"
+                  placeholder="Password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                />
+                <Button type="submit" className="w-full" disabled={submitting}>
+                  {submitting ? "Please wait…" : tab === "signin" ? "Sign In" : "Request Access"}
+                  {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
+                </Button>
+                {tab === "signin" && (
+                  <div className="space-y-2">
+                    <button
+                      type="button"
+                      className="w-full text-xs text-muted-foreground hover:text-foreground text-center"
+                      onClick={async () => {
+                        if (!email.trim()) {
+                          toast({ title: "Enter your email first", variant: "destructive" });
+                          return;
+                        }
+                        const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+                          redirectTo: `${window.location.origin}/reset-password`,
+                        });
+                        if (error) {
+                          toast({ title: "Error", description: error.message, variant: "destructive" });
+                        } else {
+                          toast({ title: "Check your email", description: "A password reset link has been sent." });
+                        }
+                      }}
+                    >
+                      Forgot password?
+                    </button>
+                    <div className="relative">
+                      <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+                      <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">or</span></div>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      disabled={submitting}
+                      onClick={handleMagicLink}
+                    >
+                      <Mail className="h-4 w-4 mr-2" />
+                      Sign in with email link
+                    </Button>
+                  </div>
+                )}
+                {tab === "signup" && (
+                  <p className="text-xs text-muted-foreground text-center">
+                    New accounts require admin approval before access is granted.
+                  </p>
+                )}
+              </form>
+            </Tabs>
+          )}
         </CardContent>
       </Card>
     </div>

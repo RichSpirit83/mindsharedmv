@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, CheckCircle2, Clock, UserPlus, Trash2, Loader2 } from "lucide-react";
+import { Shield, CheckCircle2, Clock, UserPlus, Trash2, Loader2, KeyRound } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type UserWithRole = {
