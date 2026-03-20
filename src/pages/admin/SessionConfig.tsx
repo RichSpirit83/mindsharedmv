@@ -274,7 +274,11 @@ export default function SessionConfig() {
       }
 
       // Save leads
-      await supabase.from("breakout_leads").delete().eq("session_id", sessionId);
+      const { error: leadDeleteError } = await supabase.from("breakout_leads").delete().eq("session_id", sessionId);
+      if (leadDeleteError) {
+        toast.error("Error clearing old lead data: " + leadDeleteError.message);
+        throw leadDeleteError;
+      }
       if (leads.length > 0) {
         const leadRows = leads.map((l) => ({
           session_id: sessionId,
@@ -287,7 +291,14 @@ export default function SessionConfig() {
           background: l.background,
           expertise_tags: l.expertiseTags as any,
         }));
-        await supabase.from("breakout_leads").insert(leadRows);
+        for (let i = 0; i < leadRows.length; i += 20) {
+          const batch = leadRows.slice(i, i + 20);
+          const { error: insertError } = await supabase.from("breakout_leads").insert(batch);
+          if (insertError) {
+            toast.error(`Error saving leads (batch ${Math.floor(i / 20) + 1}): ${insertError.message}`);
+            throw insertError;
+          }
+        }
       }
     } catch (err) {
       console.error("Auto-save error:", err);

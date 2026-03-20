@@ -47,17 +47,24 @@ serve(async (req) => {
       });
     }
 
+    if (action === "set-password") {
+      if (!userId) throw new Error("userId is required");
+      const { password } = await req.json().catch(() => ({ password: undefined }));
+      const pwd = password || (await req.json().catch(() => ({}))).password;
+      if (!email && !userId) throw new Error("userId is required");
+      const { error } = await adminClient.auth.admin.updateUserById(userId, { password: password ?? pwd });
+      if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (action === "delete") {
       if (!userId) throw new Error("userId is required");
-      // Don't allow deleting yourself
       if (userId === caller.id) throw new Error("Cannot delete your own account");
-
-      // Delete from user_roles first
       await adminClient.from("user_roles").delete().eq("user_id", userId);
-      // Delete from auth
       const { error } = await adminClient.auth.admin.deleteUser(userId);
       if (error) throw error;
-
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
