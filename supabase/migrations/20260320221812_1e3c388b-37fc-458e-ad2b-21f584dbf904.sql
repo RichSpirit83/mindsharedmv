@@ -1,0 +1,1 @@
+ALTER TABLE public.lead_pool ADD COLUMN tags jsonb NOT NULL DEFAULT '[]'::jsonb;
