@@ -806,37 +806,16 @@ export default function SessionConfig() {
       </Card>
 
       {/* Engagement Prompts */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
-            <div className="flex gap-2">
-              <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
-              <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
-                <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {promptMode === "generate" && (
-            <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                {csvData.length === 0 ? "Upload company data first." : `Generate prompts from ${csvData.length} companies' data.`}
-              </p>
-              <Button onClick={generatePrompts} disabled={csvData.length === 0 || isGeneratingPrompts}>
-                {isGeneratingPrompts ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Generating…</> : <><Sparkles className="h-4 w-4 mr-1" /> Generate Prompts</>}
-              </Button>
-            </div>
-          )}
-          {prompts.map((prompt, i) => (
-            <div key={i}>
-              <Label>Prompt {i + 1}</Label>
-              <Textarea value={prompt} onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))} className="mt-1.5 min-h-[80px]" />
-            </div>
-          ))}
-        </CardContent>
-      </Card>
+      <EngagementPromptsCard
+        prompts={prompts}
+        setPrompts={setPrompts}
+        promptMode={promptMode}
+        setPromptMode={setPromptMode}
+        csvData={csvData}
+        columnMapping={columnMapping}
+        isGeneratingPrompts={isGeneratingPrompts}
+        generatePrompts={generatePrompts}
+      />
 
       {/* CSV Upload */}
       <Card>
