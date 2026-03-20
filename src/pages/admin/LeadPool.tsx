@@ -124,11 +124,43 @@ export default function LeadPool() {
     return Array.from(tagSet).sort();
   }, [leads]);
 
-  // Filtered leads
+  // Sort state
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortField(null); setSortDir("asc"); }
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
+  // Filtered and sorted leads
   const filteredLeads = useMemo(() => {
-    if (!filterTag) return leads;
-    return leads.filter((l) => l.tags.includes(filterTag));
-  }, [leads, filterTag]);
+    let result = filterTag ? leads.filter((l) => l.tags.includes(filterTag)) : [...leads];
+    if (sortField) {
+      result.sort((a, b) => {
+        let aVal: string | number = "";
+        let bVal: string | number = "";
+        if (sortField === "name") { aVal = a.name || ""; bVal = b.name || ""; }
+        else if (sortField === "company") { aVal = a.company || ""; bVal = b.company || ""; }
+        else if (sortField === "tags") { aVal = a.tags.length; bVal = b.tags.length; }
+        else if (sortField === "background") { aVal = a.background || ""; bVal = b.background || ""; }
+        if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [leads, filterTag, sortField, sortDir]);
 
   const saveMutation = useMutation({
     mutationFn: async (lead: typeof form & { id?: string }) => {
