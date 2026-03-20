@@ -258,6 +258,7 @@ export type Database = {
           id: string
           linkedin_url: string | null
           name: string
+          tags: Json
           title: string | null
           website: string | null
         }
@@ -270,6 +271,7 @@ export type Database = {
           id?: string
           linkedin_url?: string | null
           name: string
+          tags?: Json
           title?: string | null
           website?: string | null
         }
@@ -282,6 +284,7 @@ export type Database = {
           id?: string
           linkedin_url?: string | null
           name?: string
+          tags?: Json
           title?: string | null
           website?: string | null
         }
