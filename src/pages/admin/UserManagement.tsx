@@ -104,6 +104,23 @@ export default function UserManagement() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: { action: "set-password", userId, password },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Password updated" });
+      setResetTarget(null);
+      setNewPassword("");
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const roleBadge = (role: string) => {
     switch (role) {
       case "admin":
