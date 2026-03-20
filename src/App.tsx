@@ -12,6 +12,7 @@ import SessionConfig from "@/pages/admin/SessionConfig";
 import MatchingWorkspace from "@/pages/admin/MatchingWorkspace";
 import LeadBriefings from "@/pages/admin/LeadBriefings";
 import LeadPool from "@/pages/admin/LeadPool";
+import FounderPool from "@/pages/admin/FounderPool";
 import UserManagement from "@/pages/admin/UserManagement";
 import PresentationView from "@/pages/admin/PresentationView";
 import PublicAttendeeView from "@/pages/PublicAttendeeView";
