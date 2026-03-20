@@ -41,6 +41,8 @@ export default function UserManagement() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
   const [deleteTarget, setDeleteTarget] = useState<UserWithRole | null>(null);
+  const [resetTarget, setResetTarget] = useState<UserWithRole | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users_with_roles"],
