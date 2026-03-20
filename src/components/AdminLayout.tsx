@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { LayoutDashboard, LayoutGrid, LogOut, Users, Shield } from "lucide-react";
+import { LayoutDashboard, LayoutGrid, LogOut, Users, Shield, Building2 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
