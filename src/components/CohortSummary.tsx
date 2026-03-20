@@ -222,6 +222,10 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label
   );
 }
 
+function Kpi({ children }: { children: React.ReactNode }) {
+  return <span className="font-semibold text-primary">{children}</span>;
+}
+
 function MiniChart({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="rounded-lg border bg-card p-3">
