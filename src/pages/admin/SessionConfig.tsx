@@ -965,6 +965,11 @@ export default function SessionConfig() {
         generatePrompts={generatePrompts}
       />
 
+      {/* Cohort Executive Summary */}
+      {csvData.length > 0 && (
+        <CohortSummary csvData={csvData} columnMapping={columnMapping} />
+      )}
+
       {/* CSV Upload */}
       <Card>
         <CardHeader><CardTitle className="font-heading text-lg">Company Data Upload</CardTitle></CardHeader>
