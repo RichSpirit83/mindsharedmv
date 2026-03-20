@@ -16,13 +16,16 @@ serve(async (req) => {
 
     // Verify caller is admin
     const authHeader = req.headers.get("Authorization");
+    const apiKeyHeader = req.headers.get("apikey");
     const token = authHeader ? authHeader.replace("Bearer ", "") : "";
     
-    // Allow service role key to bypass admin check
-    const isServiceRole = token === serviceRoleKey;
+    // Allow service role key to bypass admin check (via Authorization or apikey header)
+    const isServiceRole = token === serviceRoleKey || apiKeyHeader === serviceRoleKey;
+    let callerId: string | null = null;
     if (!isServiceRole) {
       const { data: { user: caller } } = await adminClient.auth.getUser(token);
       if (!caller) throw new Error("Unauthorized");
+      callerId = caller.id;
       const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: caller.id, _role: "admin" });
       if (!isAdmin) throw new Error("Admin access required");
     }
