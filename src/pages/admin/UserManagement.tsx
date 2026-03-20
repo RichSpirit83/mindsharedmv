@@ -147,7 +147,7 @@ export default function UserManagement() {
                   <TableHead>Email</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead className="w-[180px]">Change Role</TableHead>
-                  <TableHead className="w-[60px]" />
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
