@@ -85,7 +85,7 @@ export default function FounderPool() {
   }, [rawData, search, sortField, sortDir]);
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Building2 className="h-6 w-6 text-primary" />
@@ -104,8 +104,8 @@ export default function FounderPool() {
         />
       </div>
 
-      <Card>
-        <CardContent className="p-0">
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden mt-6">
+        <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
