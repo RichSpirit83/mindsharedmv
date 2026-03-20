@@ -1,39 +1,54 @@
 
 
-## Plan: Add Sorting to Lead Pool + Founder Participants Page
+## Plan: Executive Summary Dashboard Above Company Data
 
-### 1. Sorting for Lead Pool Table
+### What
+Add a collapsible "Cohort Executive Summary" card above the Company Data Upload section in SessionConfig. It appears only when company data is loaded (csvData.length > 0) and shows key insights with charts.
 
-**File: `src/pages/admin/LeadPool.tsx`**
+### Insights & Visualizations
 
-Add clickable column headers that toggle sort direction (asc/desc/none). State: `sortField` and `sortDir`. Apply sorting to `filteredLeads` via `useMemo` before rendering. Sortable columns: Name, Company, Tags count, Background. Use a small arrow icon indicator on the active sort column.
+Based on the canonical fields available in the CSV data:
 
-### 2. Founder Participants Page
+1. **Key Metrics Row** — 4 stat cards:
+   - Total companies count
+   - Unique sectors count
+   - Most common sales stage
+   - Geographic spread (unique cities/states)
 
-Create a new page at `/admin/founders` that displays all companies from `breakout_companies` in a table layout similar to Lead Pool. Each row shows the founder's name, company, sector, stage, revenue, and key metrics extracted from `mapped_data`.
+2. **Sector Distribution** — Horizontal bar chart (Recharts BarChart) showing company count per sector
 
-Clicking a founder row opens the existing `FounderProfileDialog` with their `mapped_data`.
+3. **Sales Stage Breakdown** — Pie/donut chart showing distribution across sales stages
 
-**New file: `src/pages/admin/FounderPool.tsx`**
-- Query `breakout_companies` table, extract `mapped_data` for display columns
-- Table columns: Name (first + last), Company, Sector, Stage, Revenue, Location
-- Each row is clickable → opens `FounderProfileDialog`
-- Include search/filter input at the top
-- Add sorting (same pattern as Lead Pool)
-- Show which session each company belongs to (join with `breakout_sessions` for session name)
+4. **Revenue Distribution** — Bar chart showing revenue band counts
 
-**File: `src/App.tsx`**
-- Add route: `<Route path="founders" element={<FounderPool />} />`
+5. **Needs Analysis** — Radar or grouped bar chart showing what founders need most (networking, trends, partners, opportunities, mentorship) based on the `need_*` fields
 
-**File: `src/components/AdminLayout.tsx`**
-- Add nav item: `{ title: "Founders", url: "/admin/founders", icon: Building2 }`
+6. **Geography** — Simple bar chart of top states/cities
 
-### Summary
+### Implementation
+
+**New file: `src/components/CohortSummary.tsx`**
+- Accepts `csvData` and `columnMapping` as props
+- Uses `useMemo` to compute all aggregations from the mapped data
+- Renders using Recharts components (already installed: `BarChart`, `PieChart`, `RadarChart`) via the existing `ChartContainer` wrapper
+- Responsive grid layout: 4 stat cards on top, then 2×2 chart grid
+- Each chart is compact — the whole section should be scannable at a glance
+- Collapsible via a toggle so it doesn't overwhelm the page
+
+**File: `src/pages/admin/SessionConfig.tsx`**
+- Import `CohortSummary`
+- Render `<CohortSummary csvData={csvData} columnMapping={columnMapping} />` just above the Company Data Upload card (before line 967)
+
+### Design
+- Clean white cards with subtle borders
+- Chart colors use the app's primary palette
+- Section header: "Cohort Executive Summary" with a collapse toggle
+- Charts use small font sizes and are compact (200px height each)
+
+### Files Changed
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/LeadPool.tsx` | Add sort state + clickable column headers with sort indicators |
-| `src/pages/admin/FounderPool.tsx` | New page — founder table with search, sort, clickable rows opening FounderProfileDialog |
-| `src/App.tsx` | Add `/admin/founders` route |
-| `src/components/AdminLayout.tsx` | Add "Founders" nav item |
+| `src/components/CohortSummary.tsx` | New — executive summary with stat cards + 4 Recharts visualizations |
+| `src/pages/admin/SessionConfig.tsx` | Import and render CohortSummary above company data card |
 
