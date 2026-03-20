@@ -71,6 +71,13 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
     const uniqueSectors = new Set(sectors.filter(Boolean)).size;
     const uniqueGeo = new Set([...states, ...cities].filter(Boolean)).size;
     const topStage = stageDist[0]?.name || "N/A";
+    const topSector = sectorDist[0]?.name || "N/A";
+    const topSectorPct = sectorDist[0] ? Math.round((sectorDist[0].value / csvData.length) * 100) : 0;
+    const topNeed = needsData.length ? needsData.reduce((a, b) => (a.value > b.value ? a : b)) : null;
+    const topNeedPct = topNeed ? Math.round((topNeed.value / csvData.length) * 100) : 0;
+    const topRevenue = revenueDist[0]?.name || "N/A";
+    const topGeo = geoDist[0]?.name || "N/A";
+    const topGeoPct = geoDist[0] ? Math.round((geoDist[0].value / csvData.length) * 100) : 0;
 
     return {
       total: csvData.length,
@@ -82,6 +89,9 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
       revenueDist,
       geoDist: geoDist.slice(0, 8),
       needsData,
+      topSector, topSectorPct,
+      topNeed: topNeed?.name || "N/A", topNeedPct,
+      topRevenue, topGeo, topGeoPct,
     };
   }, [csvData, columnMapping]);
 
