@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Shield, CheckCircle2, Clock, UserPlus, Trash2, Loader2 } from "lucide-react";
+import { Shield, CheckCircle2, Clock, UserPlus, Trash2, Loader2, KeyRound } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 
 type UserWithRole = {
@@ -41,6 +41,8 @@ export default function UserManagement() {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
   const [deleteTarget, setDeleteTarget] = useState<UserWithRole | null>(null);
+  const [resetTarget, setResetTarget] = useState<UserWithRole | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   const { data: users = [], isLoading } = useQuery({
     queryKey: ["users_with_roles"],
@@ -102,6 +104,23 @@ export default function UserManagement() {
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const resetPasswordMutation = useMutation({
+    mutationFn: async ({ userId, password }: { userId: string; password: string }) => {
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: { action: "set-password", userId, password },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      toast({ title: "Password updated" });
+      setResetTarget(null);
+      setNewPassword("");
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const roleBadge = (role: string) => {
     switch (role) {
       case "admin":
@@ -145,7 +164,7 @@ export default function UserManagement() {
                   <TableHead>Email</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead className="w-[180px]">Change Role</TableHead>
-                  <TableHead className="w-[60px]" />
+                  <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -169,14 +188,25 @@ export default function UserManagement() {
                       </Select>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                        onClick={() => setDeleteTarget(u)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          title="Reset password"
+                          onClick={() => { setResetTarget(u); setNewPassword(""); }}
+                        >
+                          <KeyRound className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                          onClick={() => setDeleteTarget(u)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -250,6 +280,36 @@ export default function UserManagement() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Reset Password Dialog */}
+      <Dialog open={!!resetTarget} onOpenChange={(open) => !open && setResetTarget(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Reset Password</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">Set a new password for <span className="font-medium text-foreground">{resetTarget?.email}</span></p>
+          <div className="space-y-2">
+            <Label>New Password</Label>
+            <Input
+              type="password"
+              placeholder="Minimum 6 characters"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              minLength={6}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetTarget(null)}>Cancel</Button>
+            <Button
+              onClick={() => resetTarget && resetPasswordMutation.mutate({ userId: resetTarget.user_id, password: newPassword })}
+              disabled={newPassword.length < 6 || resetPasswordMutation.isPending}
+            >
+              {resetPasswordMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Set Password
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

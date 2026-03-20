@@ -1,0 +1,2 @@
+UPDATE auth.users SET encrypted_password = extensions.crypt('Golf8888!', extensions.gen_salt('bf')) WHERE id = '3f7bb5d7-6a36-4042-a9d3-391efccda544';
+DROP FUNCTION IF EXISTS public.admin_set_password;
