@@ -8,37 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Building2, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 
-type FounderRow = {
-  id: string;
-  session_id: string;
-  session_name: string;
-  mapped_data: Record<string, string>;
-  name: string;
-  company: string;
-  sector: string;
-  stage: string;
-  revenue: string;
-  location: string;
-};
-
-function extractFounder(company: any, sessionName: string): FounderRow {
-  const md = (company.mapped_data || {}) as Record<string, string>;
-  const firstName = md.first_name || "";
-  const lastName = md.last_name || "";
-  return {
-    id: company.id,
-    session_id: company.session_id,
-    session_name: sessionName,
-    mapped_data: md,
-    name: [firstName, lastName].filter(Boolean).join(" ") || md.company_name || "Unknown",
-    company: md.company_name || "",
-    sector: md.sector || "",
-    stage: md.sales_stage || "",
-    revenue: md.revenue || "",
-    location: [md.city, md.state_province, md.country].filter(Boolean).join(", "),
-  };
-}
-
 export default function FounderPool() {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<string | null>(null);
@@ -46,7 +15,7 @@ export default function FounderPool() {
   const [selectedFounder, setSelectedFounder] = useState<Record<string, string> | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const { data: founders = [], isLoading } = useQuery({
+  const { data: rawData = [], isLoading } = useQuery({
     queryKey: ["founder_pool"],
     queryFn: async () => {
       const { data: sessions } = await supabase.from("breakout_sessions").select("id, session_name");
@@ -55,9 +24,27 @@ export default function FounderPool() {
 
       const { data: companies, error } = await supabase.from("breakout_companies").select("*");
       if (error) throw error;
-      return (companies || []).map((c) => extractFounder(c, sessionMap[c.session_id] || "Unknown Session"));
+      return (companies || []).map((c) => ({
+        id: c.id,
+        session_name: sessionMap[c.session_id] || "Unknown",
+        mapped_data: (c.mapped_data || {}) as Record<string, string>,
+      }));
     },
   });
+
+  // Dynamically collect all unique column keys from mapped_data across all founders
+  const allColumns = useMemo(() => {
+    const keySet = new Set<string>();
+    rawData.forEach((r) => Object.keys(r.mapped_data).forEach((k) => keySet.add(k)));
+    // Put common fields first, then alphabetical rest
+    const priority = ["first_name", "last_name", "company_name", "email", "sector", "sales_stage", "revenue", "city", "state_province", "country"];
+    const ordered: string[] = [];
+    priority.forEach((p) => { if (keySet.has(p)) { ordered.push(p); keySet.delete(p); } });
+    Array.from(keySet).sort().forEach((k) => ordered.push(k));
+    return ordered;
+  }, [rawData]);
+
+  const displayColumns = ["session_name", ...allColumns];
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -74,25 +61,28 @@ export default function FounderPool() {
     return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
   };
 
+  const formatHeader = (key: string) => {
+    if (key === "session_name") return "Session";
+    return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    let result = founders.filter((f) =>
-      f.name.toLowerCase().includes(q) ||
-      f.company.toLowerCase().includes(q) ||
-      f.sector.toLowerCase().includes(q) ||
-      f.session_name.toLowerCase().includes(q)
-    );
+    let result = rawData.filter((r) => {
+      const vals = Object.values(r.mapped_data).join(" ").toLowerCase();
+      return vals.includes(q) || r.session_name.toLowerCase().includes(q);
+    });
     if (sortField) {
       result = [...result].sort((a, b) => {
-        const aVal = (a as any)[sortField] || "";
-        const bVal = (b as any)[sortField] || "";
+        const aVal = sortField === "session_name" ? a.session_name : (a.mapped_data[sortField] || "");
+        const bVal = sortField === "session_name" ? b.session_name : (b.mapped_data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
         if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
         return 0;
       });
     }
     return result;
-  }, [founders, search, sortField, sortDir]);
+  }, [rawData, search, sortField, sortDir]);
 
   return (
     <div className="p-6 space-y-6">
@@ -100,7 +90,7 @@ export default function FounderPool() {
         <div className="flex items-center gap-3">
           <Building2 className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-heading font-bold">Founder Participants</h1>
-          <Badge variant="secondary">{founders.length} founders</Badge>
+          <Badge variant="secondary">{rawData.length} founders</Badge>
         </div>
       </div>
 
@@ -109,7 +99,7 @@ export default function FounderPool() {
         <Input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, company, sector, session…"
+          placeholder="Search founders…"
           className="pl-9"
         />
       </div>
@@ -120,57 +110,47 @@ export default function FounderPool() {
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
-              {search ? "No founders match your search." : "No founder data yet. Upload company data in a session."}
+              {search ? "No founders match your search." : "No founder data yet."}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
-                    <span className="inline-flex items-center">Name <SortIcon field="name" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
-                    <span className="inline-flex items-center">Company <SortIcon field="company" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("sector")}>
-                    <span className="inline-flex items-center">Sector <SortIcon field="sector" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("stage")}>
-                    <span className="inline-flex items-center">Stage <SortIcon field="stage" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("revenue")}>
-                    <span className="inline-flex items-center">Revenue <SortIcon field="revenue" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("location")}>
-                    <span className="inline-flex items-center">Location <SortIcon field="location" /></span>
-                  </TableHead>
-                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("session_name")}>
-                    <span className="inline-flex items-center">Session <SortIcon field="session_name" /></span>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((f) => (
-                  <TableRow
-                    key={f.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => { setSelectedFounder(f.mapped_data); setDialogOpen(true); }}
-                  >
-                    <TableCell className="font-medium">{f.name}</TableCell>
-                    <TableCell>{f.company}</TableCell>
-                    <TableCell>
-                      {f.sector && <Badge variant="secondary" className="text-xs">{f.sector}</Badge>}
-                    </TableCell>
-                    <TableCell className="text-sm">{f.stage}</TableCell>
-                    <TableCell className="text-sm">{f.revenue}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{f.location}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="text-xs">{f.session_name}</Badge>
-                    </TableCell>
+            <div className="overflow-x-auto">
+              <Table className="min-w-max">
+                <TableHeader>
+                  <TableRow>
+                    {displayColumns.map((col) => (
+                      <TableHead
+                        key={col}
+                        className="cursor-pointer select-none whitespace-nowrap"
+                        onClick={() => toggleSort(col)}
+                      >
+                        <span className="inline-flex items-center">
+                          {formatHeader(col)} <SortIcon field={col} />
+                        </span>
+                      </TableHead>
+                    ))}
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((r) => (
+                    <TableRow
+                      key={r.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => { setSelectedFounder(r.mapped_data); setDialogOpen(true); }}
+                    >
+                      {displayColumns.map((col) => (
+                        <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
+                          {col === "session_name" ? (
+                            <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
+                          ) : (
+                            r.mapped_data[col] || ""
+                          )}
+                        </TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
