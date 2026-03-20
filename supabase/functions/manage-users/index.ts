@@ -15,13 +15,17 @@ serve(async (req) => {
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
     // Verify caller is admin
-    const authHeader = req.headers.get("Authorization")!;
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user: caller } } = await adminClient.auth.getUser(token);
-    if (!caller) throw new Error("Unauthorized");
-
-    const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: caller.id, _role: "admin" });
-    if (!isAdmin) throw new Error("Admin access required");
+    const authHeader = req.headers.get("Authorization");
+    const token = authHeader ? authHeader.replace("Bearer ", "") : "";
+    
+    // Allow service role key to bypass admin check
+    const isServiceRole = token === serviceRoleKey;
+    if (!isServiceRole) {
+      const { data: { user: caller } } = await adminClient.auth.getUser(token);
+      if (!caller) throw new Error("Unauthorized");
+      const { data: isAdmin } = await adminClient.rpc("has_role", { _user_id: caller.id, _role: "admin" });
+      if (!isAdmin) throw new Error("Admin access required");
+    }
 
     const { action, email, userId, role, password } = await req.json();
 
