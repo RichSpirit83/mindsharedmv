@@ -1,5 +1,5 @@
 import { Outlet } from "react-router-dom";
-import { LayoutDashboard, LayoutGrid, LogOut, Users, Shield } from "lucide-react";
+import { LayoutDashboard, LayoutGrid, LogOut, Users, Shield, Building2 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import {
 const navItems = [
   { title: "Breakouts", url: "/admin", icon: LayoutGrid, end: true },
   { title: "Lead Pool", url: "/admin/lead-pool", icon: Users, end: false },
+  { title: "Founders", url: "/admin/founders", icon: Building2, end: false },
   { title: "Users", url: "/admin/users", icon: Shield, end: false },
 ];
 

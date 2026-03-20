@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
@@ -124,11 +124,43 @@ export default function LeadPool() {
     return Array.from(tagSet).sort();
   }, [leads]);
 
-  // Filtered leads
+  // Sort state
+  const [sortField, setSortField] = useState<string | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const toggleSort = (field: string) => {
+    if (sortField === field) {
+      if (sortDir === "asc") setSortDir("desc");
+      else { setSortField(null); setSortDir("asc"); }
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  };
+
+  const SortIcon = ({ field }: { field: string }) => {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 opacity-40" />;
+    return sortDir === "asc" ? <ArrowUp className="h-3 w-3 ml-1" /> : <ArrowDown className="h-3 w-3 ml-1" />;
+  };
+
+  // Filtered and sorted leads
   const filteredLeads = useMemo(() => {
-    if (!filterTag) return leads;
-    return leads.filter((l) => l.tags.includes(filterTag));
-  }, [leads, filterTag]);
+    let result = filterTag ? leads.filter((l) => l.tags.includes(filterTag)) : [...leads];
+    if (sortField) {
+      result.sort((a, b) => {
+        let aVal: string | number = "";
+        let bVal: string | number = "";
+        if (sortField === "name") { aVal = a.name || ""; bVal = b.name || ""; }
+        else if (sortField === "company") { aVal = a.company || ""; bVal = b.company || ""; }
+        else if (sortField === "tags") { aVal = a.tags.length; bVal = b.tags.length; }
+        else if (sortField === "background") { aVal = a.background || ""; bVal = b.background || ""; }
+        if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+        if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [leads, filterTag, sortField, sortDir]);
 
   const saveMutation = useMutation({
     mutationFn: async (lead: typeof form & { id?: string }) => {
@@ -566,11 +598,19 @@ export default function LeadPool() {
                   <TableHead className="w-[40px]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Company / Title</TableHead>
-                  <TableHead>Tags</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                    <span className="inline-flex items-center">Name <SortIcon field="name" /></span>
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                    <span className="inline-flex items-center">Company / Title <SortIcon field="company" /></span>
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("tags")}>
+                    <span className="inline-flex items-center">Tags <SortIcon field="tags" /></span>
+                  </TableHead>
                   <TableHead>Expertise</TableHead>
-                  <TableHead>Background</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("background")}>
+                    <span className="inline-flex items-center">Background <SortIcon field="background" /></span>
+                  </TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
