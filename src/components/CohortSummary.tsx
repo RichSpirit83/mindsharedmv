@@ -117,6 +117,16 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
             <StatCard icon={MapPin} label="Locations" value={stats.uniqueGeo} />
           </div>
 
+          {/* Written Summary */}
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed text-foreground">
+            This cohort comprises <Kpi>{stats.total} companies</Kpi> spanning <Kpi>{stats.uniqueSectors} sectors</Kpi> across <Kpi>{stats.uniqueGeo} locations</Kpi>.
+            {stats.topSector !== "N/A" && <> The dominant sector is <Kpi>{stats.topSector}</Kpi>, representing <Kpi>{stats.topSectorPct}%</Kpi> of the cohort.</>}
+            {stats.topStage !== "N/A" && <> Most founders are at the <Kpi>{stats.topStage}</Kpi> stage.</>}
+            {stats.topRevenue !== "N/A" && <> The most common revenue band is <Kpi>{stats.topRevenue}</Kpi>.</>}
+            {stats.topGeo !== "N/A" && <> <Kpi>{stats.topGeoPct}%</Kpi> are based in <Kpi>{stats.topGeo}</Kpi>.</>}
+            {stats.topNeed !== "N/A" && <> The top founder need is <Kpi>{stats.topNeed}</Kpi> (<Kpi>{stats.topNeedPct}%</Kpi>).</>}
+          </div>
+
           {/* Charts Grid */}
           <div className="grid md:grid-cols-2 gap-4">
             {/* Sector Distribution */}
