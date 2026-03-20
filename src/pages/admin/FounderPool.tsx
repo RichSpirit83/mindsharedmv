@@ -104,7 +104,7 @@ export default function FounderPool() {
         />
       </div>
 
-      <Card>
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden mt-6">
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
