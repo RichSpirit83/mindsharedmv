@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
