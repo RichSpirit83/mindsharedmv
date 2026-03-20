@@ -1,56 +1,39 @@
 
 
-## Plan: Fix Login, Email-Only User Access, and Table Leads Not Loading
+## Plan: Add Sorting to Lead Pool + Founder Participants Page
 
-### Three issues to fix:
+### 1. Sorting for Lead Pool Table
 
----
+**File: `src/pages/admin/LeadPool.tsx`**
 
-### 1. Login Error
+Add clickable column headers that toggle sort direction (asc/desc/none). State: `sortField` and `sortDir`. Apply sorting to `filteredLeads` via `useMemo` before rendering. Sortable columns: Name, Company, Tags count, Background. Use a small arrow icon indicator on the active sort column.
 
-Your account (`ade.omit@gmail.com`) exists and is confirmed in the database. The most likely cause is the password not matching what's stored. I'll use the `manage-users` edge function to add a `reset-password` action that lets an admin set a specific password for any user. Then I'll call it to reset your password to `Golf8888!`.
+### 2. Founder Participants Page
 
-Alternatively, the simpler fix: add a `set-password` action to the edge function so admins can set passwords directly from User Management.
+Create a new page at `/admin/founders` that displays all companies from `breakout_companies` in a table layout similar to Lead Pool. Each row shows the founder's name, company, sector, stage, revenue, and key metrics extracted from `mapped_data`.
 
-**Changes:**
-- `supabase/functions/manage-users/index.ts` — Add a `set-password` action that uses `adminClient.auth.admin.updateUserById()` to set a new password
-- `src/pages/admin/UserManagement.tsx` — Add a "Reset Password" button per user row
+Clicking a founder row opens the existing `FounderProfileDialog` with their `mapped_data`.
 
----
+**New file: `src/pages/admin/FounderPool.tsx`**
+- Query `breakout_companies` table, extract `mapped_data` for display columns
+- Table columns: Name (first + last), Company, Sector, Stage, Revenue, Location
+- Each row is clickable → opens `FounderProfileDialog`
+- Include search/filter input at the top
+- Add sorting (same pattern as Lead Pool)
+- Show which session each company belongs to (join with `breakout_sessions` for session name)
 
-### 2. Add Users Who Login With Just Email (Magic Link)
+**File: `src/App.tsx`**
+- Add route: `<Route path="founders" element={<FounderPool />} />`
 
-When an admin adds a user, they should be able to log in without needing a password. I'll implement this by:
+**File: `src/components/AdminLayout.tsx`**
+- Add nav item: `{ title: "Founders", url: "/admin/founders", icon: Building2 }`
 
-- Adding a **magic link login option** on the Login page — users enter their email and receive a login link
-- When an admin invites a user via "Add User", the system creates the account (as it does now). The invited user can then use "Sign in with email link" to get a magic link sent to them — no password needed.
-
-**Changes:**
-- `src/pages/Login.tsx` — Add a "Sign in with email link" option that calls `supabase.auth.signInWithOtp({ email })` to send a magic link
-- `supabase/functions/manage-users/index.ts` — When inviting, also send a magic link email so the user gets an immediate login link
-
----
-
-### 3. Table Leads Not Loading in Matching Workspace
-
-The `breakout_leads` table is empty (0 rows). The auto-save in `SessionConfig.tsx` deletes all leads then inserts, but the insert has no error handling — if it fails, leads are silently lost.
-
-Root cause: the lead insert at line 290 doesn't check for errors. If the batch fails (payload size, network issue), the delete already ran, and data is gone.
-
-**Changes:**
-- `src/pages/admin/SessionConfig.tsx` — Add error handling to the lead save (lines 277-291):
-  - Check the delete result for errors and toast on failure
-  - Check the insert result for errors and toast on failure  
-  - Batch lead inserts (like companies) to avoid payload limits
-
----
-
-### Summary of File Changes
+### Summary
 
 | File | Change |
 |------|--------|
-| `supabase/functions/manage-users/index.ts` | Add `set-password` action for admin password resets |
-| `src/pages/admin/UserManagement.tsx` | Add "Reset Password" button with password input dialog |
-| `src/pages/Login.tsx` | Add magic link sign-in option (`signInWithOtp`) |
-| `src/pages/admin/SessionConfig.tsx` | Add error handling + batching to lead save logic |
+| `src/pages/admin/LeadPool.tsx` | Add sort state + clickable column headers with sort indicators |
+| `src/pages/admin/FounderPool.tsx` | New page — founder table with search, sort, clickable rows opening FounderProfileDialog |
+| `src/App.tsx` | Add `/admin/founders` route |
+| `src/components/AdminLayout.tsx` | Add "Founders" nav item |
 
