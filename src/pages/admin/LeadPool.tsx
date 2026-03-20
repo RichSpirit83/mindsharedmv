@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
@@ -55,6 +57,7 @@ type LeadPoolEntry = {
   name: string;
   linkedin_url: string | null;
   expertise_tags: string[];
+  tags: string[];
   background: string | null;
   company: string | null;
   title: string | null;
@@ -63,13 +66,30 @@ type LeadPoolEntry = {
   created_at: string;
 };
 
+const TAG_COLORS: Record<string, string> = {
+  "Board Member": "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",
+  "Alumni": "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
+  "Mentor": "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",
+  "Investor": "bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-700",
+  "Speaker": "bg-pink-100 text-pink-800 border-pink-200 dark:bg-pink-900/30 dark:text-pink-300 dark:border-pink-700",
+};
+
+function getTagColor(tag: string) {
+  return TAG_COLORS[tag] || "bg-muted text-muted-foreground border-border";
+}
+
 export default function LeadPool() {
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState<LeadPoolEntry | null>(null);
   const [form, setForm] = useState({
-    name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "",
+    name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "", tags: "",
   });
+
+  // Selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkTagInput, setBulkTagInput] = useState("");
+  const [filterTag, setFilterTag] = useState<string | null>(null);
 
   // CSV import state
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
@@ -92,17 +112,33 @@ export default function LeadPool() {
       return (data ?? []).map((l: any) => ({
         ...l,
         expertise_tags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
+        tags: Array.isArray(l.tags) ? l.tags : [],
       })) as LeadPoolEntry[];
     },
   });
 
+  // Compute all unique tags across all leads
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    leads.forEach((l) => l.tags.forEach((t) => tagSet.add(t)));
+    return Array.from(tagSet).sort();
+  }, [leads]);
+
+  // Filtered leads
+  const filteredLeads = useMemo(() => {
+    if (!filterTag) return leads;
+    return leads.filter((l) => l.tags.includes(filterTag));
+  }, [leads, filterTag]);
+
   const saveMutation = useMutation({
     mutationFn: async (lead: typeof form & { id?: string }) => {
-      const tags = lead.expertise_tags.split(",").map((t) => t.trim()).filter(Boolean);
+      const expertiseTags = lead.expertise_tags.split(",").map((t) => t.trim()).filter(Boolean);
+      const tags = lead.tags.split(",").map((t) => t.trim()).filter(Boolean);
       const payload = {
         name: lead.name,
         linkedin_url: lead.linkedin_url || null,
-        expertise_tags: tags,
+        expertise_tags: expertiseTags,
+        tags,
         background: lead.background || null,
         company: lead.company || null,
         title: lead.title || null,
@@ -138,7 +174,32 @@ export default function LeadPool() {
     },
   });
 
-  const resetForm = () => setForm({ name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "" });
+  // Bulk tag mutation
+  const bulkTagMutation = useMutation({
+    mutationFn: async ({ ids, tag, action }: { ids: string[]; tag: string; action: "add" | "remove" }) => {
+      for (const id of ids) {
+        const lead = leads.find((l) => l.id === id);
+        if (!lead) continue;
+        let newTags: string[];
+        if (action === "add") {
+          newTags = lead.tags.includes(tag) ? lead.tags : [...lead.tags, tag];
+        } else {
+          newTags = lead.tags.filter((t) => t !== tag);
+        }
+        const { error } = await (supabase.from("lead_pool" as any).update({ tags: newTags }).eq("id", id) as any);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["lead_pool"] });
+      setSelectedIds(new Set());
+      setBulkTagInput("");
+      toast({ title: "Tags updated" });
+    },
+    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const resetForm = () => setForm({ name: "", linkedin_url: "", expertise_tags: "", background: "", company: "", title: "", email: "", website: "", tags: "" });
 
   const openEdit = (lead: LeadPoolEntry) => {
     setEditingLead(lead);
@@ -151,6 +212,7 @@ export default function LeadPool() {
       title: lead.title || "",
       email: lead.email || "",
       website: lead.website || "",
+      tags: lead.tags.join(", "),
     });
     setDialogOpen(true);
   };
@@ -159,6 +221,41 @@ export default function LeadPool() {
     setEditingLead(null);
     resetForm();
     setDialogOpen(true);
+  };
+
+  // Toggle individual tag on a single lead
+  const toggleLeadTag = async (lead: LeadPoolEntry, tag: string) => {
+    const newTags = lead.tags.includes(tag) ? lead.tags.filter((t) => t !== tag) : [...lead.tags, tag];
+    const { error } = await (supabase.from("lead_pool" as any).update({ tags: newTags }).eq("id", lead.id) as any);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } else {
+      queryClient.invalidateQueries({ queryKey: ["lead_pool"] });
+    }
+  };
+
+  // Selection helpers
+  const allSelected = filteredLeads.length > 0 && filteredLeads.every((l) => selectedIds.has(l.id));
+  const someSelected = selectedIds.size > 0;
+
+  const toggleAll = () => {
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredLeads.map((l) => l.id)));
+    }
+  };
+
+  const toggleOne = (id: string) => {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
+  };
+
+  const handleBulkTag = (action: "add" | "remove") => {
+    const tag = bulkTagInput.trim();
+    if (!tag) return;
+    bulkTagMutation.mutate({ ids: Array.from(selectedIds), tag, action });
   };
 
   // CSV import handlers
@@ -208,7 +305,6 @@ export default function LeadPool() {
         };
       }).filter((r) => r.name && r.name !== "Unknown");
 
-      // Batch insert in chunks of 100
       for (let i = 0; i < rows.length; i += 100) {
         const { error } = await (supabase.from("lead_pool" as any).insert(rows.slice(i, i + 100)) as any);
         if (error) throw error;
@@ -264,17 +360,12 @@ export default function LeadPool() {
           <Badge variant="secondary">{leads.length} leads</Badge>
         </div>
         <div className="flex gap-2">
-          {/* LinkedIn Import */}
           <Button variant="outline" onClick={() => setLinkedinDialogOpen(true)}>
             <Linkedin className="mr-2 h-4 w-4" /> Import LinkedIn
           </Button>
-
-          {/* Paste Import */}
           <Button variant="outline" onClick={() => setPasteDialogOpen(true)}>
             <ClipboardPaste className="mr-2 h-4 w-4" /> Paste List
           </Button>
-
-          {/* CSV Import */}
           <div>
             <input type="file" accept=".csv" className="hidden" id="csv-lead-import" onChange={handleCsvFile} />
             <Button variant="outline" asChild>
@@ -283,8 +374,6 @@ export default function LeadPool() {
               </label>
             </Button>
           </div>
-
-          {/* Add Lead Dialog */}
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setEditingLead(null); }}>
             <DialogTrigger asChild>
               <Button onClick={openNew}>
@@ -333,6 +422,31 @@ export default function LeadPool() {
                   <Input value={form.expertise_tags} onChange={(e) => setForm({ ...form, expertise_tags: e.target.value })} placeholder="fintech, AI, growth (comma-separated)" />
                 </div>
                 <div className="space-y-2">
+                  <Label>Tags</Label>
+                  <Input value={form.tags} onChange={(e) => setForm({ ...form, tags: e.target.value })} placeholder="Board Member, Alumni (comma-separated)" />
+                  {allTags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {allTags.map((tag) => {
+                        const active = form.tags.split(",").map(t => t.trim()).includes(tag);
+                        return (
+                          <button
+                            key={tag}
+                            type="button"
+                            className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer transition-colors ${active ? getTagColor(tag) : "bg-muted/50 text-muted-foreground border-border opacity-60 hover:opacity-100"}`}
+                            onClick={() => {
+                              const current = form.tags.split(",").map(t => t.trim()).filter(Boolean);
+                              const next = active ? current.filter(t => t !== tag) : [...current, tag];
+                              setForm({ ...form, tags: next.join(", ") });
+                            }}
+                          >
+                            {tag}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <Label>Background / Notes</Label>
                   <Textarea value={form.background} onChange={(e) => setForm({ ...form, background: e.target.value })} rows={3} />
                 </div>
@@ -344,6 +458,68 @@ export default function LeadPool() {
           </Dialog>
         </div>
       </div>
+
+      {/* Tag filter bar */}
+      {allTags.length > 0 && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <Tag className="h-4 w-4 text-muted-foreground" />
+          <span className="text-sm text-muted-foreground">Filter:</span>
+          <button
+            className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${!filterTag ? "bg-primary text-primary-foreground border-primary" : "bg-muted/50 text-muted-foreground border-border hover:bg-muted"}`}
+            onClick={() => setFilterTag(null)}
+          >
+            All
+          </button>
+          {allTags.map((tag) => (
+            <button
+              key={tag}
+              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${filterTag === tag ? getTagColor(tag) + " ring-2 ring-primary/30" : getTagColor(tag) + " opacity-70 hover:opacity-100"}`}
+              onClick={() => setFilterTag(filterTag === tag ? null : tag)}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Bulk action bar */}
+      {someSelected && (
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="p-3 flex items-center gap-3">
+            <span className="text-sm font-medium">{selectedIds.size} selected</span>
+            <div className="flex items-center gap-2 flex-1">
+              <Input
+                value={bulkTagInput}
+                onChange={(e) => setBulkTagInput(e.target.value)}
+                placeholder="Enter tag name…"
+                className="h-8 max-w-[200px]"
+              />
+              <Button size="sm" variant="outline" onClick={() => handleBulkTag("add")} disabled={!bulkTagInput.trim() || bulkTagMutation.isPending}>
+                <Tag className="mr-1 h-3 w-3" /> Add Tag
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => handleBulkTag("remove")} disabled={!bulkTagInput.trim() || bulkTagMutation.isPending}>
+                <X className="mr-1 h-3 w-3" /> Remove Tag
+              </Button>
+              {allTags.length > 0 && (
+                <div className="flex gap-1 ml-2">
+                  {allTags.map((tag) => (
+                    <button
+                      key={tag}
+                      className={`text-xs px-2 py-0.5 rounded-full border cursor-pointer ${getTagColor(tag)} hover:ring-1 ring-primary/30`}
+                      onClick={() => setBulkTagInput(tag)}
+                    >
+                      {tag}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+              Clear
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* CSV Import Dialog */}
       <Dialog open={csvDialogOpen} onOpenChange={(open) => { setCsvDialogOpen(open); if (!open) { setCsvData([]); setCsvHeaders([]); setCsvMapping({}); } }}>
@@ -379,24 +555,31 @@ export default function LeadPool() {
         <CardContent className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
-          ) : leads.length === 0 ? (
+          ) : filteredLeads.length === 0 ? (
             <div className="p-8 text-center text-muted-foreground">
-              No leads in the pool yet. Add leads manually or import a CSV.
+              {filterTag ? `No leads tagged "${filterTag}".` : "No leads in the pool yet. Add leads manually or import a CSV."}
             </div>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[40px]">
+                    <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
+                  </TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead>Company / Title</TableHead>
+                  <TableHead>Tags</TableHead>
                   <TableHead>Expertise</TableHead>
                   <TableHead>Background</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {leads.map((lead) => (
-                  <TableRow key={lead.id}>
+                {filteredLeads.map((lead) => (
+                  <TableRow key={lead.id} className={selectedIds.has(lead.id) ? "bg-primary/5" : ""}>
+                    <TableCell>
+                      <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} />
+                    </TableCell>
                     <TableCell className="font-medium">
                       <div>{lead.name}</div>
                       {lead.linkedin_url && (
@@ -414,6 +597,51 @@ export default function LeadPool() {
                           {lead.website.replace(/^https?:\/\//, '').slice(0, 30)}
                         </a>
                       )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex flex-wrap gap-1 items-center">
+                        {lead.tags.map((tag, i) => (
+                          <span key={i} className={`text-xs px-2 py-0.5 rounded-full border ${getTagColor(tag)}`}>
+                            {tag}
+                          </span>
+                        ))}
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button className="h-5 w-5 rounded-full border border-dashed border-muted-foreground/40 flex items-center justify-center hover:border-primary hover:text-primary transition-colors">
+                              <Plus className="h-3 w-3" />
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-56 p-2" align="start">
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium text-muted-foreground">Toggle tags</p>
+                              {allTags.map((tag) => (
+                                <button
+                                  key={tag}
+                                  className={`block w-full text-left text-xs px-2 py-1 rounded transition-colors ${lead.tags.includes(tag) ? getTagColor(tag) : "hover:bg-muted"}`}
+                                  onClick={() => toggleLeadTag(lead, tag)}
+                                >
+                                  {lead.tags.includes(tag) ? "✓ " : ""}{tag}
+                                </button>
+                              ))}
+                              <div className="border-t pt-2">
+                                <Input
+                                  placeholder="New tag…"
+                                  className="h-7 text-xs"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      const val = (e.target as HTMLInputElement).value.trim();
+                                      if (val) {
+                                        toggleLeadTag(lead, val);
+                                        (e.target as HTMLInputElement).value = "";
+                                      }
+                                    }
+                                  }}
+                                />
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
