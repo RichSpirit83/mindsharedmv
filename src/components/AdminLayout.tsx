@@ -21,6 +21,7 @@ import {
 const navItems = [
   { title: "Breakouts", url: "/admin", icon: LayoutGrid, end: true },
   { title: "Lead Pool", url: "/admin/lead-pool", icon: Users, end: false },
+  { title: "Founders", url: "/admin/founders", icon: Building2, end: false },
   { title: "Users", url: "/admin/users", icon: Shield, end: false },
 ];
 

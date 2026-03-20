@@ -598,11 +598,19 @@ export default function LeadPool() {
                   <TableHead className="w-[40px]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Company / Title</TableHead>
-                  <TableHead>Tags</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
+                    <span className="inline-flex items-center">Name <SortIcon field="name" /></span>
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("company")}>
+                    <span className="inline-flex items-center">Company / Title <SortIcon field="company" /></span>
+                  </TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("tags")}>
+                    <span className="inline-flex items-center">Tags <SortIcon field="tags" /></span>
+                  </TableHead>
                   <TableHead>Expertise</TableHead>
-                  <TableHead>Background</TableHead>
+                  <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("background")}>
+                    <span className="inline-flex items-center">Background <SortIcon field="background" /></span>
+                  </TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>

@@ -51,6 +51,7 @@ const App = () => (
               <Route path="match/:sessionId" element={<MatchingWorkspace />} />
               <Route path="leads/:sessionId" element={<LeadBriefings />} />
               <Route path="lead-pool" element={<LeadPool />} />
+              <Route path="founders" element={<FounderPool />} />
               <Route path="users" element={<UserManagement />} />
             </Route>
             <Route
