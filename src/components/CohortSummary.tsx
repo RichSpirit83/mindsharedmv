@@ -71,6 +71,13 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
     const uniqueSectors = new Set(sectors.filter(Boolean)).size;
     const uniqueGeo = new Set([...states, ...cities].filter(Boolean)).size;
     const topStage = stageDist[0]?.name || "N/A";
+    const topSector = sectorDist[0]?.name || "N/A";
+    const topSectorPct = sectorDist[0] ? Math.round((sectorDist[0].value / csvData.length) * 100) : 0;
+    const topNeed = needsData.length ? needsData.reduce((a, b) => (a.value > b.value ? a : b)) : null;
+    const topNeedPct = topNeed ? Math.round((topNeed.value / csvData.length) * 100) : 0;
+    const topRevenue = revenueDist[0]?.name || "N/A";
+    const topGeo = geoDist[0]?.name || "N/A";
+    const topGeoPct = geoDist[0] ? Math.round((geoDist[0].value / csvData.length) * 100) : 0;
 
     return {
       total: csvData.length,
@@ -82,6 +89,9 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
       revenueDist,
       geoDist: geoDist.slice(0, 8),
       needsData,
+      topSector, topSectorPct,
+      topNeed: topNeed?.name || "N/A", topNeedPct,
+      topRevenue, topGeo, topGeoPct,
     };
   }, [csvData, columnMapping]);
 
@@ -105,6 +115,16 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
             <StatCard icon={Layers} label="Sectors" value={stats.uniqueSectors} />
             <StatCard icon={TrendingUp} label="Top Stage" value={stats.topStage} />
             <StatCard icon={MapPin} label="Locations" value={stats.uniqueGeo} />
+          </div>
+
+          {/* Written Summary */}
+          <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed text-foreground">
+            This cohort comprises <Kpi>{stats.total} companies</Kpi> spanning <Kpi>{stats.uniqueSectors} sectors</Kpi> across <Kpi>{stats.uniqueGeo} locations</Kpi>.
+            {stats.topSector !== "N/A" && <> The dominant sector is <Kpi>{stats.topSector}</Kpi>, representing <Kpi>{stats.topSectorPct}%</Kpi> of the cohort.</>}
+            {stats.topStage !== "N/A" && <> Most founders are at the <Kpi>{stats.topStage}</Kpi> stage.</>}
+            {stats.topRevenue !== "N/A" && <> The most common revenue band is <Kpi>{stats.topRevenue}</Kpi>.</>}
+            {stats.topGeo !== "N/A" && <> <Kpi>{stats.topGeoPct}%</Kpi> are based in <Kpi>{stats.topGeo}</Kpi>.</>}
+            {stats.topNeed !== "N/A" && <> The top founder need is <Kpi>{stats.topNeed}</Kpi> (<Kpi>{stats.topNeedPct}%</Kpi>).</>}
           </div>
 
           {/* Charts Grid */}
@@ -200,6 +220,10 @@ function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label
       </div>
     </div>
   );
+}
+
+function Kpi({ children }: { children: React.ReactNode }) {
+  return <span className="font-semibold text-primary">{children}</span>;
 }
 
 function MiniChart({ title, children }: { title: string; children: React.ReactNode }) {
