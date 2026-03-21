@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
 import LeadSelectionDialog from "@/components/LeadSelectionDialog";
+import WorkspaceNav from "@/components/WorkspaceNav";
 import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
