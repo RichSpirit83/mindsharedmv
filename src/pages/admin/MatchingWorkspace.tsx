@@ -31,7 +31,6 @@ import {
   Monitor,
   Settings2,
   Download,
-  ArrowLeft,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
