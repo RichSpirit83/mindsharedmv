@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Copy, Download, Loader2, Users, Sparkles, ArrowLeft, Monitor } from "lucide-react";
+import { FileText, Copy, Download, Loader2, Users, Sparkles, Monitor } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import WorkspaceNav from "@/components/WorkspaceNav";
 
 interface TableData {
   id: string;
@@ -23,7 +24,6 @@ interface TableData {
 
 export default function LeadBriefings() {
   const { sessionId } = useParams<{ sessionId: string }>();
-  const navigate = useNavigate();
   const [tables, setTables] = useState<TableData[]>([]);
   const [session, setSession] = useState<any>(null);
   const [leads, setLeads] = useState<any[]>([]);
@@ -188,16 +188,10 @@ strong { color: #1a1a2e; }
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
+    <div className="max-w-5xl mx-auto animate-fade-in">
+      <WorkspaceNav sessionId={sessionId || ""} activePage="briefings" />
+      <div className="px-6 space-y-8">
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <Button variant="ghost" size="sm" className="-ml-2" onClick={() => navigate(`/admin/match/${sessionId}`)}>
-            <ArrowLeft className="h-4 w-4 mr-1" /> Back to Matching
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => window.open(`/admin/present/${sessionId}`, '_blank')}>
-            <Monitor className="h-4 w-4 mr-1" /> Present
-          </Button>
-        </div>
         <h1 className="font-heading text-2xl font-bold">Table Lead Briefings</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {session?.session_name ? `${session.session_name} — ` : ""}
@@ -285,6 +279,7 @@ strong { color: #1a1a2e; }
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }

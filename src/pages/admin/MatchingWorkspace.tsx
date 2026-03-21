@@ -39,6 +39,7 @@ import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
 import LeadSelectionDialog from "@/components/LeadSelectionDialog";
+import WorkspaceNav from "@/components/WorkspaceNav";
 import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
@@ -853,50 +854,22 @@ export default function MatchingWorkspace() {
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col">
-        {/* Navigation Menu Bar */}
-        <div className="border-b bg-card px-4 py-0 flex items-center justify-between">
-          <nav className="flex items-center gap-1">
-            {[
-              { label: "Session Config", path: `/admin/session/${sessionId}`, active: false },
-              { label: "Matching", path: null, active: true },
-              { label: "Lead Briefings", path: `/admin/leads/${sessionId}`, active: false },
-            ].map((item) => (
-              <button
-                key={item.label}
-                onClick={() => item.path && navigate(item.path)}
-                className={cn(
-                  "px-3 py-3 text-sm font-medium border-b-2 transition-colors",
-                  item.active
-                    ? "border-primary text-primary"
-                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
-                )}
-              >
-                {item.label}
-              </button>
-            ))}
-            <button
-              onClick={() => window.open(`/admin/present/${sessionId}`, "_blank")}
-              className="px-3 py-3 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-colors inline-flex items-center gap-1.5"
-            >
-              <Monitor className="h-3.5 w-3.5" /> Present
-            </button>
-            <button
-              onClick={handleDownloadPdf}
-              className="px-3 py-3 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-colors inline-flex items-center gap-1.5"
-            >
-              <Download className="h-3.5 w-3.5" /> PDF
-            </button>
-          </nav>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled>
-              <Lock className="h-4 w-4 mr-1" /> Lock All
-            </Button>
-            <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={() => generateMatches()}>
-              <Sparkles className="h-4 w-4 mr-1" />
-              {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
-            </Button>
-          </div>
-        </div>
+        <WorkspaceNav
+          sessionId={sessionId || ""}
+          activePage="matching"
+          onDownloadPdf={handleDownloadPdf}
+          rightContent={
+            <>
+              <Button variant="outline" size="sm" disabled>
+                <Lock className="h-4 w-4 mr-1" /> Lock All
+              </Button>
+              <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={() => generateMatches()}>
+                <Sparkles className="h-4 w-4 mr-1" />
+                {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
+              </Button>
+            </>
+          }
+        />
 
         {/* Context Bar */}
         <div className="px-4 py-3 border-b bg-muted/30">

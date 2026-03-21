@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 import CohortSummary from "@/components/CohortSummary";
+import WorkspaceNav from "@/components/WorkspaceNav";
 
 const DEFAULT_PROMPTS = [
   "What is the one decision or constraint that—if resolved in 90 days—would most change your trajectory?",
@@ -805,22 +806,22 @@ export default function SessionConfig() {
   }));
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
-          <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
-        </div>
-        {saving && (
+    <div className="max-w-5xl mx-auto animate-fade-in">
+      <WorkspaceNav sessionId={sessionId || ""} activePage="config" rightContent={
+        saving ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" /> Saving...
           </div>
-        )}
-        {!saving && loaded && (
+        ) : loaded ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Save className="h-3 w-3" /> Auto-saved
           </div>
-        )}
+        ) : null
+      } />
+      <div className="px-6 space-y-8">
+      <div>
+        <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
+        <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
       </div>
 
       {/* Session Details */}
@@ -1236,6 +1237,7 @@ export default function SessionConfig() {
         <Button disabled={(csvData.length === 0 && leads.length === 0) || !sessionName} onClick={handleContinue}>
           Continue to Matching →
         </Button>
+      </div>
       </div>
     </div>
   );
