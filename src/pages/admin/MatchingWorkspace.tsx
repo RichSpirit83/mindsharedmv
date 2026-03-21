@@ -132,7 +132,9 @@ export default function MatchingWorkspace() {
       const { data: dbLeads } = await supabase.from("breakout_leads").select("*").eq("session_id", sessionId);
       if (dbLeads) setLeads(dbLeads);
 
-      // Load existing tables
+      // Load lead pool to check for "Table Lead" tags
+      const { data: poolData } = await supabase.from("lead_pool").select("*") as any;
+      if (poolData) setLeadPoolData(poolData);
       const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
       if (dbTables && dbTables.length > 0) {
         // Load assignments
