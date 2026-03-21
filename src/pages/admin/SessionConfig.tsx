@@ -877,9 +877,7 @@ export default function SessionConfig() {
       </CollapsibleCard>
 
       {/* Grouping Priority */}
-      <Card>
-        <CardHeader><CardTitle className="font-heading text-lg">Grouping Priority</CardTitle></CardHeader>
-        <CardContent className="space-y-4">
+      <CollapsibleCard title="Grouping Priority" contentClassName="space-y-4">
           <div className="grid gap-3 md:grid-cols-2">
             {groupingOptions.map((opt) => (
               <button
