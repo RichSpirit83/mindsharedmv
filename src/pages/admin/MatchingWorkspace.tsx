@@ -135,6 +135,35 @@ export default function MatchingWorkspace() {
       // Load lead pool to check for "Table Lead" tags
       const { data: poolData } = await supabase.from("lead_pool").select("*") as any;
       if (poolData) setLeadPoolData(poolData);
+
+      // Sync session leads to lead pool — insert any missing ones
+      if (dbLeads && poolData) {
+        const normalizeSync = (s: string) => s.toLowerCase().trim();
+        const poolNames = new Set((poolData as any[]).map((p: any) => normalizeSync(p.name || "")));
+        const missing = dbLeads.filter((l: any) => l.name && !poolNames.has(normalizeSync(l.name)));
+        if (missing.length > 0) {
+          const inserts = missing.map((l: any) => ({
+            name: l.name || "",
+            company: l.company || null,
+            title: l.title || null,
+            email: l.email || null,
+            website: l.website || null,
+            linkedin_url: l.linkedin_url || null,
+            background: l.background || null,
+            expertise_tags: l.expertise_tags || [],
+            tags: [],
+          }));
+          const { error: syncErr } = await supabase.from("lead_pool").insert(inserts);
+          if (syncErr) {
+            console.warn("Failed to sync leads to pool:", syncErr);
+          } else {
+            console.log(`[Sync] Added ${missing.length} session leads to the lead pool`);
+            // Reload pool data
+            const { data: refreshedPool } = await supabase.from("lead_pool").select("*") as any;
+            if (refreshedPool) setLeadPoolData(refreshedPool);
+          }
+        }
+      }
       const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
       if (dbTables && dbTables.length > 0) {
         // Load assignments
