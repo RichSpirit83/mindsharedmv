@@ -8,6 +8,7 @@ import { FileText, Copy, Download, Loader2, Users, Sparkles, ArrowLeft, Monitor 
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
+import WorkspaceNav from "@/components/WorkspaceNav";
 
 interface TableData {
   id: string;
