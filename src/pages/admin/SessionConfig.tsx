@@ -942,8 +942,7 @@ export default function SessionConfig() {
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Engagement Prompts */}
       <EngagementPromptsCard
