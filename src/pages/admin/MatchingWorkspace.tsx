@@ -586,6 +586,21 @@ export default function MatchingWorkspace() {
     <div className="flex h-[calc(100vh-3.5rem)] animate-fade-in">
       <FounderProfileDialog open={profileOpen} onOpenChange={setProfileOpen} data={selectedProfile} />
       <LeadProfileDialog open={leadProfileOpen} onOpenChange={setLeadProfileOpen} lead={selectedLead} />
+      <LeadSelectionDialog
+        open={leadSelectionOpen}
+        onOpenChange={setLeadSelectionOpen}
+        leads={pendingTableLeads.map((l: any) => ({
+          name: l.name || "",
+          company: l.company || "",
+          title: l.title || "",
+          expertiseTags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
+        }))}
+        maxSelectable={getRoundSettings(activeRound).num_tables}
+        onConfirm={(selectedIndices) => {
+          setLeadSelectionOpen(false);
+          generateMatches(selectedIndices);
+        }}
+      />
 
       {/* Left Panel */}
       <div className="w-80 border-r bg-card flex flex-col">
