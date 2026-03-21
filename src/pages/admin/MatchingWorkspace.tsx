@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
+import LeadSelectionDialog from "@/components/LeadSelectionDialog";
 import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
