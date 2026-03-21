@@ -874,8 +874,7 @@ export default function SessionConfig() {
             <Label># of Table Leads</Label>
             <Input type="number" min={0} max={20} value={numLeads} onChange={(e) => updateLeadCount(Number(e.target.value))} className="mt-1.5" />
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Grouping Priority */}
       <Card>
