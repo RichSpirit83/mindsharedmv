@@ -1,40 +1,35 @@
 
 
-## Plan: Fix Table Lead Selection Index Mismatch
+## Plan: Workspace Menu Bar + Ensure Lead Pool ↔ Session Leads Sync
 
-### Problem
-There's an index mismatch between the `LeadSelectionDialog` and `generateMatches`:
+### Two Issues
 
-1. `pendingTableLeads` is a **filtered subset** of `leads` (only those tagged "Table Lead" in the pool)
-2. The dialog returns indices into `pendingTableLeads` (e.g., [0, 1, 2])
-3. `generateMatches(overrideLeadIndices)` checks `overrideLeadIndices.includes(idx)` where `idx` is the index into the **full** `leads` array
-4. This means the wrong leads get flagged as table leads
+**1. No top navigation in the Matching Workspace** — currently the only way to navigate is the "Session Config" back button. Need a menu bar for quick access to Session Config, Lead Briefings, Presentation, and other workspace sections.
 
-### Fix
+**2. "Jeff Grass" appears as a session lead but isn't in the lead pool** — `breakout_leads` and `lead_pool` are completely independent tables. When leads are added to a session (via paste, CSV, or LinkedIn scrape), they are inserted into `breakout_leads` but never synced back to `lead_pool`. The "Table Lead" tag feature relies on cross-referencing by name, which breaks when leads exist in only one table.
+
+### Changes
 
 **File: `src/pages/admin/MatchingWorkspace.tsx`**
 
-In the `onConfirm` callback of `LeadSelectionDialog`, convert the dialog's selected indices (into `pendingTableLeads`) back to indices in the full `leads` array before passing to `generateMatches`.
+1. **Add a horizontal menu bar** below the existing header (or replace the header buttons). Use a clean tab/link bar with:
+   - **Session Config** → `/admin/session/{sessionId}`
+   - **Matching** (active/current)
+   - **Lead Briefings** → `/admin/leads/{sessionId}`
+   - **Present** → opens `/admin/present/{sessionId}` in new tab
+   - **Download PDF** → triggers existing PDF function
+   
+   Style: horizontal bar with text buttons, active state underline, sits at the top of the right panel. Move the existing "Session Config" back-button, "Present", and "Download PDF" actions into this bar to declutter the toolbar.
 
-```
-onConfirm={(selectedDialogIndices) => {
-  // Map dialog indices (into pendingTableLeads) to indices in the full leads array
-  const normalize = (s: string) => s.toLowerCase().trim();
-  const fullLeadIndices = selectedDialogIndices.map((di) => {
-    const selectedName = pendingTableLeads[di]?.name || "";
-    return leads.findIndex((l: any) => normalize(l.name || "") === normalize(selectedName));
-  }).filter((i) => i >= 0);
-  
-  setLeadSelectionOpen(false);
-  generateMatches(fullLeadIndices);
-}}
-```
+2. **Sync session leads to lead pool on load** — After loading `breakout_leads` for the session, check each lead against `lead_pool` by normalized name. For any session lead NOT found in the pool, auto-insert them into `lead_pool` (with their name, company, title, email, etc.). This ensures every lead used in matching is also discoverable and taggable in the Lead Pool page.
 
-This ensures the correct leads in the full array get the `isTableLead: true` flag when sent to the AI.
+   This runs once on load — a lightweight upsert loop that only inserts missing leads.
+
+3. **Show a warning badge** next to any lead in the workspace that doesn't exist in the lead pool (as a fallback visual indicator).
 
 ### Summary
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/MatchingWorkspace.tsx` | Fix index mapping in LeadSelectionDialog onConfirm callback (~line 612) |
+| `src/pages/admin/MatchingWorkspace.tsx` | Add top menu bar for workspace navigation; sync missing session leads to lead_pool on load |
 
