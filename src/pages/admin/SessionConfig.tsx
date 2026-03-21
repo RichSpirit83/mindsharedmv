@@ -854,8 +854,7 @@ export default function SessionConfig() {
               <Input type="time" value={breakoutEnd} onChange={(e) => setBreakoutEnd(e.target.value)} className="mt-1.5" />
             </div>
           </div>
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Table Configuration */}
       <Card>
