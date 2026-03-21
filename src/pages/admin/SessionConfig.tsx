@@ -1238,6 +1238,7 @@ export default function SessionConfig() {
           Continue to Matching →
         </Button>
       </div>
+      </div>
     </div>
   );
 }
