@@ -997,8 +997,7 @@ export default function SessionConfig() {
               {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => setCsvData((prev) => prev.filter((_, i) => i !== index))} />}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Table Leads */}
       <Card>
