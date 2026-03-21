@@ -43,9 +43,13 @@ serve(async (req) => {
         const strengths = l.networkStrengths ? ` — strengths: ${l.networkStrengths}` : "";
         const notes = l.notes ? ` — notes: ${l.notes}` : "";
         const bg = l.background ? ` — background: ${l.background.slice(0, 200)}` : "";
-        return `Lead #${idx + 1}: ${l.name}${tags ? ` — expertise: ${tags}` : ""}${bg}${strengths}${notes}`;
+        const tableLeadFlag = l.isTableLead ? " [DESIGNATED TABLE LEAD]" : "";
+        return `Lead #${idx + 1}: ${l.name}${tableLeadFlag}${tags ? ` — expertise: ${tags}` : ""}${bg}${strengths}${notes}`;
       })
       .join("\n");
+
+    const designatedTableLeads = (leads || []).filter((l: any) => l.isTableLead);
+    const hasDesignatedLeads = designatedTableLeads.length > 0;
 
     const numLeads = (leads || []).length;
     const leadsPerTable = numLeads > 0 ? Math.max(1, Math.round(numLeads / numTables)) : 0;
