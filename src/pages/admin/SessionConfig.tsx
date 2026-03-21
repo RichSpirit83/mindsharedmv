@@ -1000,101 +1000,100 @@ export default function SessionConfig() {
       </CollapsibleCard>
 
       {/* Table Leads */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="font-heading text-lg">Table Leads</CardTitle>
-            <div className="flex gap-2 flex-wrap">
-              {/* LinkedIn Import */}
-              <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
-                <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
-              </Button>
-              {/* Paste Import */}
-              <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
-                <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
-              </Button>
-              {/* CSV Import for Leads */}
-              <div>
-                <input type="file" accept=".csv" className="hidden" id="lead-csv-import" onChange={handleLeadCsvFile} />
-                <Button variant="outline" size="sm" asChild>
-                  <label htmlFor="lead-csv-import" className="cursor-pointer">
-                    <Upload className="h-4 w-4 mr-1" /> Import CSV
-                  </label>
-                </Button>
-              </div>
-              <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    <Users className="h-4 w-4 mr-1" /> Add from Lead Pool
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-lg">
-                  <DialogHeader>
-                    <DialogTitle>Add from Lead Pool</DialogTitle>
-                  </DialogHeader>
-                  {leadPool.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-4 text-center">No leads in the pool yet. Add leads from the Lead Pool page first.</p>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="flex items-center justify-between">
-                        <button
-                          onClick={toggleSelectAllPool}
-                          className="text-xs text-primary hover:underline"
-                        >
-                          {poolSelection.size === annotatedPoolLeads.filter((pl: any) => !pl.alreadyInSession).length ? "Deselect All" : "Select All"}
-                        </button>
-                        <span className="text-xs text-muted-foreground">{poolSelection.size} selected</span>
-                      </div>
-                      <div className="space-y-2 max-h-80 overflow-auto">
-                        {annotatedPoolLeads.map((pl: any) => (
-                          <button
-                            key={pl.id}
-                            onClick={() => !pl.alreadyInSession && togglePoolSelection(pl.id)}
-                            disabled={pl.alreadyInSession}
-                            className={cn(
-                              "w-full text-left p-3 rounded-lg border transition-colors",
-                              pl.alreadyInSession ? "opacity-50 cursor-not-allowed bg-muted/20" : poolSelection.has(pl.id) ? "border-primary bg-primary/5" : "hover:bg-muted/50"
-                            )}
-                          >
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-2">
-                                <div className={cn(
-                                  "h-4 w-4 rounded border flex items-center justify-center",
-                                  poolSelection.has(pl.id) ? "bg-primary border-primary" : "border-muted-foreground/30"
-                                )}>
-                                  {poolSelection.has(pl.id) && <Check className="h-3 w-3 text-primary-foreground" />}
-                                </div>
-                                <span className="font-medium text-sm">{pl.name}</span>
-                              </div>
-                              {pl.alreadyInSession && <Badge variant="secondary" className="text-xs">Already added</Badge>}
-                            </div>
-                            {(pl.title || pl.company) && (
-                              <div className="text-xs text-muted-foreground ml-6">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
-                            )}
-                            {Array.isArray(pl.expertise_tags) && pl.expertise_tags.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mt-1 ml-6">
-                                {pl.expertise_tags.slice(0, 5).map((t: string, i: number) => (
-                                  <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
-                                ))}
-                              </div>
-                            )}
-                          </button>
-                        ))}
-                      </div>
-                      <Button onClick={addSelectedFromPool} disabled={poolSelection.size === 0} className="w-full">
-                        Add {poolSelection.size} Lead{poolSelection.size !== 1 ? "s" : ""}
-                      </Button>
-                    </div>
-                  )}
-                </DialogContent>
-              </Dialog>
-              <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); }}>
-                <Plus className="h-4 w-4 mr-1" /> Add Lead
+      <CollapsibleCard
+        title="Table Leads"
+        contentClassName="space-y-6"
+        headerRight={
+          <div className="flex gap-2 flex-wrap">
+            {/* LinkedIn Import */}
+            <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
+              <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
+            </Button>
+            {/* Paste Import */}
+            <Button variant="outline" size="sm" onClick={() => setLeadPasteDialogOpen(true)}>
+              <ClipboardPaste className="h-4 w-4 mr-1" /> Paste List
+            </Button>
+            {/* CSV Import for Leads */}
+            <div>
+              <input type="file" accept=".csv" className="hidden" id="lead-csv-import" onChange={handleLeadCsvFile} />
+              <Button variant="outline" size="sm" asChild>
+                <label htmlFor="lead-csv-import" className="cursor-pointer">
+                  <Upload className="h-4 w-4 mr-1" /> Import CSV
+                </label>
               </Button>
             </div>
+            <Dialog open={poolDialogOpen} onOpenChange={setPoolDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Users className="h-4 w-4 mr-1" /> Add from Lead Pool
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Add from Lead Pool</DialogTitle>
+                </DialogHeader>
+                {leadPool.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No leads in the pool yet. Add leads from the Lead Pool page first.</p>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <button
+                        onClick={toggleSelectAllPool}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        {poolSelection.size === annotatedPoolLeads.filter((pl: any) => !pl.alreadyInSession).length ? "Deselect All" : "Select All"}
+                      </button>
+                      <span className="text-xs text-muted-foreground">{poolSelection.size} selected</span>
+                    </div>
+                    <div className="space-y-2 max-h-80 overflow-auto">
+                      {annotatedPoolLeads.map((pl: any) => (
+                        <button
+                          key={pl.id}
+                          onClick={() => !pl.alreadyInSession && togglePoolSelection(pl.id)}
+                          disabled={pl.alreadyInSession}
+                          className={cn(
+                            "w-full text-left p-3 rounded-lg border transition-colors",
+                            pl.alreadyInSession ? "opacity-50 cursor-not-allowed bg-muted/20" : poolSelection.has(pl.id) ? "border-primary bg-primary/5" : "hover:bg-muted/50"
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <div className={cn(
+                                "h-4 w-4 rounded border flex items-center justify-center",
+                                poolSelection.has(pl.id) ? "bg-primary border-primary" : "border-muted-foreground/30"
+                              )}>
+                                {poolSelection.has(pl.id) && <Check className="h-3 w-3 text-primary-foreground" />}
+                              </div>
+                              <span className="font-medium text-sm">{pl.name}</span>
+                            </div>
+                            {pl.alreadyInSession && <Badge variant="secondary" className="text-xs">Already added</Badge>}
+                          </div>
+                          {(pl.title || pl.company) && (
+                            <div className="text-xs text-muted-foreground ml-6">{[pl.title, pl.company].filter(Boolean).join(" at ")}</div>
+                          )}
+                          {Array.isArray(pl.expertise_tags) && pl.expertise_tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-1 ml-6">
+                              {pl.expertise_tags.slice(0, 5).map((t: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-xs">{t}</Badge>
+                              ))}
+                            </div>
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <Button onClick={addSelectedFromPool} disabled={poolSelection.size === 0} className="w-full">
+                      Add {poolSelection.size} Lead{poolSelection.size !== 1 ? "s" : ""}
+                    </Button>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+            <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); }}>
+              <Plus className="h-4 w-4 mr-1" /> Add Lead
+            </Button>
           </div>
-        </CardHeader>
-        <CardContent className="space-y-6">
+        }
+      >
           {leads.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">No table leads yet. Add leads manually or from the lead pool.</p>
           ) : leads.map((lead, i) => (
