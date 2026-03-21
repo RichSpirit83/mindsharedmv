@@ -59,7 +59,7 @@ serve(async (req) => {
       : "";
 
     const leadAlignmentInstruction = numLeads > 0
-      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.`
+      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.${hasDesignatedLeads ? `\n\nDESIGNATED TABLE LEADS: Leads marked with [DESIGNATED TABLE LEAD] MUST be assigned as the FIRST lead (Table Head) at their respective tables. They take priority over other leads. There are ${designatedTableLeads.length} designated table leads — assign each one to the table where their expertise is most relevant.` : ""}`
       : "";
 
     const leadMatchingInstruction = leadMatchingMode === "strict"
