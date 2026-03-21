@@ -962,9 +962,7 @@ export default function SessionConfig() {
       )}
 
       {/* CSV Upload */}
-      <Card>
-        <CardHeader><CardTitle className="font-heading text-lg">Company Data Upload</CardTitle></CardHeader>
-        <CardContent>
+      <CollapsibleCard title="Company Data Upload">
           {csvData.length === 0 ? (
             <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer">
               <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" id="csv-upload" />
