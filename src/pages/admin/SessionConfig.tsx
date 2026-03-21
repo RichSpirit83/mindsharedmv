@@ -1183,8 +1183,7 @@ export default function SessionConfig() {
               </div>
             </div>
           ))}
-        </CardContent>
-      </Card>
+      </CollapsibleCard>
 
       {/* Lead CSV Import Dialog */}
       <Dialog open={leadCsvDialogOpen} onOpenChange={(open) => { setLeadCsvDialogOpen(open); if (!open) { setLeadCsvData([]); setLeadCsvHeaders([]); setLeadCsvMapping({}); } }}>
