@@ -533,6 +533,15 @@ export default function LeadPool() {
               <Button size="sm" variant="outline" onClick={() => handleBulkTag("remove")} disabled={!bulkTagInput.trim() || bulkTagMutation.isPending}>
                 <X className="mr-1 h-3 w-3" /> Remove Tag
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+                onClick={() => bulkTagMutation.mutate({ ids: Array.from(selectedIds), tag: "Table Lead", action: "add" })}
+                disabled={bulkTagMutation.isPending}
+              >
+                <Star className="mr-1 h-3 w-3 fill-yellow-500 text-yellow-500" /> Set Table Lead
+              </Button>
               {allTags.length > 0 && (
                 <div className="flex gap-1 ml-2">
                   {allTags.map((tag) => (
