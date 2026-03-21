@@ -624,6 +624,15 @@ export default function LeadPool() {
                     <TableCell>
                       <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} />
                     </TableCell>
+                    <TableCell className="text-center">
+                      <button
+                        onClick={() => toggleLeadTag(lead, "Table Lead")}
+                        className={`p-1 rounded-full transition-colors ${lead.tags.includes("Table Lead") ? "text-yellow-500" : "text-muted-foreground/30 hover:text-yellow-400"}`}
+                        title={lead.tags.includes("Table Lead") ? "Remove Table Lead" : "Set as Table Lead"}
+                      >
+                        <Star className={`h-4 w-4 ${lead.tags.includes("Table Lead") ? "fill-yellow-500" : ""}`} />
+                      </button>
+                    </TableCell>
                     <TableCell className="font-medium">
                       <div>{lead.name}</div>
                       {lead.linkedin_url && (
