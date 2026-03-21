@@ -825,9 +825,7 @@ export default function SessionConfig() {
       </div>
 
       {/* Session Details */}
-      <Card>
-        <CardHeader><CardTitle className="font-heading text-lg">Session Details</CardTitle></CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-2">
+      <CollapsibleCard title="Session Details" contentClassName="grid gap-6 md:grid-cols-2">
           <div className="md:col-span-2">
             <Label>Session Name</Label>
             <Input placeholder="e.g. Mindshare 2026 Session 1" value={sessionName} onChange={(e) => setSessionName(e.target.value)} className="mt-1.5" />
