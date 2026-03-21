@@ -205,6 +205,16 @@ export default function MatchingWorkspace() {
 
   const activeRoundSettings = getRoundSettings(activeRound);
 
+  // Cross-reference session leads with lead_pool to find tagged Table Leads
+  const getTaggedTableLeads = () => {
+    const normalize = (s: string) => s.toLowerCase().trim();
+    return leads.filter((sessionLead: any) => {
+      const poolMatch = leadPoolData.find((p: any) => normalize(p.name) === normalize(sessionLead.name || ""));
+      const tags = Array.isArray(poolMatch?.tags) ? poolMatch.tags : [];
+      return tags.includes("Table Lead");
+    });
+  };
+
   const updateMatchingSettings = async (
     patch: Partial<{
       grouping_priority: string;
