@@ -233,7 +233,6 @@ function EngagementPromptsCard({
             <Textarea value={prompt} onChange={(e) => setPrompts((prev) => prev.map((p, j) => (j === i ? e.target.value : p)))} className="min-h-[80px]" />
           </div>
         ))}
-      </CardContent>
 
       {/* Load from Pool Dialog */}
       <Dialog open={loadDialogOpen} onOpenChange={setLoadDialogOpen}>
@@ -265,7 +264,7 @@ function EngagementPromptsCard({
           )}
         </DialogContent>
       </Dialog>
-    </Card>
+    </CollapsibleCard>
   );
 }
 
