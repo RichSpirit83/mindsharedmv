@@ -31,7 +31,6 @@ import {
   Monitor,
   Settings2,
   Download,
-  ArrowLeft,
   Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -135,6 +134,35 @@ export default function MatchingWorkspace() {
       // Load lead pool to check for "Table Lead" tags
       const { data: poolData } = await supabase.from("lead_pool").select("*") as any;
       if (poolData) setLeadPoolData(poolData);
+
+      // Sync session leads to lead pool — insert any missing ones
+      if (dbLeads && poolData) {
+        const normalizeSync = (s: string) => s.toLowerCase().trim();
+        const poolNames = new Set((poolData as any[]).map((p: any) => normalizeSync(p.name || "")));
+        const missing = dbLeads.filter((l: any) => l.name && !poolNames.has(normalizeSync(l.name)));
+        if (missing.length > 0) {
+          const inserts = missing.map((l: any) => ({
+            name: l.name || "",
+            company: l.company || null,
+            title: l.title || null,
+            email: l.email || null,
+            website: l.website || null,
+            linkedin_url: l.linkedin_url || null,
+            background: l.background || null,
+            expertise_tags: l.expertise_tags || [],
+            tags: [],
+          }));
+          const { error: syncErr } = await supabase.from("lead_pool").insert(inserts);
+          if (syncErr) {
+            console.warn("Failed to sync leads to pool:", syncErr);
+          } else {
+            console.log(`[Sync] Added ${missing.length} session leads to the lead pool`);
+            // Reload pool data
+            const { data: refreshedPool } = await supabase.from("lead_pool").select("*") as any;
+            if (refreshedPool) setLeadPoolData(refreshedPool);
+          }
+        }
+      }
       const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
       if (dbTables && dbTables.length > 0) {
         // Load assignments
@@ -825,38 +853,41 @@ export default function MatchingWorkspace() {
 
       {/* Right Panel */}
       <div className="flex-1 flex flex-col">
-        <div className="p-4 border-b flex items-center justify-between bg-card">
-          <div>
-            <h2 className="font-heading font-semibold">Matching Workspace</h2>
-            {sessionConfig?.session_name && (
-              <p className="text-xs text-muted-foreground mb-1">{sessionConfig.session_name}</p>
-            )}
-             <p className="text-xs text-muted-foreground max-w-2xl leading-relaxed">
-               <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
-               {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
-               {activeRoundSettings.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
-               {activeRoundSettings.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
-               {activeRoundSettings.grouping_priority === "hybrid" && " — balancing sector alignment, stage diversity, and shared challenges"}
-               .{" "}
-               {activeRoundSettings.allow_stage_mixing
-                 ? "Early and later-stage companies may be mixed for cross-stage mentorship."
-                 : "Companies are kept at similar stages within each table."}
-               {" "}
-               {activeRoundSettings.avoid_competitors
-                 ? "Direct competitors are kept apart."
-                 : "Competitors may be seated together for competitive-intelligence exchange."}
-               {leads.length > 0 && (
-                 <>{" "}Leads are matched <span className="font-semibold">{activeRoundSettings.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables where their expertise aligns with founders' needs ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {activeRoundSettings.num_tables} tables).</>
-               )}
-               {activeRound > 1 && (
-                 <>{" "}Shuffle: <span className="font-semibold">{activeRoundSettings.shuffle_mode === "founders" ? "founders only" : activeRoundSettings.shuffle_mode === "leads" ? "leads only" : "both"}</span>.</>
-               )}
-             </p>
-          </div>
+        {/* Navigation Menu Bar */}
+        <div className="border-b bg-card px-4 py-0 flex items-center justify-between">
+          <nav className="flex items-center gap-1">
+            {[
+              { label: "Session Config", path: `/admin/session/${sessionId}`, active: false },
+              { label: "Matching", path: null, active: true },
+              { label: "Lead Briefings", path: `/admin/leads/${sessionId}`, active: false },
+            ].map((item) => (
+              <button
+                key={item.label}
+                onClick={() => item.path && navigate(item.path)}
+                className={cn(
+                  "px-3 py-3 text-sm font-medium border-b-2 transition-colors",
+                  item.active
+                    ? "border-primary text-primary"
+                    : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30"
+                )}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button
+              onClick={() => window.open(`/admin/present/${sessionId}`, "_blank")}
+              className="px-3 py-3 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-colors inline-flex items-center gap-1.5"
+            >
+              <Monitor className="h-3.5 w-3.5" /> Present
+            </button>
+            <button
+              onClick={handleDownloadPdf}
+              className="px-3 py-3 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-colors inline-flex items-center gap-1.5"
+            >
+              <Download className="h-3.5 w-3.5" /> PDF
+            </button>
+          </nav>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => navigate(`/admin/session/${sessionId}`)}>
-              <ArrowLeft className="h-4 w-4 mr-1" /> Session Config
-            </Button>
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
@@ -865,6 +896,32 @@ export default function MatchingWorkspace() {
               {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
             </Button>
           </div>
+        </div>
+
+        {/* Context Bar */}
+        <div className="px-4 py-3 border-b bg-muted/30">
+          <h2 className="font-heading font-semibold text-sm">{sessionConfig?.session_name || "Matching Workspace"}</h2>
+          <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed mt-0.5">
+            <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
+            {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
+            {activeRoundSettings.grouping_priority === "stage" && " — prioritizing stage/revenue similarity so each table has companies at similar growth phases"}
+            {activeRoundSettings.grouping_priority === "need" && " — prioritizing shared challenges and needs so conversations are most relevant"}
+            {activeRoundSettings.grouping_priority === "hybrid" && " — balancing sector alignment, stage diversity, and shared challenges"}
+            .{" "}
+            {activeRoundSettings.allow_stage_mixing
+              ? "Early and later-stage companies may be mixed for cross-stage mentorship."
+              : "Companies are kept at similar stages within each table."}
+            {" "}
+            {activeRoundSettings.avoid_competitors
+              ? "Direct competitors are kept apart."
+              : "Competitors may be seated together for competitive-intelligence exchange."}
+            {leads.length > 0 && (
+              <>{" "}Leads are matched <span className="font-semibold">{activeRoundSettings.lead_matching_mode === "strict" ? "strictly" : "flexibly"}</span> to tables ({leads.length} lead{leads.length !== 1 ? "s" : ""} across {activeRoundSettings.num_tables} tables).</>
+            )}
+            {activeRound > 1 && (
+              <>{" "}Shuffle: <span className="font-semibold">{activeRoundSettings.shuffle_mode === "founders" ? "founders only" : activeRoundSettings.shuffle_mode === "leads" ? "leads only" : "both"}</span>.</>
+            )}
+          </p>
         </div>
 
         {/* Round Tabs */}
