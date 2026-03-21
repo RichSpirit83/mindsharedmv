@@ -280,6 +280,7 @@ strong { color: #1a1a2e; }
           </div>
         </>
       )}
+      </div>
     </div>
   );
 }
