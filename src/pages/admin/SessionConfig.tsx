@@ -806,22 +806,22 @@ export default function SessionConfig() {
   }));
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-8 animate-fade-in">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
-          <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
-        </div>
-        {saving && (
+    <div className="max-w-5xl mx-auto animate-fade-in">
+      <WorkspaceNav sessionId={sessionId || ""} activePage="config" rightContent={
+        saving ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" /> Saving...
           </div>
-        )}
-        {!saving && loaded && (
+        ) : loaded ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Save className="h-3 w-3" /> Auto-saved
           </div>
-        )}
+        ) : null
+      } />
+      <div className="px-6 space-y-8">
+      <div>
+        <h1 className="font-heading text-2xl font-bold">Session Configuration</h1>
+        <p className="text-muted-foreground text-sm mt-1">Set up your breakout session parameters before uploading company data.</p>
       </div>
 
       {/* Session Details */}
