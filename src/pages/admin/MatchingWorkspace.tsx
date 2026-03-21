@@ -609,9 +609,14 @@ export default function MatchingWorkspace() {
           expertiseTags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
         }))}
         maxSelectable={getRoundSettings(activeRound).num_tables}
-        onConfirm={(selectedIndices) => {
+        onConfirm={(selectedDialogIndices) => {
+          const normalize = (s: string) => s.toLowerCase().trim();
+          const fullLeadIndices = selectedDialogIndices.map((di) => {
+            const selectedName = pendingTableLeads[di]?.name || "";
+            return leads.findIndex((l: any) => normalize(l.name || "") === normalize(selectedName));
+          }).filter((i) => i >= 0);
           setLeadSelectionOpen(false);
-          generateMatches(selectedIndices);
+          generateMatches(fullLeadIndices);
         }}
       />
 
