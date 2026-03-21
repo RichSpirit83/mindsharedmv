@@ -857,9 +857,7 @@ export default function SessionConfig() {
       </CollapsibleCard>
 
       {/* Table Configuration */}
-      <Card>
-        <CardHeader><CardTitle className="font-heading text-lg">Table Configuration</CardTitle></CardHeader>
-        <CardContent className="grid gap-6 md:grid-cols-3">
+      <CollapsibleCard title="Table Configuration" contentClassName="grid gap-6 md:grid-cols-3">
           <div>
             <Label>Total Companies</Label>
             <Input value={csvData.length || "—"} disabled className="mt-1.5 bg-muted" />
