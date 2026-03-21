@@ -99,6 +99,9 @@ export default function MatchingWorkspace() {
   const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
   const [leadProfileOpen, setLeadProfileOpen] = useState(false);
   const [activeRound, setActiveRound] = useState(1);
+  const [leadPoolData, setLeadPoolData] = useState<any[]>([]);
+  const [leadSelectionOpen, setLeadSelectionOpen] = useState(false);
+  const [pendingTableLeads, setPendingTableLeads] = useState<any[]>([]);
 
   // Load from DB
   useEffect(() => {
