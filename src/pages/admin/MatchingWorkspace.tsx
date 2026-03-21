@@ -243,7 +243,17 @@ export default function MatchingWorkspace() {
     setSessionConfig(data);
   };
 
-  const generateMatches = async () => {
+  const generateMatches = async (overrideLeadIndices?: number[]) => {
+    // Check for table lead overflow before generating
+    const taggedTableLeads = getTaggedTableLeads();
+    const numTables = getRoundSettings(activeRound).num_tables;
+
+    if (!overrideLeadIndices && taggedTableLeads.length > numTables) {
+      setPendingTableLeads(taggedTableLeads);
+      setLeadSelectionOpen(true);
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const rs = getRoundSettings(activeRound);
