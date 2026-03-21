@@ -277,13 +277,26 @@ export default function MatchingWorkspace() {
         shuffleMode: rs.shuffle_mode,
       };
 
-      const leadsForAi = (leads || []).map((l: any) => ({
-        name: l.name ?? "",
-        company: l.company ?? "",
-        title: l.title ?? "",
-        expertiseTags: toStringArray(l.expertise_tags),
-        background: l.background ?? "",
-      }));
+      const leadsForAi = (leads || []).map((l: any, idx: number) => {
+        const isTableLead = (() => {
+          if (overrideLeadIndices) {
+            // User picked specific leads from the selection dialog
+            return overrideLeadIndices.includes(idx);
+          }
+          // Auto-detect from pool tags
+          const normalize = (s: string) => s.toLowerCase().trim();
+          const poolMatch = leadPoolData.find((p: any) => normalize(p.name) === normalize(l.name || ""));
+          return Array.isArray(poolMatch?.tags) && poolMatch.tags.includes("Table Lead");
+        })();
+        return {
+          name: l.name ?? "",
+          company: l.company ?? "",
+          title: l.title ?? "",
+          expertiseTags: toStringArray(l.expertise_tags),
+          background: l.background ?? "",
+          isTableLead,
+        };
+      });
 
       // For shuffle modes, pass previous round's tables as context
       let previousRoundTables: TableGroup[] | undefined;
