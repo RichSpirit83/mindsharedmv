@@ -176,22 +176,21 @@ function EngagementPromptsCard({
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="font-heading text-lg">Engagement Prompts</CardTitle>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setLoadDialogOpen(true)}>
-              <Library className="h-4 w-4 mr-1" /> Prompt Pool
-            </Button>
-            <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
-            <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
-              <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
-            </Button>
-          </div>
+    <CollapsibleCard
+      title="Engagement Prompts"
+      contentClassName="space-y-4"
+      headerRight={
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setLoadDialogOpen(true)}>
+            <Library className="h-4 w-4 mr-1" /> Prompt Pool
+          </Button>
+          <Button variant={promptMode === "custom" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("custom")}>Write Your Own</Button>
+          <Button variant={promptMode === "generate" ? "default" : "outline"} size="sm" onClick={() => setPromptMode("generate")}>
+            <Sparkles className="h-4 w-4 mr-1" /> Generate from Data
+          </Button>
         </div>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      }
+    >
         {promptMode === "generate" && (
           <div className="p-4 rounded-lg border border-dashed bg-muted/30 text-center space-y-2">
             <p className="text-sm text-muted-foreground">
