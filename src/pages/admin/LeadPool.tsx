@@ -599,6 +599,9 @@ export default function LeadPool() {
                   <TableHead className="w-[40px]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </TableHead>
+                  <TableHead className="w-[50px] text-center">
+                    <Star className="h-3.5 w-3.5 mx-auto text-yellow-500" />
+                  </TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
                     <span className="inline-flex items-center">Name <SortIcon field="name" /></span>
                   </TableHead>
