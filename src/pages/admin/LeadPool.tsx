@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Plus, Trash2, Edit2, Users, Upload, ClipboardPaste, Linkedin, Tag, X, ArrowUpDown, ArrowUp, ArrowDown, Star } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
@@ -67,6 +67,7 @@ type LeadPoolEntry = {
 };
 
 const TAG_COLORS: Record<string, string> = {
+  "Table Lead": "bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-300 dark:border-yellow-700",
   "Board Member": "bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-700",
   "Alumni": "bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-700",
   "Mentor": "bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-700",
@@ -532,6 +533,15 @@ export default function LeadPool() {
               <Button size="sm" variant="outline" onClick={() => handleBulkTag("remove")} disabled={!bulkTagInput.trim() || bulkTagMutation.isPending}>
                 <X className="mr-1 h-3 w-3" /> Remove Tag
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-yellow-300 text-yellow-700 hover:bg-yellow-50"
+                onClick={() => bulkTagMutation.mutate({ ids: Array.from(selectedIds), tag: "Table Lead", action: "add" })}
+                disabled={bulkTagMutation.isPending}
+              >
+                <Star className="mr-1 h-3 w-3 fill-yellow-500 text-yellow-500" /> Set Table Lead
+              </Button>
               {allTags.length > 0 && (
                 <div className="flex gap-1 ml-2">
                   {allTags.map((tag) => (
@@ -598,6 +608,9 @@ export default function LeadPool() {
                   <TableHead className="w-[40px]">
                     <Checkbox checked={allSelected} onCheckedChange={toggleAll} />
                   </TableHead>
+                  <TableHead className="w-[50px] text-center">
+                    <Star className="h-3.5 w-3.5 mx-auto text-yellow-500" />
+                  </TableHead>
                   <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("name")}>
                     <span className="inline-flex items-center">Name <SortIcon field="name" /></span>
                   </TableHead>
@@ -619,6 +632,15 @@ export default function LeadPool() {
                   <TableRow key={lead.id} className={selectedIds.has(lead.id) ? "bg-primary/5" : ""}>
                     <TableCell>
                       <Checkbox checked={selectedIds.has(lead.id)} onCheckedChange={() => toggleOne(lead.id)} />
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <button
+                        onClick={() => toggleLeadTag(lead, "Table Lead")}
+                        className={`p-1 rounded-full transition-colors ${lead.tags.includes("Table Lead") ? "text-yellow-500" : "text-muted-foreground/30 hover:text-yellow-400"}`}
+                        title={lead.tags.includes("Table Lead") ? "Remove Table Lead" : "Set as Table Lead"}
+                      >
+                        <Star className={`h-4 w-4 ${lead.tags.includes("Table Lead") ? "fill-yellow-500" : ""}`} />
+                      </button>
                     </TableCell>
                     <TableCell className="font-medium">
                       <div>{lead.name}</div>

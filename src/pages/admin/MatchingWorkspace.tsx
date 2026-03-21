@@ -39,6 +39,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
 import LeadProfileDialog from "@/components/LeadProfileDialog";
+import LeadSelectionDialog from "@/components/LeadSelectionDialog";
 import jsPDF from "jspdf";
 
 const TABLE_COLORS = [
@@ -98,6 +99,9 @@ export default function MatchingWorkspace() {
   const [selectedLead, setSelectedLead] = useState<LeadChip | null>(null);
   const [leadProfileOpen, setLeadProfileOpen] = useState(false);
   const [activeRound, setActiveRound] = useState(1);
+  const [leadPoolData, setLeadPoolData] = useState<any[]>([]);
+  const [leadSelectionOpen, setLeadSelectionOpen] = useState(false);
+  const [pendingTableLeads, setPendingTableLeads] = useState<any[]>([]);
 
   // Load from DB
   useEffect(() => {
@@ -128,7 +132,9 @@ export default function MatchingWorkspace() {
       const { data: dbLeads } = await supabase.from("breakout_leads").select("*").eq("session_id", sessionId);
       if (dbLeads) setLeads(dbLeads);
 
-      // Load existing tables
+      // Load lead pool to check for "Table Lead" tags
+      const { data: poolData } = await supabase.from("lead_pool").select("*") as any;
+      if (poolData) setLeadPoolData(poolData);
       const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
       if (dbTables && dbTables.length > 0) {
         // Load assignments
@@ -199,6 +205,16 @@ export default function MatchingWorkspace() {
 
   const activeRoundSettings = getRoundSettings(activeRound);
 
+  // Cross-reference session leads with lead_pool to find tagged Table Leads
+  const getTaggedTableLeads = () => {
+    const normalize = (s: string) => s.toLowerCase().trim();
+    return leads.filter((sessionLead: any) => {
+      const poolMatch = leadPoolData.find((p: any) => normalize(p.name) === normalize(sessionLead.name || ""));
+      const tags = Array.isArray(poolMatch?.tags) ? poolMatch.tags : [];
+      return tags.includes("Table Lead");
+    });
+  };
+
   const updateMatchingSettings = async (
     patch: Partial<{
       grouping_priority: string;
@@ -237,7 +253,17 @@ export default function MatchingWorkspace() {
     setSessionConfig(data);
   };
 
-  const generateMatches = async () => {
+  const generateMatches = async (overrideLeadIndices?: number[]) => {
+    // Check for table lead overflow before generating
+    const taggedTableLeads = getTaggedTableLeads();
+    const numTables = getRoundSettings(activeRound).num_tables;
+
+    if (!overrideLeadIndices && taggedTableLeads.length > numTables) {
+      setPendingTableLeads(taggedTableLeads);
+      setLeadSelectionOpen(true);
+      return;
+    }
+
     setIsGenerating(true);
     try {
       const rs = getRoundSettings(activeRound);
@@ -251,13 +277,26 @@ export default function MatchingWorkspace() {
         shuffleMode: rs.shuffle_mode,
       };
 
-      const leadsForAi = (leads || []).map((l: any) => ({
-        name: l.name ?? "",
-        company: l.company ?? "",
-        title: l.title ?? "",
-        expertiseTags: toStringArray(l.expertise_tags),
-        background: l.background ?? "",
-      }));
+      const leadsForAi = (leads || []).map((l: any, idx: number) => {
+        const isTableLead = (() => {
+          if (overrideLeadIndices) {
+            // User picked specific leads from the selection dialog
+            return overrideLeadIndices.includes(idx);
+          }
+          // Auto-detect from pool tags
+          const normalize = (s: string) => s.toLowerCase().trim();
+          const poolMatch = leadPoolData.find((p: any) => normalize(p.name) === normalize(l.name || ""));
+          return Array.isArray(poolMatch?.tags) && poolMatch.tags.includes("Table Lead");
+        })();
+        return {
+          name: l.name ?? "",
+          company: l.company ?? "",
+          title: l.title ?? "",
+          expertiseTags: toStringArray(l.expertise_tags),
+          background: l.background ?? "",
+          isTableLead,
+        };
+      });
 
       // For shuffle modes, pass previous round's tables as context
       let previousRoundTables: TableGroup[] | undefined;
@@ -560,6 +599,21 @@ export default function MatchingWorkspace() {
     <div className="flex h-[calc(100vh-3.5rem)] animate-fade-in">
       <FounderProfileDialog open={profileOpen} onOpenChange={setProfileOpen} data={selectedProfile} />
       <LeadProfileDialog open={leadProfileOpen} onOpenChange={setLeadProfileOpen} lead={selectedLead} />
+      <LeadSelectionDialog
+        open={leadSelectionOpen}
+        onOpenChange={setLeadSelectionOpen}
+        leads={pendingTableLeads.map((l: any) => ({
+          name: l.name || "",
+          company: l.company || "",
+          title: l.title || "",
+          expertiseTags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
+        }))}
+        maxSelectable={getRoundSettings(activeRound).num_tables}
+        onConfirm={(selectedIndices) => {
+          setLeadSelectionOpen(false);
+          generateMatches(selectedIndices);
+        }}
+      />
 
       {/* Left Panel */}
       <div className="w-80 border-r bg-card flex flex-col">
@@ -801,7 +855,7 @@ export default function MatchingWorkspace() {
             <Button variant="outline" size="sm" disabled>
               <Lock className="h-4 w-4 mr-1" /> Lock All
             </Button>
-            <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={generateMatches}>
+            <Button size="sm" disabled={isGenerating || companies.length === 0} onClick={() => generateMatches()}>
               <Sparkles className="h-4 w-4 mr-1" />
               {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
             </Button>
@@ -885,7 +939,7 @@ export default function MatchingWorkspace() {
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
-            <Button variant="outline" onClick={generateMatches} disabled={isGenerating}>
+            <Button variant="outline" onClick={() => generateMatches()} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : `Regenerate Round ${activeRound}`}
             </Button>
             <Button variant="outline" onClick={handleDownloadPdf} disabled={tables.length === 0}>
