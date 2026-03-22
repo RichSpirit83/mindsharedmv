@@ -8,7 +8,8 @@ import {
 } from "recharts";
 import {
   COMPANIES, Company, SECTOR_COLORS, STAGE_COLORS, CAP_COLORS,
-  getSectorColor, getWhyItMatters, REVENUE_ORDER, STAGE_ORDER, CAP_ORDER
+  getSectorColor, getWhyItMatters, REVENUE_ORDER, STAGE_ORDER, CAP_ORDER,
+  computeStageScore
 } from "./companyData";
 
 interface Props {
@@ -54,16 +55,30 @@ function PmfBadge({ pmf }: { pmf: boolean }) {
 }
 
 // ── Card 1: Full Cohort Roster ──
+function ScorePill({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="px-2.5 py-0.5 rounded-full text-[11px] font-medium"
+      style={{ backgroundColor: `${color}26`, color }}
+    >
+      {label}
+    </span>
+  );
+}
+
 function RosterDrilldown() {
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("All");
   const [sectorFilter, setSectorFilter] = useState("All");
   const [pmfFilter, setPmfFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("name");
 
   const sectors = useMemo(() => [...new Set(COMPANIES.map(c => c.sector))].sort(), []);
 
+  const scored = useMemo(() => COMPANIES.map(c => ({ ...c, stageScore: computeStageScore(c) })), []);
+
   const filtered = useMemo(() => {
-    return COMPANIES.filter(c => {
+    let result = scored.filter(c => {
       if (search && !c.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (stageFilter !== "All") {
         const map: Record<string, string[]> = {
@@ -77,7 +92,11 @@ function RosterDrilldown() {
       if (pmfFilter !== "All" && (pmfFilter === "Yes" ? !c.pmf : c.pmf)) return false;
       return true;
     });
-  }, [search, stageFilter, sectorFilter, pmfFilter]);
+    if (sortBy === "score-desc") result.sort((a, b) => b.stageScore.score - a.stageScore.score);
+    else if (sortBy === "score-asc") result.sort((a, b) => a.stageScore.score - b.stageScore.score);
+    else result.sort((a, b) => a.name.localeCompare(b.name));
+    return result;
+  }, [search, stageFilter, sectorFilter, pmfFilter, sortBy, scored]);
 
   const selectCls = "bg-slate-800 border-slate-600 text-slate-200 text-xs rounded-lg px-3 py-1.5";
 
@@ -99,6 +118,11 @@ function RosterDrilldown() {
         <select className={selectCls} value={pmfFilter} onChange={e => setPmfFilter(e.target.value)}>
           <option>All</option><option>Yes</option><option>No</option>
         </select>
+        <select className={selectCls} value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <option value="name">Sort: Name</option>
+          <option value="score-desc">Sort: Score (High → Low)</option>
+          <option value="score-asc">Sort: Score (Low → High)</option>
+        </select>
       </div>
       <p className="text-xs text-slate-400">Showing {filtered.length} of {COMPANIES.length} companies</p>
       <div className="grid grid-cols-3 gap-3">
@@ -112,9 +136,30 @@ function RosterDrilldown() {
               <SectorPill sector={c.sector} />
               <StagePill stage={c.salesStage} />
             </div>
-            <div className="flex justify-between text-[11px] text-slate-400">
+            <div className="flex justify-between text-[11px] text-slate-400 mb-2.5">
               <span>{c.revenue}</span>
               <span>{c.cap}</span>
+            </div>
+            {/* Stage Score Row */}
+            <div className="flex items-end gap-3 pt-2 border-t border-slate-700/40">
+              <div className="flex-1 min-w-0">
+                <span className="text-[10px] text-slate-400 block mb-1">Stage Score</span>
+                <div className="h-[5px] w-full rounded-full bg-slate-900/80">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{
+                      width: `${(c.stageScore.score / 3) * 100}%`,
+                      backgroundColor: c.stageScore.color,
+                    }}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col items-end shrink-0">
+                <span className="text-[13px] font-bold leading-none" style={{ color: c.stageScore.color }}>
+                  {c.stageScore.score.toFixed(2)}
+                </span>
+                <ScorePill label={c.stageScore.label} color={c.stageScore.color} />
+              </div>
             </div>
           </div>
         ))}
