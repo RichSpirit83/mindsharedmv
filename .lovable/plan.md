@@ -1,28 +1,49 @@
 
 
-## Plan: Simplify Cohort Executive Summary Layout
+## Plan: Add New Founder Data Import on Founder Pool Page
 
-### Changes to `src/components/CohortSummary.tsx`
+### What
+Add two import options (file upload + paste) directly on the Founder Participants page, allowing new survey data to be appended to an existing cohort. The user selects which session (cohort) the data belongs to, maps columns, and new rows are inserted into `breakout_companies` without touching existing records.
 
-Restructure the component to show:
+### Changes
 
-1. **Written summary at the top** — Move the existing text overview (with highlighted KPIs) above everything else. Add capital raised info to the summary text.
+**File: `src/pages/admin/FounderPool.tsx`**
 
-2. **4 stat cards in a row below the summary:**
-   - **Number of Companies** — total count
-   - **Breakout by Revenue** — top revenue band + count (e.g., "$1M-$5M (40%)")
-   - **Breakout by Capital Raised** — top capital raised band + count (uses `capital_raised` field from column mapping)
-   - **Breakout by Sector** — top sector + count
+1. **Add import buttons** in the header area (next to the badge): "Upload CSV" and "Paste Data" buttons
+2. **Session selector** — When either import flow starts, show a dropdown of existing `breakout_sessions` so the user picks which cohort the new data belongs to
+3. **CSV upload flow**:
+   - File input accepting `.csv`
+   - Parse with PapaParse, show the `ColumnMapper` component using the same `CANONICAL_FIELDS` list from SessionConfig (extract to a shared constant file)
+   - Preview via `CsvPreviewTable`
+   - On confirm, insert rows into `breakout_companies` with the selected `session_id`, storing both `raw_data` and `mapped_data`
+   - Invalidate the `founder_pool` query to refresh the table
+4. **Paste flow**:
+   - Open a dialog with a textarea (similar to `PasteLeadsDialog` pattern)
+   - Parse pasted TSV/CSV, auto-detect columns
+   - Same column mapping + session selector + preview + insert flow
+5. **Deduplication check** — Before inserting, compare new rows against existing `breakout_companies` for the selected session by normalized `(first_name + last_name + company_name)`. Skip duplicates and show a toast with the count skipped.
 
-3. **Remove everything else** — Delete all charts (sector bar, stage donut, revenue bar, radar, geography) and the old stat cards row (Sectors, Top Stage, Locations).
+**New file: `src/lib/founderFields.ts`**
+- Extract `CANONICAL_FIELDS` and `FIELD_ALIASES` from SessionConfig into a shared module so both SessionConfig and FounderPool import from the same source
 
-### Data changes
-- Add `capital_raised` aggregation to the `useMemo` stats computation (same `countBy` pattern as revenue/sector)
-- Update the written summary to mention capital raised
-- Simplify stat cards to show the top value + percentage for revenue, capital raised, and sector
+**File: `src/pages/admin/SessionConfig.tsx`**
+- Import `CANONICAL_FIELDS` and `FIELD_ALIASES` from the shared module instead of defining them locally
 
-### File changed
+### Flow
+
+```text
+User clicks "Upload CSV" or "Paste Data"
+  → Select cohort (session) from dropdown
+  → Parse data → Column Mapper
+  → Preview table (with delete row option)
+  → Confirm → Insert into breakout_companies → Refresh table
+```
+
+### Summary
+
 | File | Change |
 |------|--------|
-| `src/components/CohortSummary.tsx` | Restructure: text summary on top, 4 simplified stat cards below, remove all charts |
+| `src/lib/founderFields.ts` | New — shared canonical fields + aliases |
+| `src/pages/admin/FounderPool.tsx` | Add CSV upload + paste import with session selector, mapping, dedup, insert |
+| `src/pages/admin/SessionConfig.tsx` | Import fields from shared module |
 
