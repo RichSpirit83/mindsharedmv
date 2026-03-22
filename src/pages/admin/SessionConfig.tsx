@@ -891,7 +891,7 @@ export default function SessionConfig() {
 
       {/* Cohort Executive Summary */}
       {csvData.length > 0 && (
-        <CohortSummary csvData={csvData} columnMapping={columnMapping} />
+        <CohortSummary />
       )}
 
       {/* CSV Upload */}
