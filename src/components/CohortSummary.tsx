@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronDown, ChevronUp } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell
 } from "recharts";
+import CohortDrilldownModal from "./cohort/CohortDrilldownModal";
+import { CAP_COLORS } from "./cohort/companyData";
 
 // ── Hardcoded Data ──────────────────────────────────────────
 const COHORT_SIZE = 45;
@@ -28,11 +28,11 @@ const PMF_BY_STAGE = [
 ];
 
 const CAPITALIZATION = [
-  { label: "None / Bootstrapped", value: 6, color: "#64748b" },
-  { label: "Pre-Seed", value: 20, color: "#8b5cf6" },
-  { label: "Seed", value: 12, color: "#6366f1" },
-  { label: "Other (undisclosed)", value: 5, color: "#a855f7" },
-  { label: "Series B+", value: 1, color: "#10b981" },
+  { label: "None / Bootstrapped", value: 6, color: CAP_COLORS["None"] },
+  { label: "Pre-Seed", value: 20, color: CAP_COLORS["Pre-Seed"] },
+  { label: "Seed", value: 12, color: CAP_COLORS["Seed"] },
+  { label: "Other (undisclosed)", value: 5, color: CAP_COLORS["Other"] },
+  { label: "Series B+", value: 1, color: CAP_COLORS["Series B"] },
 ];
 
 const REVENUE = [
@@ -60,6 +60,7 @@ const NETWORKING_OBJECTIVES = [
 
 export default function CohortSummary() {
   const [open, setOpen] = useState(true);
+  const [drillCard, setDrillCard] = useState<number | null>(null);
 
   const pmfPct = Math.round((PMF.yes / COHORT_SIZE) * 100);
 
@@ -89,8 +90,7 @@ export default function CohortSummary() {
         <div className="space-y-5">
           {/* ── TOP ROW: 4 Stat Cards ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {/* Card 1: Cohort Snapshot */}
-            <DashCard label="Cohort Size">
+            <DashCard label="Cohort Size" onClick={() => setDrillCard(0)}>
               <p className="text-5xl font-bold text-white">{COHORT_SIZE}</p>
               <div className="flex gap-3 mt-2 text-xs text-slate-400">
                 <span>{SUBMISSIONS} Submissions</span>
@@ -103,11 +103,9 @@ export default function CohortSummary() {
               </div>
             </DashCard>
 
-            {/* Card 2: PMF Self-Report */}
-            <DashCard label="Claimed Product-Market Fit">
+            <DashCard label="Claimed Product-Market Fit" onClick={() => setDrillCard(1)}>
               <p className="text-5xl font-bold text-white">{pmfPct}%</p>
               <p className="text-xs text-slate-400 mt-1">{PMF.yes} of {COHORT_SIZE}</p>
-              {/* PMF bar */}
               <div className="w-full h-2 rounded-full bg-slate-700 mt-3 overflow-hidden flex">
                 <div className="bg-indigo-500 h-full" style={{ width: `${pmfPct}%` }} />
                 <div className="bg-slate-500 h-full flex-1" />
@@ -117,8 +115,7 @@ export default function CohortSummary() {
               </div>
             </DashCard>
 
-            {/* Card 3: Top Challenge */}
-            <DashCard label="GTM as Critical Challenge">
+            <DashCard label="GTM as Critical Challenge" onClick={() => setDrillCard(2)}>
               <p className="text-5xl font-bold text-white">93%</p>
               <p className="text-xs text-slate-400 mt-1">42 of 45 companies</p>
               <div className="mt-3 space-y-2">
@@ -134,8 +131,7 @@ export default function CohortSummary() {
               </div>
             </DashCard>
 
-            {/* Card 4: Relationship Priority */}
-            <DashCard label="Why They're Here">
+            <DashCard label="Why They're Here" onClick={() => setDrillCard(3)}>
               <div className="space-y-3 mt-1">
                 {NETWORKING_OBJECTIVES.map((n) => (
                   <div key={n.label} className="text-xs">
@@ -165,7 +161,7 @@ export default function CohortSummary() {
           {/* ── BOTTOM ROW: 4 Chart Cards ── */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             {/* Card 5: Sales Stage */}
-            <DashCard label="Sales Stage">
+            <DashCard label="Sales Stage" onClick={() => setDrillCard(4)}>
               <div className="space-y-2 mt-1">
                 {SALES_STAGE.map((s) => {
                   const pct = Math.round((s.value / COHORT_SIZE) * 100);
@@ -173,10 +169,7 @@ export default function CohortSummary() {
                     <div key={s.label} className="flex items-center gap-2 text-xs">
                       <span className="w-28 text-slate-300 truncate text-[11px]">{s.label}</span>
                       <div className="flex-1 h-3 rounded bg-slate-700/50 overflow-hidden">
-                        <div
-                          className="h-full rounded"
-                          style={{ width: `${pct}%`, backgroundColor: s.color }}
-                        />
+                        <div className="h-full rounded" style={{ width: `${pct}%`, backgroundColor: s.color }} />
                       </div>
                       <span className="text-slate-400 w-12 text-right text-[11px]">{s.value} ({pct}%)</span>
                     </div>
@@ -186,26 +179,13 @@ export default function CohortSummary() {
             </DashCard>
 
             {/* Card 6: Revenue Distribution */}
-            <DashCard label="ARR Distribution">
+            <DashCard label="ARR Distribution" onClick={() => setDrillCard(5)}>
               <div className="h-[180px] mt-1">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={REVENUE} margin={{ top: 5, right: 5, bottom: 30, left: -10 }}>
-                    <XAxis
-                      dataKey="label"
-                      tick={{ fill: "#94a3b8", fontSize: 9 }}
-                      angle={-35}
-                      textAnchor="end"
-                      axisLine={{ stroke: "#334155" }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, color: "#fff" }}
-                    />
+                    <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 9 }} angle={-35} textAnchor="end" axisLine={{ stroke: "#334155" }} tickLine={false} />
+                    <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, color: "#fff" }} />
                     <Bar dataKey="value" radius={[4, 4, 0, 0]} fill="#6366f1" />
                   </BarChart>
                 </ResponsiveContainer>
@@ -215,64 +195,36 @@ export default function CohortSummary() {
               </p>
             </DashCard>
 
-            {/* Card 7: Capitalization Stage (Donut) */}
-            <DashCard label="Last Round Raised">
-              <div className="h-[180px] mt-1 flex items-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={CAPITALIZATION}
-                      dataKey="value"
-                      nameKey="label"
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={35}
-                      outerRadius={60}
-                      paddingAngle={2}
-                      stroke="none"
-                    >
-                      {CAPITALIZATION.map((entry, index) => (
-                        <Cell key={index} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, color: "#fff" }}
-                    />
-                    <Legend
-                      layout="vertical"
-                      align="right"
-                      verticalAlign="middle"
-                      wrapperStyle={{ fontSize: 10, color: "#94a3b8", lineHeight: "18px" }}
-                      formatter={(value: string) => <span className="text-slate-300">{value}</span>}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
+            {/* Card 7: Last Round Raised (Bar Chart) */}
+            <DashCard label="Last Round Raised" onClick={() => setDrillCard(6)}>
+              <div className="space-y-2 mt-1">
+                {CAPITALIZATION.map((c) => {
+                  const pct = Math.round((c.value / COHORT_SIZE) * 100);
+                  return (
+                    <div key={c.label} className="flex items-center gap-2 text-xs">
+                      <span className="w-28 text-slate-300 truncate text-[11px]">{c.label}</span>
+                      <div className="flex-1 h-3 rounded bg-slate-700/50 overflow-hidden">
+                        <div className="h-full rounded" style={{ width: `${pct}%`, backgroundColor: c.color }} />
+                      </div>
+                      <span className="text-slate-400 w-12 text-right text-[11px]">{c.value} ({pct}%)</span>
+                    </div>
+                  );
+                })}
               </div>
-              <p className="text-center text-[10px] text-slate-500 -mt-1">44% Pre-Seed</p>
+              <p className="text-center text-[10px] text-slate-500 mt-2">44% Pre-Seed</p>
             </DashCard>
 
-            {/* Card 8: PMF Paradox (highlighted) */}
-            <DashCard label="PMF Paradox" highlight>
+            {/* Card 8: PMF Paradox */}
+            <DashCard label="PMF Paradox" highlight onClick={() => setDrillCard(7)}>
               <p className="text-[10px] text-slate-500 mb-2">
                 Companies claiming PMF but still founder-led signal the cohort's core unlock
               </p>
               <div className="h-[170px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={PMF_BY_STAGE} margin={{ top: 5, right: 5, bottom: 5, left: -15 }}>
-                    <XAxis
-                      dataKey="stage"
-                      tick={{ fill: "#94a3b8", fontSize: 9 }}
-                      axisLine={{ stroke: "#334155" }}
-                      tickLine={false}
-                    />
-                    <YAxis
-                      tick={{ fill: "#94a3b8", fontSize: 10 }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-                    <Tooltip
-                      contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, color: "#fff" }}
-                    />
+                    <XAxis dataKey="stage" tick={{ fill: "#94a3b8", fontSize: 9 }} axisLine={{ stroke: "#334155" }} tickLine={false} />
+                    <YAxis tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: "#1e293b", border: "1px solid #334155", borderRadius: 8, fontSize: 12, color: "#fff" }} />
                     <Bar dataKey="pmfYes" name="PMF Yes" fill="#6366f1" radius={[3, 3, 0, 0]} />
                     <Bar dataKey="pmfNo" name="PMF No" fill="#f43f5e" radius={[3, 3, 0, 0]} />
                   </BarChart>
@@ -285,23 +237,34 @@ export default function CohortSummary() {
           </div>
         </div>
       )}
+
+      {/* Drill-down modal */}
+      <CohortDrilldownModal
+        cardIndex={drillCard ?? 0}
+        open={drillCard !== null}
+        onClose={() => setDrillCard(null)}
+      />
     </div>
   );
 }
 
 // ── Sub-components ──────────────────────────────────────────
 
-function DashCard({ label, children, highlight }: { label: string; children: React.ReactNode; highlight?: boolean }) {
+function DashCard({ label, children, highlight, onClick }: { label: string; children: React.ReactNode; highlight?: boolean; onClick?: () => void }) {
   return (
     <div
-      className={`rounded-xl border p-4 ${
+      onClick={onClick}
+      className={`rounded-xl border p-4 cursor-pointer group relative transition-colors ${
         highlight
-          ? "border-indigo-500/40 bg-slate-800/80 shadow-[0_0_20px_-5px_rgba(99,102,241,0.3)]"
-          : "border-slate-700/50 bg-slate-800/50"
+          ? "border-indigo-500/40 bg-slate-800/80 shadow-[0_0_20px_-5px_rgba(99,102,241,0.3)] hover:border-indigo-400/60"
+          : "border-slate-700/50 bg-slate-800/50 hover:border-slate-500"
       }`}
     >
       <p className="text-[11px] text-slate-400 font-semibold uppercase tracking-widest mb-2">{label}</p>
       {children}
+      <span className="absolute bottom-2.5 right-3 text-[11px] text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
+        ↗ View Detail
+      </span>
     </div>
   );
 }
