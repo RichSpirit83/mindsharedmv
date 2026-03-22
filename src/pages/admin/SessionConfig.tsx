@@ -540,16 +540,7 @@ export default function SessionConfig() {
     }
   };
 
-  const autoMapHeaders = (headers: string[]) => {
-    const autoMap: Record<string, string> = {};
-    CANONICAL_FIELDS.forEach((field) => {
-      for (const h of headers) {
-        const match = fuzzyMatchHeader(h, [field]);
-        if (match) { autoMap[field] = h; break; }
-      }
-    });
-    return autoMap;
-  };
+  const autoMapHeaders = autoMapHeadersShared;
 
   const handleCsvUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
