@@ -103,3 +103,58 @@ export function getWhyItMatters(sector: string): string {
   if (sector.includes("FinTech") || sector.includes("SaaS")) return "Repeatable motion is the next unlock";
   return "Founder dependency is the growth ceiling";
 }
+
+// ── Stage Score Computation ──
+
+const SALES_STAGE_SCORE: Record<string, number> = {
+  "Founder-Led": 0,
+  "Refining": 1,
+  "Building Repeatable": 2,
+  "Team-Led": 3,
+};
+
+const REVENUE_SCORE: Record<string, number> = {
+  "<$250K": 0,
+  "$251K-$500K": 0.5,
+  "$501K-$1M": 1,
+  "$2M-$5M": 2,
+  "$6M-$10M": 2.5,
+  "$11M-$20M": 3,
+};
+
+const EMPLOYEE_SCORE: Record<string, number> = {
+  "1-5": 0,
+  "6-25": 0.33,
+  "25-50": 0.66,
+  "51-100": 1,
+};
+
+export interface StageScore {
+  score: number;
+  label: string;
+  color: string;
+}
+
+export const STAGE_SCORE_THRESHOLDS: { max: number; label: string; color: string }[] = [
+  { max: 0.75, label: "Pre-Traction", color: "#475569" },
+  { max: 1.50, label: "Early Stage", color: "#f59e0b" },
+  { max: 2.25, label: "Growth Stage", color: "#14b8a6" },
+  { max: 3.00, label: "Scale Stage", color: "#10b981" },
+];
+
+export function computeStageScore(company: Company): StageScore {
+  const stagePts = SALES_STAGE_SCORE[company.salesStage] ?? 0;
+  const revPts = REVENUE_SCORE[company.revenue] ?? 0;
+  const pmfPts = company.pmf ? 1 : 0;
+  const empPts = EMPLOYEE_SCORE[company.employees] ?? 0;
+
+  // Weighted composite normalized to 0–3
+  const raw = stagePts * 0.4 + revPts * 0.3 + pmfPts * 0.15 + empPts * 0.15;
+  // pmf (0-1) and emp (0-1) contribute max 0.15 each; stage max 1.2; rev max 0.9 → max = 2.7
+  // Normalize so max possible → 3
+  const maxPossible = 3 * 0.4 + 3 * 0.3 + 1 * 0.15 + 1 * 0.15;
+  const score = Math.round(((raw / maxPossible) * 3) * 100) / 100;
+
+  const tier = STAGE_SCORE_THRESHOLDS.find(t => score <= t.max) || STAGE_SCORE_THRESHOLDS[3];
+  return { score, label: tier.label, color: tier.color };
+}
