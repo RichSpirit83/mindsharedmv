@@ -1,34 +1,40 @@
 
 
-## Plan: Add Stage Score to Founder Participants Table
+## Plan: Fix Stage Score Computation for Database Data
 
-### Problem
-The stage scoring model exists in `companyData.ts` but only shows in the cohort dashboard drill-down. The Founder Participants page (`/admin/founders`) has no scoring visibility.
+### Root Cause
+The `computeStageScoreFromMapped()` function uses field names and value formats that don't match the actual database `mapped_data`. Every signal returns 0 because nothing matches.
 
-### Approach
-Create a helper that computes the stage score from `mapped_data` fields (which use snake_case like `sales_stage`, `revenue`, `pmf`, `employees`) by mapping them to the `Company` interface format, then call `computeStageScore`.
+### Mismatches Found
 
-Add two new columns to the Founder Pool table: **Stage Score** (visual bar + number) and **Stage** (colored pill label).
+| Signal | Code expects | Actual DB value |
+|--------|-------------|-----------------|
+| Sales Stage field | `sales_stage` | `sales_stage` (correct) |
+| Sales Stage value | `"building repeatable"` | `"Building a repeatable process – I have a structured sales process and am working on making it scalable beyond the founder."` |
+| PMF field | `pmf` or `product_market_fit` | `has_pmf` |
+| PMF value | `"true"`, `"yes"`, `"1"` | `"checked"` |
+| Revenue value | `"$2M-$5M"` | `"2M-5M"` (no $ sign) |
+| Employees field | `employees` or `team_size` | `employee_count` |
 
-### Changes
+### Fix in `src/components/cohort/companyData.ts`
 
-**File: `src/components/cohort/companyData.ts`**
-- Add a new exported function `computeStageScoreFromMapped(mapped: Record<string, string>): StageScore` that:
-  - Maps `mapped_data` fields to `Company` shape (e.g. `sales_stage` → `salesStage`, `pmf` → boolean)
-  - Calls existing `computeStageScore` internally
-  - Handles missing/unmapped fields gracefully (defaults to 0)
+Update `computeStageScoreFromMapped()`:
 
-**File: `src/pages/admin/FounderPool.tsx`**
-- Import `computeStageScoreFromMapped` and `STAGE_SCORE_THRESHOLDS`
-- Add "Stage Score" and "Stage" to `displayColumns` (after session_name, before other fields)
-- Render the Stage Score column as a thin colored bar + numeric score
-- Render the Stage column as a colored pill (Pre-Traction / Early / Growth / Scale)
-- Add sort support for the score column (sorts by computed numeric value rather than string)
+1. **Sales stage normalization** — Use `includes()` matching instead of exact match. The DB values are full sentences like "Building a repeatable process...", so match on keywords:
+   - Contains "founder-led" → "Founder-Led"
+   - Contains "refining" → "Refining"
+   - Contains "repeatable" → "Building Repeatable"
+   - Contains "team-led" → "Team-Led"
+
+2. **PMF field** — Also check `has_pmf`. Accept `"checked"` as a truthy value.
+
+3. **Revenue normalization** — Strip `$` and match flexibly. Add mappings for values without dollar signs: `"2M-5M"` → `"$2M-$5M"`, `"501K-1M"` → `"$501K-$1M"`, etc.
+
+4. **Employees field** — Also check `employee_count`.
 
 ### Summary
 
 | File | Change |
 |------|--------|
-| `src/components/cohort/companyData.ts` | Add `computeStageScoreFromMapped()` adapter function |
-| `src/pages/admin/FounderPool.tsx` | Add Stage Score bar + Stage pill columns to the table |
+| `src/components/cohort/companyData.ts` | Fix field name lookups and value normalization in `computeStageScoreFromMapped()` |
 
