@@ -75,7 +75,7 @@ export default function FounderPool() {
     return ordered;
   }, [rawData]);
 
-  const displayColumns = ["session_name", ...allColumns];
+  const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
