@@ -338,7 +338,7 @@ export default function FounderPool() {
 
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!o) resetImport(); }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="sm:max-w-4xl bg-background">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               {importMode === "csv" ? <Upload className="h-5 w-5" /> : <ClipboardPaste className="h-5 w-5" />}
