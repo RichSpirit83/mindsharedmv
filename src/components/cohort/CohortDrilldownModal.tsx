@@ -8,7 +8,8 @@ import {
 } from "recharts";
 import {
   COMPANIES, Company, SECTOR_COLORS, STAGE_COLORS, CAP_COLORS,
-  getSectorColor, getWhyItMatters, REVENUE_ORDER, STAGE_ORDER, CAP_ORDER
+  getSectorColor, getWhyItMatters, REVENUE_ORDER, STAGE_ORDER, CAP_ORDER,
+  computeStageScore
 } from "./companyData";
 
 interface Props {
