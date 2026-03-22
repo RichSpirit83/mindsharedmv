@@ -1,24 +1,12 @@
 import { useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ChevronDown, ChevronUp, Building2, Layers, TrendingUp, MapPin } from "lucide-react";
+import { ChevronDown, ChevronUp, Building2, DollarSign, TrendingUp, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from "recharts";
 
 interface CohortSummaryProps {
   csvData: Record<string, string>[];
   columnMapping: Record<string, string>;
 }
-
-const CHART_COLORS = [
-  "hsl(var(--primary))",
-  "hsl(var(--accent))",
-  "hsl(var(--secondary))",
-  "#6366f1", "#f59e0b", "#10b981", "#ef4444", "#8b5cf6",
-  "#ec4899", "#14b8a6", "#f97316", "#06b6d4",
-];
 
 function countBy(arr: string[]): { name: string; value: number }[] {
   const map: Record<string, number> = {};
@@ -43,55 +31,35 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
     if (!csvData.length) return null;
 
     const sectors = csvData.map((r) => getCol(r, columnMapping, "sector"));
-    const stages = csvData.map((r) => getCol(r, columnMapping, "sales_stage"));
     const revenues = csvData.map((r) => getCol(r, columnMapping, "revenue"));
+    const capitalRaised = csvData.map((r) => getCol(r, columnMapping, "capital_raised"));
+    const stages = csvData.map((r) => getCol(r, columnMapping, "sales_stage"));
     const states = csvData.map((r) => getCol(r, columnMapping, "state_province"));
     const cities = csvData.map((r) => getCol(r, columnMapping, "city"));
 
     const sectorDist = countBy(sectors);
-    const stageDist = countBy(stages);
     const revenueDist = countBy(revenues);
-    const geoDist = countBy(states.length ? states : cities);
-
-    // Needs analysis
-    const needFields = ["need_networking", "need_trends", "need_partners", "need_opportunities", "need_mentorship"];
-    const needLabels: Record<string, string> = {
-      need_networking: "Networking",
-      need_trends: "Trends",
-      need_partners: "Partners",
-      need_opportunities: "Opportunities",
-      need_mentorship: "Mentorship",
-    };
-    const needsData = needFields.map((field) => {
-      const vals = csvData.map((r) => getCol(r, columnMapping, field).toLowerCase());
-      const yesCount = vals.filter((v) => v === "yes" || v === "true" || v === "1" || v === "y").length;
-      return { name: needLabels[field] || field, value: yesCount };
-    }).filter((d) => d.value > 0);
+    const capitalDist = countBy(capitalRaised);
+    const stageDist = countBy(stages);
 
     const uniqueSectors = new Set(sectors.filter(Boolean)).size;
     const uniqueGeo = new Set([...states, ...cities].filter(Boolean)).size;
     const topStage = stageDist[0]?.name || "N/A";
     const topSector = sectorDist[0]?.name || "N/A";
     const topSectorPct = sectorDist[0] ? Math.round((sectorDist[0].value / csvData.length) * 100) : 0;
-    const topNeed = needsData.length ? needsData.reduce((a, b) => (a.value > b.value ? a : b)) : null;
-    const topNeedPct = topNeed ? Math.round((topNeed.value / csvData.length) * 100) : 0;
     const topRevenue = revenueDist[0]?.name || "N/A";
-    const topGeo = geoDist[0]?.name || "N/A";
-    const topGeoPct = geoDist[0] ? Math.round((geoDist[0].value / csvData.length) * 100) : 0;
+    const topRevenuePct = revenueDist[0] ? Math.round((revenueDist[0].value / csvData.length) * 100) : 0;
+    const topCapital = capitalDist[0]?.name || "N/A";
+    const topCapitalPct = capitalDist[0] ? Math.round((capitalDist[0].value / csvData.length) * 100) : 0;
 
     return {
       total: csvData.length,
       uniqueSectors,
-      topStage,
       uniqueGeo,
-      sectorDist: sectorDist.slice(0, 10),
-      stageDist,
-      revenueDist,
-      geoDist: geoDist.slice(0, 8),
-      needsData,
-      topSector, topSectorPct,
-      topNeed: topNeed?.name || "N/A", topNeedPct,
-      topRevenue, topGeo, topGeoPct,
+      topStage,
+      topSector, topSectorPct, sectorDist,
+      topRevenue, topRevenuePct, revenueDist,
+      topCapital, topCapitalPct, capitalDist,
     };
   }, [csvData, columnMapping]);
 
@@ -108,99 +76,41 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
         </div>
       </CardHeader>
       {open && (
-        <CardContent className="space-y-6">
-          {/* Stat Cards */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard icon={Building2} label="Companies" value={stats.total} />
-            <StatCard icon={Layers} label="Sectors" value={stats.uniqueSectors} />
-            <StatCard icon={TrendingUp} label="Top Stage" value={stats.topStage} />
-            <StatCard icon={MapPin} label="Locations" value={stats.uniqueGeo} />
-          </div>
-
+        <CardContent className="space-y-4">
           {/* Written Summary */}
           <div className="rounded-lg border bg-muted/30 p-4 text-sm leading-relaxed text-foreground">
             This cohort comprises <Kpi>{stats.total} companies</Kpi> spanning <Kpi>{stats.uniqueSectors} sectors</Kpi> across <Kpi>{stats.uniqueGeo} locations</Kpi>.
             {stats.topSector !== "N/A" && <> The dominant sector is <Kpi>{stats.topSector}</Kpi>, representing <Kpi>{stats.topSectorPct}%</Kpi> of the cohort.</>}
             {stats.topStage !== "N/A" && <> Most founders are at the <Kpi>{stats.topStage}</Kpi> stage.</>}
-            {stats.topRevenue !== "N/A" && <> The most common revenue band is <Kpi>{stats.topRevenue}</Kpi>.</>}
-            {stats.topGeo !== "N/A" && <> <Kpi>{stats.topGeoPct}%</Kpi> are based in <Kpi>{stats.topGeo}</Kpi>.</>}
-            {stats.topNeed !== "N/A" && <> The top founder need is <Kpi>{stats.topNeed}</Kpi> (<Kpi>{stats.topNeedPct}%</Kpi>).</>}
+            {stats.topRevenue !== "N/A" && <> The most common revenue band is <Kpi>{stats.topRevenue}</Kpi> (<Kpi>{stats.topRevenuePct}%</Kpi>).</>}
+            {stats.topCapital !== "N/A" && <> The leading capital raised bracket is <Kpi>{stats.topCapital}</Kpi> (<Kpi>{stats.topCapitalPct}%</Kpi>).</>}
           </div>
 
-          {/* Charts Grid */}
-          <div className="grid md:grid-cols-2 gap-4">
-            {/* Sector Distribution */}
-            {stats.sectorDist.length > 0 && (
-              <MiniChart title="Sector Distribution">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={stats.sectorDist} layout="vertical" margin={{ left: 80, right: 12, top: 4, bottom: 4 }}>
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={75} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </MiniChart>
-            )}
-
-            {/* Sales Stage Donut */}
-            {stats.stageDist.length > 0 && (
-              <MiniChart title="Sales Stage Breakdown">
-                <ResponsiveContainer width="100%" height={200}>
-                  <PieChart>
-                    <Pie data={stats.stageDist} dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={40} outerRadius={75} paddingAngle={2} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`} labelLine={false} style={{ fontSize: 9 }}>
-                      {stats.stageDist.map((_, i) => (
-                        <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </MiniChart>
-            )}
-
-            {/* Revenue Distribution */}
-            {stats.revenueDist.length > 0 && (
-              <MiniChart title="Revenue Distribution">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={stats.revenueDist} margin={{ left: 8, right: 8, top: 4, bottom: 4 }}>
-                    <XAxis dataKey="name" tick={{ fontSize: 9 }} angle={-30} textAnchor="end" height={50} />
-                    <YAxis tick={{ fontSize: 10 }} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="hsl(var(--accent))" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </MiniChart>
-            )}
-
-            {/* Needs Analysis Radar */}
-            {stats.needsData.length > 0 && (
-              <MiniChart title="Founder Needs Analysis">
-                <ResponsiveContainer width="100%" height={200}>
-                  <RadarChart data={stats.needsData} cx="50%" cy="50%" outerRadius={70}>
-                    <PolarGrid stroke="hsl(var(--border))" />
-                    <PolarAngleAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <PolarRadiusAxis tick={{ fontSize: 9 }} />
-                    <Radar dataKey="value" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
-                    <Tooltip />
-                  </RadarChart>
-                </ResponsiveContainer>
-              </MiniChart>
-            )}
-
-            {/* Geography */}
-            {stats.geoDist.length > 0 && (
-              <MiniChart title="Geographic Spread">
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={stats.geoDist} layout="vertical" margin={{ left: 60, right: 12, top: 4, bottom: 4 }}>
-                    <XAxis type="number" tick={{ fontSize: 10 }} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} width={55} />
-                    <Tooltip />
-                    <Bar dataKey="value" fill="#6366f1" radius={[0, 4, 4, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </MiniChart>
-            )}
+          {/* 4 Stat Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <StatCard
+              icon={Building2}
+              label="Companies"
+              value={stats.total}
+            />
+            <StatCard
+              icon={DollarSign}
+              label="Revenue Breakout"
+              value={stats.topRevenue}
+              sub={stats.revenueDist.slice(0, 3).map(d => `${d.name} (${d.value})`).join(", ")}
+            />
+            <StatCard
+              icon={TrendingUp}
+              label="Capital Raised"
+              value={stats.topCapital}
+              sub={stats.capitalDist.slice(0, 3).map(d => `${d.name} (${d.value})`).join(", ")}
+            />
+            <StatCard
+              icon={Layers}
+              label="Sector Breakout"
+              value={stats.topSector}
+              sub={stats.sectorDist.slice(0, 3).map(d => `${d.name} (${d.value})`).join(", ")}
+            />
           </div>
         </CardContent>
       )}
@@ -208,29 +118,21 @@ export default function CohortSummary({ csvData, columnMapping }: CohortSummaryP
   );
 }
 
-function StatCard({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: string | number }) {
+function StatCard({ icon: Icon, label, value, sub }: { icon: React.ElementType; label: string; value: string | number; sub?: string }) {
   return (
-    <div className="rounded-lg border bg-card p-3 flex items-center gap-3">
-      <div className="rounded-md bg-primary/10 p-2">
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-      <div>
+    <div className="rounded-lg border bg-card p-3 flex flex-col gap-1">
+      <div className="flex items-center gap-2">
+        <div className="rounded-md bg-primary/10 p-1.5">
+          <Icon className="h-4 w-4 text-primary" />
+        </div>
         <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="font-heading font-semibold text-lg leading-tight">{String(value)}</p>
       </div>
+      <p className="font-heading font-semibold text-base leading-tight">{String(value)}</p>
+      {sub && <p className="text-[11px] text-muted-foreground leading-snug">{sub}</p>}
     </div>
   );
 }
 
 function Kpi({ children }: { children: React.ReactNode }) {
   return <span className="font-semibold text-primary">{children}</span>;
-}
-
-function MiniChart({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border bg-card p-3">
-      <p className="text-xs font-medium text-muted-foreground mb-2">{title}</p>
-      {children}
-    </div>
-  );
 }
