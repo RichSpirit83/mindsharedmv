@@ -107,6 +107,12 @@ export default function FounderPool() {
     });
     if (sortField) {
       result = [...result].sort((a, b) => {
+        // Sort by computed score numerically
+        if (sortField === "_stage_score" || sortField === "_stage") {
+          const aScore = computeStageScoreFromMapped(a.mapped_data).score;
+          const bScore = computeStageScoreFromMapped(b.mapped_data).score;
+          return sortDir === "asc" ? aScore - bScore : bScore - aScore;
+        }
         const aVal = sortField === "session_name" ? a.session_name : (a.mapped_data[sortField] || "");
         const bVal = sortField === "session_name" ? b.session_name : (b.mapped_data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
