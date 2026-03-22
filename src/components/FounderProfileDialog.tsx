@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Building2, User, MapPin, DollarSign, Users, Target, TrendingUp, Briefcase } from "lucide-react";
+import { computeStageScoreFromMapped } from "@/components/cohort/companyData";
 
 interface FounderProfileDialogProps {
   open: boolean;
