@@ -2,6 +2,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Building2, User, MapPin, DollarSign, Users, Target, TrendingUp, Briefcase } from "lucide-react";
+import { computeStageScoreFromMapped } from "@/components/cohort/companyData";
 
 interface FounderProfileDialogProps {
   open: boolean;
@@ -38,8 +39,29 @@ export default function FounderProfileDialog({ open, onOpenChange, data }: Found
           </DialogTitle>
         </DialogHeader>
 
+        {/* Stage Score */}
+        {(() => {
+          const score = computeStageScoreFromMapped(data);
+          const pct = Math.round((score.score / 3) * 100);
+          return (
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border">
+              <div className="flex-1">
+                <p className="text-[10px] text-muted-foreground mb-1">Stage Score</p>
+                <div className="h-1.5 rounded-full bg-background overflow-hidden">
+                  <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, backgroundColor: score.color }} />
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-sm font-bold" style={{ color: score.color }}>{score.score.toFixed(2)}</p>
+                <Badge className="text-[10px] px-2 py-0" style={{ backgroundColor: `${score.color}22`, color: score.color, border: 'none' }}>
+                  {score.label}
+                </Badge>
+              </div>
+            </div>
+          );
+        })()}
+
         <div className="space-y-5">
-          {/* Founder info */}
           <div className="flex items-center gap-3">
             <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
               <User className="h-5 w-5 text-primary" />
