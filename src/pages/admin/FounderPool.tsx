@@ -94,6 +94,8 @@ export default function FounderPool() {
 
   const formatHeader = (key: string) => {
     if (key === "session_name") return "Session";
+    if (key === "_stage_score") return "Score";
+    if (key === "_stage") return "Stage";
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
