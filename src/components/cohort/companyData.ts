@@ -158,32 +158,48 @@ export function computeStageScore(company: Company): StageScore {
 
 /** Compute stage score from mapped_data fields (snake_case keys from DB) */
 export function computeStageScoreFromMapped(mapped: Record<string, string>): StageScore {
-  const salesStageRaw = mapped.sales_stage || mapped.salesStage || "";
-  // Normalize common variations
-  const stageMap: Record<string, string> = {
-    "founder-led sales": "Founder-Led",
-    "founder-led": "Founder-Led",
-    "refining process": "Refining",
-    "refining": "Refining",
-    "building repeatable": "Building Repeatable",
-    "team-led sales": "Team-Led",
-    "team-led": "Team-Led",
-  };
-  const salesStage = stageMap[salesStageRaw.toLowerCase().trim()] || salesStageRaw;
+  const salesStageRaw = (mapped.sales_stage || mapped.salesStage || "").toLowerCase().trim();
+  
+  // Keyword matching for long-form DB values
+  let salesStage = salesStageRaw;
+  if (salesStageRaw.includes("team-led") || salesStageRaw.includes("team led")) {
+    salesStage = "Team-Led";
+  } else if (salesStageRaw.includes("repeatable")) {
+    salesStage = "Building Repeatable";
+  } else if (salesStageRaw.includes("refining")) {
+    salesStage = "Refining";
+  } else if (salesStageRaw.includes("founder")) {
+    salesStage = "Founder-Led";
+  }
 
-  const pmfRaw = (mapped.pmf || mapped.product_market_fit || "").toLowerCase().trim();
-  const pmf = pmfRaw === "true" || pmfRaw === "yes" || pmfRaw === "1";
+  const pmfRaw = (mapped.has_pmf || mapped.pmf || mapped.product_market_fit || "").toLowerCase().trim();
+  const pmf = pmfRaw === "true" || pmfRaw === "yes" || pmfRaw === "1" || pmfRaw === "checked";
+
+  // Normalize revenue — DB may omit $ signs
+  let revenueRaw = mapped.revenue || "";
+  const revNorm = revenueRaw.replace(/\$/g, "").trim();
+  const revMap: Record<string, string> = {
+    "<250k": "<$250K", "<250K": "<$250K",
+    "251k-500k": "$251K-$500K", "251K-500K": "$251K-$500K",
+    "501k-1m": "$501K-$1M", "501K-1M": "$501K-$1M",
+    "2m-5m": "$2M-$5M", "2M-5M": "$2M-$5M",
+    "6m-10m": "$6M-$10M", "6M-10M": "$6M-$10M",
+    "11m-20m": "$11M-$20M", "11M-20M": "$11M-$20M",
+  };
+  const revenue = revMap[revNorm] || revenueRaw;
+
+  const employees = mapped.employee_count || mapped.employees || mapped.team_size || "";
 
   const company: Company = {
     name: mapped.company_name || mapped.first_name || "",
     sector: mapped.sector || "",
     table: 0,
-    revenue: mapped.revenue || "",
+    revenue,
     cap: mapped.capital_raised || mapped.last_round || "",
     salesStage,
     pmf,
     primaryMarket: mapped.primary_market || "",
-    employees: mapped.employees || mapped.team_size || "",
+    employees,
   };
 
   return computeStageScore(company);
