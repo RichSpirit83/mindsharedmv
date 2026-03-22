@@ -1,38 +1,28 @@
 
 
-## Plan: Add Consistent Workspace Navigation to All Breakout Pages
+## Plan: Simplify Cohort Executive Summary Layout
 
-### Problem
-The matching workspace has a navigation bar, but Session Config and Lead Briefings don't. Need the same nav bar across all three session-scoped pages.
+### Changes to `src/components/CohortSummary.tsx`
 
-### Approach
-Extract the navigation bar into a shared component, then use it in all three pages.
+Restructure the component to show:
 
-### Changes
+1. **Written summary at the top** — Move the existing text overview (with highlighted KPIs) above everything else. Add capital raised info to the summary text.
 
-**New file: `src/components/WorkspaceNav.tsx`**
-- Shared component accepting `sessionId` and `activePage` ("config" | "matching" | "briefings") props
-- Renders the same horizontal tab bar currently in MatchingWorkspace: Session Config, Matching, Lead Briefings, Present (new tab), PDF download
-- Active page gets the underline style; others are clickable links
-- Optional `rightContent` slot for page-specific actions (e.g., Save/Generate buttons)
+2. **4 stat cards in a row below the summary:**
+   - **Number of Companies** — total count
+   - **Breakout by Revenue** — top revenue band + count (e.g., "$1M-$5M (40%)")
+   - **Breakout by Capital Raised** — top capital raised band + count (uses `capital_raised` field from column mapping)
+   - **Breakout by Sector** — top sector + count
 
-**File: `src/pages/admin/SessionConfig.tsx`**
-- Import and render `<WorkspaceNav sessionId={sessionId} activePage="config" />` at the top of the page, replacing the current header
-- Move the save status indicator into the nav's right content area
+3. **Remove everything else** — Delete all charts (sector bar, stage donut, revenue bar, radar, geography) and the old stat cards row (Sectors, Top Stage, Locations).
 
-**File: `src/pages/admin/LeadBriefings.tsx`**
-- Import and render `<WorkspaceNav sessionId={sessionId} activePage="briefings" />` replacing the current "Back to Matching" button and header
-- Move the "Generate All Briefings" button into the nav's right content area
+### Data changes
+- Add `capital_raised` aggregation to the `useMemo` stats computation (same `countBy` pattern as revenue/sector)
+- Update the written summary to mention capital raised
+- Simplify stat cards to show the top value + percentage for revenue, capital raised, and sector
 
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
-- Replace the inline nav bar (lines 857-888) with `<WorkspaceNav sessionId={sessionId} activePage="matching" />` and pass the Lock All / Generate buttons as right content
-
-### Summary
-
+### File changed
 | File | Change |
 |------|--------|
-| `src/components/WorkspaceNav.tsx` | New shared workspace navigation bar component |
-| `src/pages/admin/SessionConfig.tsx` | Add WorkspaceNav at top |
-| `src/pages/admin/LeadBriefings.tsx` | Replace back button with WorkspaceNav |
-| `src/pages/admin/MatchingWorkspace.tsx` | Extract inline nav into shared WorkspaceNav |
+| `src/components/CohortSummary.tsx` | Restructure: text summary on top, 4 simplified stat cards below, remove all charts |
 
