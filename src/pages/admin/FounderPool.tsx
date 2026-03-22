@@ -318,15 +318,52 @@ export default function FounderPool() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => { setSelectedFounder(r.mapped_data); setDialogOpen(true); }}
                     >
-                      {displayColumns.map((col) => (
-                        <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
-                          {col === "session_name" ? (
-                            <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
-                          ) : (
-                            r.mapped_data[col] || ""
-                          )}
-                        </TableCell>
-                      ))}
+                      {displayColumns.map((col) => {
+                        if (col === "_stage_score") {
+                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const pct = Math.round((score.score / 3) * 100);
+                          return (
+                            <TableCell key={col} className="whitespace-nowrap text-sm">
+                              <div className="flex items-center gap-2 min-w-[100px]">
+                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{ width: `${pct}%`, backgroundColor: score.color }}
+                                  />
+                                </div>
+                                <span className="text-xs font-semibold" style={{ color: score.color }}>
+                                  {score.score.toFixed(2)}
+                                </span>
+                              </div>
+                            </TableCell>
+                          );
+                        }
+                        if (col === "_stage") {
+                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          return (
+                            <TableCell key={col} className="whitespace-nowrap text-sm">
+                              <span
+                                className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium"
+                                style={{
+                                  backgroundColor: `${score.color}26`,
+                                  color: score.color,
+                                }}
+                              >
+                                {score.label}
+                              </span>
+                            </TableCell>
+                          );
+                        }
+                        return (
+                          <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
+                            {col === "session_name" ? (
+                              <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
+                            ) : (
+                              r.mapped_data[col] || ""
+                            )}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   ))}
                 </TableBody>
