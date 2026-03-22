@@ -16,6 +16,7 @@ import FounderProfileDialog from "@/components/FounderProfileDialog";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import { CANONICAL_FIELDS, autoMapHeaders } from "@/lib/founderFields";
+import { computeStageScoreFromMapped } from "@/components/cohort/companyData";
 
 type ImportStep = "idle" | "select-session" | "mapping" | "preview";
 
