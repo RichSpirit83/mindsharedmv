@@ -16,6 +16,7 @@ import FounderProfileDialog from "@/components/FounderProfileDialog";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import { CANONICAL_FIELDS, autoMapHeaders } from "@/lib/founderFields";
+import { computeStageScoreFromMapped } from "@/components/cohort/companyData";
 
 type ImportStep = "idle" | "select-session" | "mapping" | "preview";
 
@@ -74,7 +75,7 @@ export default function FounderPool() {
     return ordered;
   }, [rawData]);
 
-  const displayColumns = ["session_name", ...allColumns];
+  const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -93,6 +94,8 @@ export default function FounderPool() {
 
   const formatHeader = (key: string) => {
     if (key === "session_name") return "Session";
+    if (key === "_stage_score") return "Score";
+    if (key === "_stage") return "Stage";
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
@@ -104,6 +107,12 @@ export default function FounderPool() {
     });
     if (sortField) {
       result = [...result].sort((a, b) => {
+        // Sort by computed score numerically
+        if (sortField === "_stage_score" || sortField === "_stage") {
+          const aScore = computeStageScoreFromMapped(a.mapped_data).score;
+          const bScore = computeStageScoreFromMapped(b.mapped_data).score;
+          return sortDir === "asc" ? aScore - bScore : bScore - aScore;
+        }
         const aVal = sortField === "session_name" ? a.session_name : (a.mapped_data[sortField] || "");
         const bVal = sortField === "session_name" ? b.session_name : (b.mapped_data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
@@ -309,15 +318,52 @@ export default function FounderPool() {
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => { setSelectedFounder(r.mapped_data); setDialogOpen(true); }}
                     >
-                      {displayColumns.map((col) => (
-                        <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
-                          {col === "session_name" ? (
-                            <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
-                          ) : (
-                            r.mapped_data[col] || ""
-                          )}
-                        </TableCell>
-                      ))}
+                      {displayColumns.map((col) => {
+                        if (col === "_stage_score") {
+                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const pct = Math.round((score.score / 3) * 100);
+                          return (
+                            <TableCell key={col} className="whitespace-nowrap text-sm">
+                              <div className="flex items-center gap-2 min-w-[100px]">
+                                <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                                  <div
+                                    className="h-full rounded-full transition-all"
+                                    style={{ width: `${pct}%`, backgroundColor: score.color }}
+                                  />
+                                </div>
+                                <span className="text-xs font-semibold" style={{ color: score.color }}>
+                                  {score.score.toFixed(2)}
+                                </span>
+                              </div>
+                            </TableCell>
+                          );
+                        }
+                        if (col === "_stage") {
+                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          return (
+                            <TableCell key={col} className="whitespace-nowrap text-sm">
+                              <span
+                                className="inline-block px-2 py-0.5 rounded-full text-[11px] font-medium"
+                                style={{
+                                  backgroundColor: `${score.color}26`,
+                                  color: score.color,
+                                }}
+                              >
+                                {score.label}
+                              </span>
+                            </TableCell>
+                          );
+                        }
+                        return (
+                          <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
+                            {col === "session_name" ? (
+                              <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
+                            ) : (
+                              r.mapped_data[col] || ""
+                            )}
+                          </TableCell>
+                        );
+                      })}
                     </TableRow>
                   ))}
                 </TableBody>

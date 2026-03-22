@@ -148,13 +148,43 @@ export function computeStageScore(company: Company): StageScore {
   const pmfPts = company.pmf ? 1 : 0;
   const empPts = EMPLOYEE_SCORE[company.employees] ?? 0;
 
-  // Weighted composite normalized to 0–3
   const raw = stagePts * 0.4 + revPts * 0.3 + pmfPts * 0.15 + empPts * 0.15;
-  // pmf (0-1) and emp (0-1) contribute max 0.15 each; stage max 1.2; rev max 0.9 → max = 2.7
-  // Normalize so max possible → 3
   const maxPossible = 3 * 0.4 + 3 * 0.3 + 1 * 0.15 + 1 * 0.15;
   const score = Math.round(((raw / maxPossible) * 3) * 100) / 100;
 
   const tier = STAGE_SCORE_THRESHOLDS.find(t => score <= t.max) || STAGE_SCORE_THRESHOLDS[3];
   return { score, label: tier.label, color: tier.color };
+}
+
+/** Compute stage score from mapped_data fields (snake_case keys from DB) */
+export function computeStageScoreFromMapped(mapped: Record<string, string>): StageScore {
+  const salesStageRaw = mapped.sales_stage || mapped.salesStage || "";
+  // Normalize common variations
+  const stageMap: Record<string, string> = {
+    "founder-led sales": "Founder-Led",
+    "founder-led": "Founder-Led",
+    "refining process": "Refining",
+    "refining": "Refining",
+    "building repeatable": "Building Repeatable",
+    "team-led sales": "Team-Led",
+    "team-led": "Team-Led",
+  };
+  const salesStage = stageMap[salesStageRaw.toLowerCase().trim()] || salesStageRaw;
+
+  const pmfRaw = (mapped.pmf || mapped.product_market_fit || "").toLowerCase().trim();
+  const pmf = pmfRaw === "true" || pmfRaw === "yes" || pmfRaw === "1";
+
+  const company: Company = {
+    name: mapped.company_name || mapped.first_name || "",
+    sector: mapped.sector || "",
+    table: 0,
+    revenue: mapped.revenue || "",
+    cap: mapped.capital_raised || mapped.last_round || "",
+    salesStage,
+    pmf,
+    primaryMarket: mapped.primary_market || "",
+    employees: mapped.employees || mapped.team_size || "",
+  };
+
+  return computeStageScore(company);
 }
