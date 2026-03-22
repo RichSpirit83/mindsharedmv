@@ -1,12 +1,23 @@
-import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useState, useMemo, useRef, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Building2, Search, ArrowUpDown, ArrowUp, ArrowDown, Upload, ClipboardPaste } from "lucide-react";
+import { toast } from "@/hooks/use-toast";
+import Papa from "papaparse";
 import FounderProfileDialog from "@/components/FounderProfileDialog";
+import ColumnMapper from "@/components/ColumnMapper";
+import CsvPreviewTable from "@/components/CsvPreviewTable";
+import { CANONICAL_FIELDS, autoMapHeaders } from "@/lib/founderFields";
+
+type ImportStep = "idle" | "select-session" | "mapping" | "preview";
 
 export default function FounderPool() {
   const [search, setSearch] = useState("");
@@ -15,28 +26,47 @@ export default function FounderPool() {
   const [selectedFounder, setSelectedFounder] = useState<Record<string, string> | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  // Import state
+  const [importStep, setImportStep] = useState<ImportStep>("idle");
+  const [importMode, setImportMode] = useState<"csv" | "paste" | null>(null);
+  const [selectedSessionId, setSelectedSessionId] = useState<string>("");
+  const [pasteText, setPasteText] = useState("");
+  const [csvData, setCsvData] = useState<Record<string, string>[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [columnMapping, setColumnMapping] = useState<Record<string, string>>({});
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
+  const { data: sessions = [] } = useQuery({
+    queryKey: ["breakout_sessions_list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("breakout_sessions").select("id, session_name").order("created_at", { ascending: false });
+      return data || [];
+    },
+  });
+
   const { data: rawData = [], isLoading } = useQuery({
     queryKey: ["founder_pool"],
     queryFn: async () => {
-      const { data: sessions } = await supabase.from("breakout_sessions").select("id, session_name");
+      const { data: sessionsData } = await supabase.from("breakout_sessions").select("id, session_name");
       const sessionMap: Record<string, string> = {};
-      (sessions || []).forEach((s) => { sessionMap[s.id] = s.session_name; });
+      (sessionsData || []).forEach((s) => { sessionMap[s.id] = s.session_name; });
 
       const { data: companies, error } = await supabase.from("breakout_companies").select("*");
       if (error) throw error;
       return (companies || []).map((c) => ({
         id: c.id,
+        session_id: c.session_id,
         session_name: sessionMap[c.session_id] || "Unknown",
         mapped_data: (c.mapped_data || {}) as Record<string, string>,
       }));
     },
   });
 
-  // Dynamically collect all unique column keys from mapped_data across all founders
   const allColumns = useMemo(() => {
     const keySet = new Set<string>();
     rawData.forEach((r) => Object.keys(r.mapped_data).forEach((k) => keySet.add(k)));
-    // Put common fields first, then alphabetical rest
     const priority = ["first_name", "last_name", "company_name", "email", "sector", "sales_stage", "revenue", "city", "state_province", "country"];
     const ordered: string[] = [];
     priority.forEach((p) => { if (keySet.has(p)) { ordered.push(p); keySet.delete(p); } });
@@ -84,6 +114,138 @@ export default function FounderPool() {
     return result;
   }, [rawData, search, sortField, sortDir]);
 
+  // ---- Import logic ----
+
+  const resetImport = () => {
+    setImportStep("idle");
+    setImportMode(null);
+    setSelectedSessionId("");
+    setPasteText("");
+    setCsvData([]);
+    setCsvHeaders([]);
+    setColumnMapping({});
+  };
+
+  const startImport = (mode: "csv" | "paste") => {
+    setImportMode(mode);
+    setImportStep("select-session");
+  };
+
+  const handleSessionSelected = () => {
+    if (!selectedSessionId) return;
+    if (importMode === "csv") {
+      fileRef.current?.click();
+    } else {
+      // paste mode — show paste dialog (step handled within dialog)
+    }
+  };
+
+  const handleFileChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: true,
+      complete: (results) => {
+        const headers = results.meta.fields || [];
+        setCsvHeaders(headers);
+        setCsvData(results.data as Record<string, string>[]);
+        const autoMap = autoMapHeaders(headers);
+        setColumnMapping(autoMap);
+        setImportStep("mapping");
+      },
+    });
+    e.target.value = "";
+  }, []);
+
+  const handleParsePaste = () => {
+    if (!pasteText.trim()) return;
+    const result = Papa.parse(pasteText.trim(), { header: true, skipEmptyLines: true, delimiter: "" });
+    const headers = result.meta.fields || [];
+    const data = result.data as Record<string, string>[];
+
+    if (headers.length === 0 || data.length === 0) {
+      const fallback = Papa.parse(pasteText.trim(), { header: false, skipEmptyLines: true, delimiter: "" });
+      const rows = fallback.data as string[][];
+      if (rows.length > 0) {
+        const defaultHeaders = CANONICAL_FIELDS.slice(0, Math.max(...rows.map(r => r.length)));
+        const asObjects = rows.map(row => {
+          const obj: Record<string, string> = {};
+          defaultHeaders.forEach((h, i) => { obj[h] = row[i] || ""; });
+          return obj;
+        });
+        setCsvHeaders(defaultHeaders);
+        setCsvData(asObjects);
+        setColumnMapping(autoMapHeaders(defaultHeaders));
+        setImportStep("mapping");
+        return;
+      }
+      toast({ title: "Could not parse data", variant: "destructive" });
+      return;
+    }
+
+    setCsvHeaders(headers);
+    setCsvData(data);
+    setColumnMapping(autoMapHeaders(headers));
+    setImportStep("mapping");
+  };
+
+  const handleImport = async () => {
+    if (!selectedSessionId || csvData.length === 0) return;
+    setImporting(true);
+
+    try {
+      // Build mapped rows
+      const newRows = csvData.map((row) => {
+        const mapped: Record<string, string> = {};
+        Object.entries(columnMapping).forEach(([canonical, csvHeader]) => {
+          if (csvHeader && row[csvHeader]) mapped[canonical] = row[csvHeader];
+        });
+        return { raw_data: row, mapped_data: mapped };
+      });
+
+      // Dedup: check existing companies in this session
+      const existingInSession = rawData.filter(r => r.session_id === selectedSessionId);
+      const normalize = (s: string) => (s || "").toLowerCase().trim();
+      const existingKeys = new Set(
+        existingInSession.map(r =>
+          `${normalize(r.mapped_data.first_name)}|${normalize(r.mapped_data.last_name)}|${normalize(r.mapped_data.company_name)}`
+        )
+      );
+
+      const uniqueRows = newRows.filter(r => {
+        const key = `${normalize(r.mapped_data.first_name)}|${normalize(r.mapped_data.last_name)}|${normalize(r.mapped_data.company_name)}`;
+        return !existingKeys.has(key);
+      });
+
+      const skipped = newRows.length - uniqueRows.length;
+
+      if (uniqueRows.length > 0) {
+        const inserts = uniqueRows.map(r => ({
+          session_id: selectedSessionId,
+          raw_data: r.raw_data,
+          mapped_data: r.mapped_data,
+        }));
+
+        const { error } = await supabase.from("breakout_companies").insert(inserts);
+        if (error) throw error;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["founder_pool"] });
+      toast({
+        title: "Import complete",
+        description: `${uniqueRows.length} companies added${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`,
+      });
+      resetImport();
+    } catch (err: any) {
+      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const importDialogOpen = importStep !== "idle";
+
   return (
     <div className="p-6 flex flex-col h-[calc(100vh-3.5rem)] overflow-hidden">
       <div className="flex items-center justify-between">
@@ -92,9 +254,17 @@ export default function FounderPool() {
           <h1 className="text-2xl font-heading font-bold">Founder Participants</h1>
           <Badge variant="secondary">{rawData.length} founders</Badge>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => startImport("csv")}>
+            <Upload className="h-4 w-4 mr-1" /> Upload CSV
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => startImport("paste")}>
+            <ClipboardPaste className="h-4 w-4 mr-1" /> Paste Data
+          </Button>
+        </div>
       </div>
 
-      <div className="relative max-w-sm">
+      <div className="relative max-w-sm mt-4">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           value={search}
@@ -104,7 +274,7 @@ export default function FounderPool() {
         />
       </div>
 
-      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden mt-6">
+      <Card className="flex-1 min-h-0 flex flex-col overflow-hidden mt-4">
         <CardContent className="p-0 flex-1 min-h-0 overflow-auto">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Loading…</div>
@@ -160,6 +330,105 @@ export default function FounderPool() {
         onOpenChange={setDialogOpen}
         data={selectedFounder}
       />
+
+      {/* Hidden file input */}
+      <input ref={fileRef} type="file" accept=".csv" className="hidden" onChange={handleFileChange} />
+
+      {/* Import Dialog */}
+      <Dialog open={importDialogOpen} onOpenChange={(o) => { if (!o) resetImport(); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {importMode === "csv" ? <Upload className="h-5 w-5" /> : <ClipboardPaste className="h-5 w-5" />}
+              {importStep === "select-session" && "Select Cohort"}
+              {importStep === "mapping" && "Map Columns"}
+              {importStep === "preview" && `Preview Import (${csvData.length} records)`}
+            </DialogTitle>
+          </DialogHeader>
+
+          {importStep === "select-session" && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">
+                Choose which cohort (session) this new data belongs to.
+              </p>
+              <Select value={selectedSessionId} onValueChange={setSelectedSessionId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a cohort…" />
+                </SelectTrigger>
+                <SelectContent>
+                  {sessions.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.session_name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              {importMode === "paste" && (
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">
+                    Paste rows from a spreadsheet. Include a header row. Tab and comma separators are auto-detected.
+                  </p>
+                  <Textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    placeholder={"Company Name\tFirst Name\tLast Name\tEmail\tSector\nAcme Inc\tJane\tDoe\tjane@acme.com\tTech"}
+                    rows={8}
+                    className="font-mono text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={resetImport}>Cancel</Button>
+                {importMode === "csv" ? (
+                  <Button disabled={!selectedSessionId} onClick={handleSessionSelected}>
+                    Choose File
+                  </Button>
+                ) : (
+                  <Button disabled={!selectedSessionId || !pasteText.trim()} onClick={handleParsePaste}>
+                    Parse & Continue
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {importStep === "mapping" && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary">{csvData.length} rows detected</Badge>
+              </div>
+              <ColumnMapper
+                csvHeaders={csvHeaders}
+                canonicalFields={CANONICAL_FIELDS}
+                mapping={columnMapping}
+                onMappingChange={setColumnMapping}
+                onConfirm={() => setImportStep("preview")}
+              />
+              <div className="flex gap-2 justify-start">
+                <Button variant="outline" size="sm" onClick={() => setImportStep("select-session")}>
+                  Back
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {importStep === "preview" && (
+            <div className="space-y-4">
+              <CsvPreviewTable
+                data={csvData}
+                mapping={columnMapping}
+                onDeleteRow={(index) => setCsvData((prev) => prev.filter((_, i) => i !== index))}
+              />
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setImportStep("mapping")}>Back to Mapping</Button>
+                <Button onClick={handleImport} disabled={importing}>
+                  {importing ? "Importing…" : `Import ${csvData.length} Records`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
