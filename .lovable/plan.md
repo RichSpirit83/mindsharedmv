@@ -1,40 +1,28 @@
 
 
-## Plan: Fix Stage Score Computation for Database Data
+## Plan: Fix Presentation View Page
 
-### Root Cause
-The `computeStageScoreFromMapped()` function uses field names and value formats that don't match the actual database `mapped_data`. Every signal returns 0 because nothing matches.
+### Problem
+The "Present" button in the workspace navigation uses `window.open()` to open the presentation view in a new tab. In the Lovable preview iframe environment, `window.open()` may not work correctly, and the page may fail to load.
 
-### Mismatches Found
+Additionally, there may be no clear way to navigate back or test the page directly.
 
-| Signal | Code expects | Actual DB value |
-|--------|-------------|-----------------|
-| Sales Stage field | `sales_stage` | `sales_stage` (correct) |
-| Sales Stage value | `"building repeatable"` | `"Building a repeatable process – I have a structured sales process and am working on making it scalable beyond the founder."` |
-| PMF field | `pmf` or `product_market_fit` | `has_pmf` |
-| PMF value | `"true"`, `"yes"`, `"1"` | `"checked"` |
-| Revenue value | `"$2M-$5M"` | `"2M-5M"` (no $ sign) |
-| Employees field | `employees` or `team_size` | `employee_count` |
+### Approach
+Two changes to make the presentation view accessible:
 
-### Fix in `src/components/cohort/companyData.ts`
+**1. Add a direct route within the admin layout** (or make it navigable without `window.open`)
 
-Update `computeStageScoreFromMapped()`:
+In `WorkspaceNav.tsx`, change the Present button from `window.open` to a standard `navigate()` call using React Router, or provide both options (navigate + open in new tab).
 
-1. **Sales stage normalization** — Use `includes()` matching instead of exact match. The DB values are full sentences like "Building a repeatable process...", so match on keywords:
-   - Contains "founder-led" → "Founder-Led"
-   - Contains "refining" → "Refining"
-   - Contains "repeatable" → "Building Repeatable"
-   - Contains "team-led" → "Team-Led"
+**2. Verify the page renders correctly**
 
-2. **PMF field** — Also check `has_pmf`. Accept `"checked"` as a truthy value.
+The page code itself looks correct. The `breakout_table_assignments` table returns empty results for this session, so tables will show "0 participants" — but the page structure (header, carousel, prompts, timer) should still render.
 
-3. **Revenue normalization** — Strip `$` and match flexibly. Add mappings for values without dollar signs: `"2M-5M"` → `"$2M-$5M"`, `"501K-1M"` → `"$501K-$1M"`, etc.
-
-4. **Employees field** — Also check `employee_count`.
-
-### Summary
+### Changes
 
 | File | Change |
 |------|--------|
-| `src/components/cohort/companyData.ts` | Fix field name lookups and value normalization in `computeStageScoreFromMapped()` |
+| `src/components/WorkspaceNav.tsx` | Change the Present button to use `navigate()` instead of `window.open()`, or add a fallback link |
 
+### Alternative
+If the issue is specifically a build/runtime error not visible in current logs, I can use browser tools to navigate directly to the present page and capture the actual error. Would you like me to test the page first before making changes?
