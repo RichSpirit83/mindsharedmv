@@ -435,7 +435,18 @@ export default function SessionConfig() {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, saveSessionMetadata]);
 
-  // Auto-sync imported lead to lead_pool
+  // Schedule a debounced roster save (called after state-setting roster mutations)
+  const scheduleRosterSave = useCallback(() => {
+    rosterDirtyRef.current = true;
+    if (rosterSaveTimer.current) clearTimeout(rosterSaveTimer.current);
+    rosterSaveTimer.current = setTimeout(() => {
+      if (rosterDirtyRef.current) {
+        rosterDirtyRef.current = false;
+        saveRosterData();
+      }
+    }, 2500);
+  }, [saveRosterData]);
+
   const syncToLeadPool = async (lead: TableLead) => {
     try {
       await (supabase.from("lead_pool" as any).insert({
