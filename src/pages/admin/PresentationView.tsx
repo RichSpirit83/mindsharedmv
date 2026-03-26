@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil, Eye, EyeOff, X } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil, Eye, EyeOff, X, Share2, Check, Copy } from "lucide-react";
+import { toast } from "sonner";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface LeadDisplay {
