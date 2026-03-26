@@ -209,8 +209,39 @@ ${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributi
 
     const parsed = JSON.parse(toolCall.function.arguments);
 
+    // Post-processing: rebalance tables if any are too small or too large
+    const rawTables = parsed.tables || [];
+    const rebalancedMin = Math.floor(companies.length / numTables);
+    const rebalancedMax = rebalancedMin + (companies.length % numTables > 0 ? 1 : 0);
+
+    // Flatten all indices and rebuild if needed
+    let needsRebalance = rawTables.some((t: any) =>
+      (t.company_indices || []).length < rebalancedMin || (t.company_indices || []).length > rebalancedMax + 1
+    );
+
+    if (needsRebalance) {
+      console.log("Rebalancing tables due to uneven distribution");
+      // Sort tables by size (smallest first) and move from largest to smallest
+      let sorted = [...rawTables].sort((a: any, b: any) =>
+        (a.company_indices || []).length - (b.company_indices || []).length
+      );
+      let maxIter = 100;
+      while (maxIter-- > 0) {
+        const smallest = sorted[0];
+        const largest = sorted[sorted.length - 1];
+        if ((smallest.company_indices || []).length >= rebalancedMin) break;
+        if ((largest.company_indices || []).length <= rebalancedMin) break;
+        // Move last company from largest to smallest
+        const moved = largest.company_indices.pop();
+        smallest.company_indices.push(moved);
+        sorted.sort((a: any, b: any) =>
+          (a.company_indices || []).length - (b.company_indices || []).length
+        );
+      }
+    }
+
     // Map company indices back to company data
-    const tables = (parsed.tables || []).map((table: any) => ({
+    const tables = rawTables.map((table: any) => ({
       table_number: table.table_number,
       table_name: table.table_name,
       theme: table.theme,
