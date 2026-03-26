@@ -1,37 +1,21 @@
 
 
-## Plan: Editable Founder Records + De-duplication
+## Plan: De-duplicate Companies Before Matching
 
-### 1. Editable Founder Profile Dialog
+### Problem
+The `breakout_companies` table can contain duplicate rows for the same company within a session (e.g., SUSA appears twice). The matching engine sends all rows to the AI, causing duplicates in table assignments.
 
-**File: `src/components/FounderProfileDialog.tsx`**
+### Fix
 
-- Add an "Edit" toggle button in the dialog header
-- When in edit mode, render each field as an `Input` instead of plain text
-- Track edits in local state; on "Save", update `mapped_data` in `breakout_companies` for all DB rows belonging to that founder (important for deduped founders spanning multiple sessions)
-- Pass the founder's DB row IDs and a `queryClient.invalidateQueries` callback from the parent
+**File: `src/pages/admin/MatchingWorkspace.tsx`**
 
-**File: `src/pages/admin/FounderPool.tsx`**
+After fetching `dbCompanies` and building `fullCompanyData` (line ~130), deduplicate by company name (case-insensitive) before setting state. Merge `mapped_data` from duplicates (prefer non-empty values), keeping only one record per unique company.
 
-- Pass the list of underlying `breakout_companies` IDs to the dialog so it knows which rows to update
-- After save, invalidate the `founder_pool` query to refresh the table
+Same dedup logic should also apply to the `companies` (chips) array.
 
-### 2. De-duplicate Founders Across Sessions
-
-**File: `src/pages/admin/FounderPool.tsx`**
-
-- After fetching `rawData`, group rows by a dedup key: `email` (if present) or `first_name|last_name|company_name`
-- Merge grouped rows into a single display record with:
-  - Combined `session_names: string[]` (shown as multiple badges)
-  - Combined `ids: string[]` (all underlying DB row IDs, needed for editing)
-  - Merged `mapped_data` (union of fields, preferring the most complete record)
-- Update the table rendering to show multiple session badges per row instead of a single one
-- The `session_name` column becomes a list of badge tags
-
-### Changes Summary
+This is a ~10-line change: wrap the `dbCompanies` array in a dedup function before `.map()` calls on lines 117-130.
 
 | File | Change |
 |------|--------|
-| `src/components/FounderProfileDialog.tsx` | Add edit mode with inline inputs and save-to-DB logic |
-| `src/pages/admin/FounderPool.tsx` | Dedup founders by email/name+company, merge sessions into tags, pass IDs to dialog |
+| `src/pages/admin/MatchingWorkspace.tsx` | Deduplicate `dbCompanies` by company name before building chips and `fullCompanyData` |
 
