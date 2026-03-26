@@ -488,6 +488,8 @@ export default function MatchingWorkspace() {
 
     const isCompanyDrag = source.droppableId.startsWith("companies-");
 
+    let updatedTables: TableGroup[] = [];
+
     if (isCompanyDrag) {
       const srcTableIdx = parseInt(source.droppableId.replace("companies-", ""));
       const destTableIdx = parseInt(destination.droppableId.replace("companies-", ""));
@@ -495,6 +497,7 @@ export default function MatchingWorkspace() {
         const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
         const [movedCompany] = next[srcTableIdx].companies.splice(source.index, 1);
         next[destTableIdx].companies.splice(destination.index, 0, movedCompany);
+        updatedTables = next;
         return next;
       });
     } else {
@@ -506,18 +509,39 @@ export default function MatchingWorkspace() {
         next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
         next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
         next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+        updatedTables = next;
         return next;
       });
     }
-  }, []);
+
+    // Persist the updated tables to DB
+    setTimeout(() => {
+      if (updatedTables.length > 0) {
+        saveTablesToDb(updatedTables).catch((err) => {
+          console.error("Failed to save drag changes:", err);
+          toast.error("Failed to save changes");
+        });
+      }
+    }, 0);
+  }, [sessionId, fullCompanyData]);
 
   const handleRemoveCompany = useCallback((tableIndex: number, companyIndex: number) => {
+    let updatedTables: TableGroup[] = [];
     setTables((prev) => {
       const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
       next[tableIndex].companies.splice(companyIndex, 1);
+      updatedTables = next;
       return next;
     });
-  }, []);
+    setTimeout(() => {
+      if (updatedTables.length > 0) {
+        saveTablesToDb(updatedTables).catch((err) => {
+          console.error("Failed to save removal:", err);
+          toast.error("Failed to save changes");
+        });
+      }
+    }, 0);
+  }, [sessionId, fullCompanyData]);
 
   const openProfile = (data: Record<string, string>) => {
     setSelectedProfile(data);
