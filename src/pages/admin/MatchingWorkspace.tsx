@@ -1002,6 +1002,7 @@ export default function MatchingWorkspace() {
           sessionId={sessionId || ""}
           activePage="matching"
           onDownloadPdf={handleDownloadPdf}
+          onDownloadCsv={handleDownloadCsv}
           rightContent={
             <>
               <Button variant="outline" size="sm" disabled>

@@ -43,6 +43,14 @@ export default function WorkspaceNav({ sessionId, activePage, rightContent, onDo
         >
           <Monitor className="h-3.5 w-3.5" /> Present
         </button>
+        {onDownloadCsv && (
+          <button
+            onClick={onDownloadCsv}
+            className="px-3 py-3 text-sm font-medium border-b-2 border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/30 transition-colors inline-flex items-center gap-1.5"
+          >
+            <Download className="h-3.5 w-3.5" /> CSV
+          </button>
+        )}
         {onDownloadPdf && (
           <button
             onClick={onDownloadPdf}
