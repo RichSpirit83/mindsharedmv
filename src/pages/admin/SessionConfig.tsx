@@ -746,7 +746,7 @@ export default function SessionConfig() {
     setLeadCsvDialogOpen(false);
     setLeadCsvData([]);
     toast.success(`Added ${newLeads.length} leads`);
-
+    scheduleRosterSave();
     // Sync to lead pool
     for (const l of newLeads) { await syncToLeadPool(l); }
   };
