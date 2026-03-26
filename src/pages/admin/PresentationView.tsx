@@ -334,7 +334,11 @@ export default function PresentationView() {
                           <div className="mb-2 text-xs text-white/30 font-medium">{table.companies.length} participants</div>
                           <div className="space-y-1 flex-1">
                             {table.companies.map((c, ci) => (
-                              <div key={ci} className="flex items-center justify-between text-sm py-1 px-2 rounded bg-white/[0.04]">
+                              <div
+                                key={ci}
+                                className="flex items-center justify-between text-sm py-1 px-2 rounded bg-white/[0.04] cursor-pointer hover:bg-white/[0.1] transition"
+                                onClick={() => setSelectedCompany(c.mapped_data)}
+                              >
                                 <span className="font-medium text-white/90">{c.first_name} {c.last_name}</span>
                                 <span className="text-white/40 text-xs truncate ml-2 max-w-[45%] text-right">{c.company_name}</span>
                               </div>
