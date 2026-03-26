@@ -170,6 +170,20 @@ export default function PresentationView() {
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
 
+  const handleStartEditing = (table: TableDisplay) => {
+    setEditingTableId(table.id);
+    setEditingName(table.table_name);
+  };
+
+  const handleSaveName = async (id: string) => {
+    const trimmed = editingName.trim();
+    const { error } = await supabase.from("breakout_tables").update({ table_name: trimmed }).eq("id", id);
+    if (!error) {
+      setTables((prev) => prev.map((t) => (t.id === id ? { ...t, table_name: trimmed } : t)));
+    }
+    setEditingTableId(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[hsl(230,25%,8%)] flex items-center justify-center">
