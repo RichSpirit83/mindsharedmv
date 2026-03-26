@@ -563,6 +563,7 @@ export default function SessionConfig() {
     setPoolSelection(new Set());
     setPoolDialogOpen(false);
     toast.success(`Added ${newLeads.length} lead${newLeads.length > 1 ? "s" : ""} from pool`);
+    scheduleRosterSave();
   };
 
   const togglePoolSelection = (id: string) => {
