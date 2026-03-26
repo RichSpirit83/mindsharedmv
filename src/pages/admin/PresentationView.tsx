@@ -76,6 +76,7 @@ export default function PresentationView() {
             return lead ? { name: lead.name, company: lead.company || "", title: lead.title || "" } : { name };
           });
           return {
+            id: t.id,
             table_number: t.table_number,
             table_name: t.table_name || "",
             theme: t.theme || "",
