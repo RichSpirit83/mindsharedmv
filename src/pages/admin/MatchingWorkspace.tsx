@@ -35,6 +35,7 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Tag,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -1204,6 +1205,61 @@ export default function MatchingWorkspace() {
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Tag className="h-4 w-4 mr-1" /> Table Signs
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent side="top" align="end" className="w-96 max-h-[70vh] overflow-auto p-0">
+                <div className="px-4 py-3 border-b sticky top-0 bg-popover z-10">
+                  <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">All participants with their table numbers</p>
+                </div>
+                <div className="divide-y">
+                  {(() => {
+                    const roundTables = tables.filter((t) => t.round_number === activeRound);
+                    const allPeople = roundTables.flatMap((t) => [
+                      ...t.assigned_leads.map((l) => ({
+                        name: l.name,
+                        company: l.company || "",
+                        tableNum: t.table_number,
+                        tableName: t.table_name,
+                        isLead: true,
+                      })),
+                      ...t.companies.map((c) => ({
+                        name: `${c.first_name}${c.last_name ? ` ${c.last_name}` : ""}`,
+                        company: c.company_name,
+                        tableNum: t.table_number,
+                        tableName: t.table_name,
+                        isLead: false,
+                      })),
+                    ]).sort((a, b) => a.name.localeCompare(b.name));
+                    
+                    if (allPeople.length === 0) {
+                      return <p className="text-sm text-muted-foreground text-center py-6">No assignments for Round {activeRound}</p>;
+                    }
+                    
+                    return allPeople.map((p, i) => (
+                      <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-muted/50">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm font-medium truncate">{p.name}</span>
+                            {p.isLead && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">Lead</Badge>}
+                          </div>
+                          {p.company && <p className="text-xs text-muted-foreground truncate">{p.company}</p>}
+                        </div>
+                        <div className="shrink-0 ml-3 text-right">
+                          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold">
+                            {p.tableNum}
+                          </span>
+                        </div>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              </PopoverContent>
+            </Popover>
             <Button variant="outline" onClick={() => generateMatches()} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : `Regenerate Round ${activeRound}`}
             </Button>
