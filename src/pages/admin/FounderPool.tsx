@@ -24,7 +24,7 @@ export default function FounderPool() {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [selectedFounder, setSelectedFounder] = useState<Record<string, string> | null>(null);
+  const [selectedFounder, setSelectedFounder] = useState<{ data: Record<string, string>; ids: string[]; sessionNames: string[] } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Import state
@@ -65,15 +65,41 @@ export default function FounderPool() {
     },
   });
 
+  // De-duplicate founders across sessions
+  const dedupedData = useMemo(() => {
+    const groups = new Map<string, { data: Record<string, string>; ids: string[]; sessionNames: string[] }>();
+    rawData.forEach((r) => {
+      const email = (r.mapped_data.email || "").toLowerCase().trim();
+      const key = email || `${(r.mapped_data.first_name || "").toLowerCase().trim()}|${(r.mapped_data.last_name || "").toLowerCase().trim()}|${(r.mapped_data.company_name || "").toLowerCase().trim()}`;
+      if (!key || key === "||") {
+        // Can't dedup, treat as unique
+        groups.set(r.id, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
+        return;
+      }
+      const existing = groups.get(key);
+      if (existing) {
+        existing.ids.push(r.id);
+        if (!existing.sessionNames.includes(r.session_name)) existing.sessionNames.push(r.session_name);
+        // Merge: prefer non-empty values
+        Object.entries(r.mapped_data).forEach(([k, v]) => {
+          if (v && !existing.data[k]) existing.data[k] = v;
+        });
+      } else {
+        groups.set(key, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
+      }
+    });
+    return Array.from(groups.values());
+  }, [rawData]);
+
   const allColumns = useMemo(() => {
     const keySet = new Set<string>();
-    rawData.forEach((r) => Object.keys(r.mapped_data).forEach((k) => keySet.add(k)));
+    dedupedData.forEach((r) => Object.keys(r.data).forEach((k) => keySet.add(k)));
     const priority = ["first_name", "last_name", "company_name", "email", "sector", "sales_stage", "revenue", "city", "state_province", "country"];
     const ordered: string[] = [];
     priority.forEach((p) => { if (keySet.has(p)) { ordered.push(p); keySet.delete(p); } });
     Array.from(keySet).sort().forEach((k) => ordered.push(k));
     return ordered;
-  }, [rawData]);
+  }, [dedupedData]);
 
   const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
 
@@ -101,27 +127,26 @@ export default function FounderPool() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    let result = rawData.filter((r) => {
-      const vals = Object.values(r.mapped_data).join(" ").toLowerCase();
-      return vals.includes(q) || r.session_name.toLowerCase().includes(q);
+    let result = dedupedData.filter((r) => {
+      const vals = Object.values(r.data).join(" ").toLowerCase();
+      return vals.includes(q) || r.sessionNames.join(" ").toLowerCase().includes(q);
     });
     if (sortField) {
       result = [...result].sort((a, b) => {
-        // Sort by computed score numerically
         if (sortField === "_stage_score" || sortField === "_stage") {
-          const aScore = computeStageScoreFromMapped(a.mapped_data).score;
-          const bScore = computeStageScoreFromMapped(b.mapped_data).score;
+          const aScore = computeStageScoreFromMapped(a.data).score;
+          const bScore = computeStageScoreFromMapped(b.data).score;
           return sortDir === "asc" ? aScore - bScore : bScore - aScore;
         }
-        const aVal = sortField === "session_name" ? a.session_name : (a.mapped_data[sortField] || "");
-        const bVal = sortField === "session_name" ? b.session_name : (b.mapped_data[sortField] || "");
+        const aVal = sortField === "session_name" ? a.sessionNames.join(", ") : (a.data[sortField] || "");
+        const bVal = sortField === "session_name" ? b.sessionNames.join(", ") : (b.data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
         if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
         return 0;
       });
     }
     return result;
-  }, [rawData, search, sortField, sortDir]);
+  }, [dedupedData, search, sortField, sortDir]);
 
   // ---- Import logic ----
 
@@ -262,7 +287,7 @@ export default function FounderPool() {
         <div className="flex items-center gap-3">
           <Building2 className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-heading font-bold">Founder Participants</h1>
-          <Badge variant="secondary">{rawData.length} founders</Badge>
+          <Badge variant="secondary">{dedupedData.length} founders</Badge>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => startImport("csv")}>
@@ -312,15 +337,15 @@ export default function FounderPool() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r) => (
+                  {filtered.map((r, idx) => (
                     <TableRow
-                      key={r.id}
+                      key={r.ids[0] || idx}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => { setSelectedFounder(r.mapped_data); setDialogOpen(true); }}
+                      onClick={() => { setSelectedFounder(r); setDialogOpen(true); }}
                     >
                       {displayColumns.map((col) => {
                         if (col === "_stage_score") {
-                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const score = computeStageScoreFromMapped(r.data);
                           const pct = Math.round((score.score / 3) * 100);
                           return (
                             <TableCell key={col} className="whitespace-nowrap text-sm">
@@ -339,7 +364,7 @@ export default function FounderPool() {
                           );
                         }
                         if (col === "_stage") {
-                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const score = computeStageScoreFromMapped(r.data);
                           return (
                             <TableCell key={col} className="whitespace-nowrap text-sm">
                               <span
@@ -357,9 +382,13 @@ export default function FounderPool() {
                         return (
                           <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
                             {col === "session_name" ? (
-                              <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
+                              <div className="flex flex-wrap gap-1">
+                                {r.sessionNames.map((s, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">{s}</Badge>
+                                ))}
+                              </div>
                             ) : (
-                              r.mapped_data[col] || ""
+                              r.data[col] || ""
                             )}
                           </TableCell>
                         );
@@ -376,7 +405,10 @@ export default function FounderPool() {
       <FounderProfileDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        data={selectedFounder}
+        data={selectedFounder?.data || null}
+        ids={selectedFounder?.ids || []}
+        sessionNames={selectedFounder?.sessionNames || []}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ["founder_pool"] })}
       />
 
       {/* Hidden file input */}
