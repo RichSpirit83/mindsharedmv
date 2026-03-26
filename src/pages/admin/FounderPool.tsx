@@ -127,27 +127,26 @@ export default function FounderPool() {
 
   const filtered = useMemo(() => {
     const q = search.toLowerCase();
-    let result = rawData.filter((r) => {
-      const vals = Object.values(r.mapped_data).join(" ").toLowerCase();
-      return vals.includes(q) || r.session_name.toLowerCase().includes(q);
+    let result = dedupedData.filter((r) => {
+      const vals = Object.values(r.data).join(" ").toLowerCase();
+      return vals.includes(q) || r.sessionNames.join(" ").toLowerCase().includes(q);
     });
     if (sortField) {
       result = [...result].sort((a, b) => {
-        // Sort by computed score numerically
         if (sortField === "_stage_score" || sortField === "_stage") {
-          const aScore = computeStageScoreFromMapped(a.mapped_data).score;
-          const bScore = computeStageScoreFromMapped(b.mapped_data).score;
+          const aScore = computeStageScoreFromMapped(a.data).score;
+          const bScore = computeStageScoreFromMapped(b.data).score;
           return sortDir === "asc" ? aScore - bScore : bScore - aScore;
         }
-        const aVal = sortField === "session_name" ? a.session_name : (a.mapped_data[sortField] || "");
-        const bVal = sortField === "session_name" ? b.session_name : (b.mapped_data[sortField] || "");
+        const aVal = sortField === "session_name" ? a.sessionNames.join(", ") : (a.data[sortField] || "");
+        const bVal = sortField === "session_name" ? b.sessionNames.join(", ") : (b.data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
         if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
         return 0;
       });
     }
     return result;
-  }, [rawData, search, sortField, sortDir]);
+  }, [dedupedData, search, sortField, sortDir]);
 
   // ---- Import logic ----
 
