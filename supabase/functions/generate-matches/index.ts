@@ -102,7 +102,9 @@ serve(async (req) => {
       return parts.join(" | ");
     }).join("\n");
 
-    const systemPrompt = `You are an expert event facilitator creating optimized breakout table assignments for a CEO peer-group event. You must assign ALL ${companies.length} companies to exactly ${numTables} tables with roughly ${targetPerTable} companies each.
+    const systemPrompt = `You are an expert event facilitator creating optimized breakout table assignments for a CEO peer-group event. You must assign ALL ${companies.length} companies to exactly ${numTables} tables.
+
+HARD SIZE CONSTRAINT: Each table MUST have between ${minPerTable} and ${maxPerTable} companies. No table may have fewer than ${minPerTable} or more than ${maxPerTable}. This is a strict requirement — do NOT create unbalanced tables.
 
 GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
 
@@ -110,6 +112,7 @@ ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
 ${shuffleConstraint}
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
+- Each table must have between ${minPerTable} and ${maxPerTable} companies (HARD CONSTRAINT)
 ${competitorRule}
 - Each table needs a clear thematic rationale
 - Tables should foster productive peer conversation
