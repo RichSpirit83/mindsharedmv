@@ -72,6 +72,7 @@ interface LeadChip {
 }
 
 interface TableGroup {
+  db_id?: string;
   table_number: number;
   table_name: string;
   theme: string;
