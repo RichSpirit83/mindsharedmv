@@ -1,28 +1,38 @@
 
 
-## Plan: Fix Presentation View Page
+## Plan: Add "Paste Emails" Button to Pull Leads from Pool
 
-### Problem
-The "Present" button in the workspace navigation uses `window.open()` to open the presentation view in a new tab. In the Lovable preview iframe environment, `window.open()` may not work correctly, and the page may fail to load.
-
-Additionally, there may be no clear way to navigate back or test the page directly.
-
-### Approach
-Two changes to make the presentation view accessible:
-
-**1. Add a direct route within the admin layout** (or make it navigable without `window.open`)
-
-In `WorkspaceNav.tsx`, change the Present button from `window.open` to a standard `navigate()` call using React Router, or provide both options (navigate + open in new tab).
-
-**2. Verify the page renders correctly**
-
-The page code itself looks correct. The `breakout_table_assignments` table returns empty results for this session, so tables will show "0 participants" — but the page structure (header, carousel, prompts, timer) should still render.
+### What
+Add a new button in the Table Leads section header that lets the user paste a list of email addresses. The system matches each email against the Lead Pool and auto-populates the full lead profiles for any matches.
 
 ### Changes
 
+**New file: `src/components/PasteEmailsDialog.tsx`**
+- Dialog with a `Textarea` for pasting emails (one per line, or comma-separated)
+- On submit, parse emails, query `lead_pool` for matching records
+- Show results: matched leads (with name/company preview) and unmatched emails
+- User confirms to add matched leads to the session
+
+**File: `src/pages/admin/SessionConfig.tsx`**
+- Add state for the new dialog (`emailPasteDialogOpen`)
+- Add a new button in the Table Leads `headerRight` section: `<Mail /> Paste Emails`
+- On confirm, add matched leads to the session leads array (same as `addFromPool` logic)
+- Sync added leads to lead pool (already in session)
+
+### Flow
+1. User clicks "Paste Emails"
+2. Pastes email addresses into textarea
+3. Clicks "Look Up" — system queries lead_pool by email
+4. Shows matched leads (checkable) and any unmatched emails
+5. User confirms — leads are added to the session
+
+### Technical Details
+- Query: `supabase.from("lead_pool").select("*").in("email", parsedEmails)`
+- Reuses existing `addFromPool()` helper to create `TableLead` objects
+- Deduplicates against leads already in the session (same check as pool dialog)
+
 | File | Change |
 |------|--------|
-| `src/components/WorkspaceNav.tsx` | Change the Present button to use `navigate()` instead of `window.open()`, or add a fallback link |
+| `src/components/PasteEmailsDialog.tsx` | New dialog component |
+| `src/pages/admin/SessionConfig.tsx` | Add button + dialog integration |
 
-### Alternative
-If the issue is specifically a build/runtime error not visible in current logs, I can use browser tools to navigate directly to the present page and capture the actual error. Would you like me to test the page first before making changes?
