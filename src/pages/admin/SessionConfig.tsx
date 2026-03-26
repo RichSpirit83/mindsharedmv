@@ -1231,6 +1231,7 @@ export default function SessionConfig() {
           setNumLeads((prev) => prev + newLeads.length);
           setEmailPasteDialogOpen(false);
           toast.success(`Added ${newLeads.length} lead${newLeads.length !== 1 ? "s" : ""} from email lookup`);
+          scheduleRosterSave();
         }}
       />
 
