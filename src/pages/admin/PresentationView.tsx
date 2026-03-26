@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil, Eye, EyeOff, X } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil, Eye, EyeOff, X, Share2, Check, Copy } from "lucide-react";
+import { toast } from "sonner";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface LeadDisplay {
@@ -39,7 +40,7 @@ function parseTimeToToday(timeStr: string): Date {
   return d;
 }
 
-export default function PresentationView() {
+export default function PresentationView({ isPublic = false }: { isPublic?: boolean }) {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
@@ -240,17 +241,32 @@ export default function PresentationView() {
     <div className="min-h-screen bg-[hsl(230,25%,8%)] text-white flex flex-col overflow-hidden">
       {/* Header */}
       <div className="text-center py-6 px-8 shrink-0 relative">
-        <button
-          onClick={() => navigate(`/admin/match/${sessionId}`)}
-          className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        {!isPublic && (
+          <button
+            onClick={() => navigate(`/admin/match/${sessionId}`)}
+            className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <h1 className="text-3xl font-bold tracking-tight">{session?.session_name || "Breakout Session"}</h1>
         {session?.session_date && (
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         )}
         <div className="absolute right-8 top-1/2 -translate-y-1/2 flex gap-2">
+          {!isPublic && (
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/present/${sessionId}`;
+                navigator.clipboard.writeText(url);
+                toast.success("Public link copied to clipboard");
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition bg-white/10 text-white/70 hover:bg-white/20"
+              title="Copy public share link"
+            >
+              <Share2 className="h-3 w-3" /> Share
+            </button>
+          )}
           <button
             onClick={() => setShowNames((v) => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showNames ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
@@ -292,7 +308,7 @@ export default function PresentationView() {
                           <div className="mb-3">
                             <div className="flex items-baseline gap-3 mb-1">
                               <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                              {showNames && (editingTableId === table.id ? (
+                              {showNames && (editingTableId === table.id && !isPublic ? (
                                 <input
                                   autoFocus
                                   value={editingName}
@@ -302,7 +318,7 @@ export default function PresentationView() {
                                   className="text-lg font-bold leading-tight bg-transparent border-b border-white/30 outline-none text-white w-full"
                                 />
                               ) : (
-                                <h2 className="text-lg font-bold leading-tight cursor-pointer hover:text-white/70" onDoubleClick={() => handleStartEditing(table)}>{table.table_name}</h2>
+                                <h2 className={`text-lg font-bold leading-tight ${!isPublic ? "cursor-pointer hover:text-white/70" : ""}`} onDoubleClick={() => !isPublic && handleStartEditing(table)}>{table.table_name}</h2>
                               ))}
                             </div>
                             {showThemes && <p className="text-xs text-white/40">{table.theme}</p>}
@@ -371,7 +387,7 @@ export default function PresentationView() {
 
                 {/* Timer */}
                 <div className="pt-8 border-t border-white/10 text-center space-y-4">
-                  {editingTime ? (
+                  {!isPublic && editingTime ? (
                     <div className="flex items-center justify-center gap-3">
                       <input
                         type="time"
@@ -389,17 +405,19 @@ export default function PresentationView() {
                       <button onClick={saveTime} className="px-4 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition">Save</button>
                       <button onClick={() => setEditingTime(false)} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 text-sm font-semibold transition">Cancel</button>
                     </div>
-                  ) : session?.breakout_start && session?.breakout_end ? (
+                  ) : !isPublic && session?.breakout_start && session?.breakout_end ? (
                     <button onClick={startEditingTime} className="inline-flex items-center gap-2 text-white/40 text-sm hover:text-white/60 transition">
                       {session.breakout_start} – {session.breakout_end}
                       <Pencil className="h-3 w-3" />
                     </button>
-                  ) : (
+                  ) : !isPublic && !session?.breakout_start ? (
                     <button onClick={startEditingTime} className="inline-flex items-center gap-2 text-white/40 text-sm hover:text-white/60 transition">
                       Set timer
                       <Pencil className="h-3 w-3" />
                     </button>
-                  )}
+                  ) : session?.breakout_start && session?.breakout_end ? (
+                    <p className="text-white/40 text-sm">{session.breakout_start} – {session.breakout_end}</p>
+                  ) : null}
                   <div className="text-[6rem] font-mono font-bold leading-none tracking-tight"
                     style={{ color: remainingSeconds !== null && remainingSeconds <= 60 ? "hsl(0, 72%, 51%)" : "white" }}>
                     {remainingSeconds !== null ? formatTime(remainingSeconds) : "--:--"}

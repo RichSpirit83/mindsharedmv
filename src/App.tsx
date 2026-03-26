@@ -81,6 +81,7 @@ const App = () => (
               }
             />
             <Route path="/s/:sessionSlug" element={<PublicAttendeeView />} />
+            <Route path="/present/:sessionId" element={<PresentationView isPublic />} />
             <Route path="/" element={<HomeRedirect />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
