@@ -1061,6 +1061,7 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick,
           <div className="flex items-center gap-2">
             <span className="font-heading font-bold text-sm">Table {table.table_number}</span>
             <Badge variant="outline" className="text-xs">{table.stage_mix}</Badge>
+            <Badge variant="secondary" className="text-xs">{table.companies.length + (table.assigned_leads?.length || 0)} people</Badge>
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7">
             <Lock className="h-3 w-3" />
