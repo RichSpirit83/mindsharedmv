@@ -51,6 +51,7 @@ const TABLE_COLORS = [
 ];
 
 interface CompanyChip {
+  db_company_id?: string;
   company_name: string;
   first_name: string;
   last_name?: string;
