@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft, Pencil, Eye, EyeOff } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface LeadDisplay {
@@ -47,6 +47,8 @@ export default function PresentationView() {
   const [loading, setLoading] = useState(true);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [showNames, setShowNames] = useState(true);
+  const [showThemes, setShowThemes] = useState(true);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingTime, setEditingTime] = useState(false);
@@ -247,6 +249,22 @@ export default function PresentationView() {
         {session?.session_date && (
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         )}
+        <div className="absolute right-8 top-1/2 -translate-y-1/2 flex gap-2">
+          <button
+            onClick={() => setShowNames((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showNames ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
+            title={showNames ? "Hide table names" : "Show table names"}
+          >
+            {showNames ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} Names
+          </button>
+          <button
+            onClick={() => setShowThemes((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showThemes ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
+            title={showThemes ? "Hide descriptions" : "Show descriptions"}
+          >
+            {showThemes ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} Themes
+          </button>
+        </div>
       </div>
 
       {/* Carousel */}
@@ -273,7 +291,7 @@ export default function PresentationView() {
                           <div className="mb-3">
                             <div className="flex items-baseline gap-3 mb-1">
                               <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                              {editingTableId === table.id ? (
+                              {showNames && (editingTableId === table.id ? (
                                 <input
                                   autoFocus
                                   value={editingName}
@@ -284,9 +302,9 @@ export default function PresentationView() {
                                 />
                               ) : (
                                 <h2 className="text-lg font-bold leading-tight cursor-pointer hover:text-white/70" onDoubleClick={() => handleStartEditing(table)}>{table.table_name}</h2>
-                              )}
+                              ))}
                             </div>
-                            <p className="text-xs text-white/40">{table.theme}</p>
+                            {showThemes && <p className="text-xs text-white/40">{table.theme}</p>}
                           </div>
                           {table.leads.length > 0 ? (
                             <div className="mb-3">
