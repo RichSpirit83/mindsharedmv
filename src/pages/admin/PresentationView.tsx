@@ -248,7 +248,18 @@ export default function PresentationView() {
                           <div className="mb-3">
                             <div className="flex items-baseline gap-3 mb-1">
                               <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                              <h2 className="text-lg font-bold leading-tight">{table.table_name}</h2>
+                              {editingTableId === table.id ? (
+                                <input
+                                  autoFocus
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onBlur={() => handleSaveName(table.id)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(table.id); if (e.key === "Escape") setEditingTableId(null); }}
+                                  className="text-lg font-bold leading-tight bg-transparent border-b border-white/30 outline-none text-white w-full"
+                                />
+                              ) : (
+                                <h2 className="text-lg font-bold leading-tight cursor-pointer hover:text-white/70" onDoubleClick={() => handleStartEditing(table)}>{table.table_name}</h2>
+                              )}
                             </div>
                             <p className="text-xs text-white/40">{table.theme}</p>
                           </div>
