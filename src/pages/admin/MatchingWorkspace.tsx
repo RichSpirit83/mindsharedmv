@@ -1016,7 +1016,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick, onRemoveCompany }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void; onRemoveCompany: (companyIndex: number) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
@@ -1108,24 +1108,53 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick 
           </Droppable>
         )}
 
-        {/* Companies */}
+        {/* Companies - Droppable */}
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-2">Companies</p>
-        {table.companies.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
-        ) : (
-          <div className="space-y-1">
-            {table.companies.map((c, i) => (
-              <div
-                key={i}
-                className="text-xs flex items-center justify-between p-1.5 rounded bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
-                onClick={() => c.mapped_data && onCompanyClick(c.mapped_data)}
-              >
-                <span className="font-medium">{c.company_name}</span>
-                <span className="text-muted-foreground">{c.first_name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <Droppable droppableId={`companies-${tableIndex}`}>
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={cn(
+                "space-y-1 min-h-[32px] rounded p-1 transition-colors",
+                snapshot.isDraggingOver && "bg-accent/30 ring-1 ring-accent/40"
+              )}
+            >
+              {table.companies.length === 0 ? (
+                <p className="text-xs text-muted-foreground/50 text-center py-1">Drop company here</p>
+              ) : (
+                table.companies.map((c, i) => (
+                  <Draggable key={`${tableIndex}-company-${i}`} draggableId={`${tableIndex}-company-${i}-${c.company_name}`} index={i}>
+                    {(dragProvided, dragSnapshot) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        {...dragProvided.dragHandleProps}
+                        className={cn(
+                          "text-xs flex items-center justify-between p-1.5 rounded bg-muted/50 cursor-grab hover:bg-muted transition-colors group",
+                          dragSnapshot.isDragging && "shadow-lg ring-2 ring-accent/40"
+                        )}
+                        onClick={() => c.mapped_data && onCompanyClick(c.mapped_data)}
+                      >
+                        <span className="font-medium">{c.company_name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">{c.first_name}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onRemoveCompany(i); }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))
+              )}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
       </CardContent>
     </Card>
   );
