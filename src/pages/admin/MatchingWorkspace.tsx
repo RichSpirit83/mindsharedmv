@@ -1205,61 +1205,70 @@ export default function MatchingWorkspace() {
 
         {hasGenerated && (
           <div className="p-4 border-t bg-card flex justify-end gap-2">
-            <Popover>
-              <PopoverTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <Tag className="h-4 w-4 mr-1" /> Table Signs
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent side="top" align="end" className="w-96 max-h-[70vh] overflow-auto p-0">
-                <div className="px-4 py-3 border-b sticky top-0 bg-popover z-10">
-                  <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">All participants with their table numbers</p>
-                </div>
-                <div className="divide-y">
-                  {(() => {
-                    const roundTables = tables.filter((t) => t.round_number === activeRound);
-                    const allPeople = roundTables.flatMap((t) => [
-                      ...t.assigned_leads.map((l) => ({
-                        name: l.name,
-                        company: l.company || "",
-                        tableNum: t.table_number,
-                        tableName: t.table_name,
-                        isLead: true,
-                      })),
-                      ...t.companies.map((c) => ({
-                        name: `${c.first_name}${c.last_name ? ` ${c.last_name}` : ""}`,
-                        company: c.company_name,
-                        tableNum: t.table_number,
-                        tableName: t.table_name,
-                        isLead: false,
-                      })),
-                    ]).sort((a, b) => a.name.localeCompare(b.name));
-                    
-                    if (allPeople.length === 0) {
-                      return <p className="text-sm text-muted-foreground text-center py-6">No assignments for Round {activeRound}</p>;
-                    }
-                    
-                    return allPeople.map((p, i) => (
-                      <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-muted/50">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm font-medium truncate">{p.name}</span>
-                            {p.isLead && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">Lead</Badge>}
-                          </div>
-                          {p.company && <p className="text-xs text-muted-foreground truncate">{p.company}</p>}
-                        </div>
-                        <div className="shrink-0 ml-3 text-right">
-                          <span className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold">
-                            {p.tableNum}
-                          </span>
-                        </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              </PopoverContent>
-            </Popover>
+            <TableSignsPopover
+              tables={tables}
+              activeRound={activeRound}
+              onReassignCompany={(personName, company, fromTableNum, toTableNum) => {
+                const roundTables = tables.filter((t) => t.round_number === activeRound);
+                const srcTable = roundTables.find((t) => t.table_number === fromTableNum);
+                const destTable = roundTables.find((t) => t.table_number === toTableNum);
+                if (!srcTable || !destTable) return;
+
+                const companyIdx = srcTable.companies.findIndex(
+                  (c) => `${c.first_name}${c.last_name ? ` ${c.last_name}` : ""}` === personName
+                );
+                if (companyIdx < 0) return;
+
+                const movedCompany = srcTable.companies[companyIdx];
+                const srcGlobal = tables.indexOf(srcTable);
+                const destGlobal = tables.indexOf(destTable);
+
+                setTables((prev) => {
+                  const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+                  next[srcGlobal].companies.splice(companyIdx, 1);
+                  next[destGlobal].companies.push(movedCompany);
+                  return next;
+                });
+
+                saveCompanyMove(movedCompany, srcTable, destTable).catch((err) => {
+                  console.error("Failed to save reassignment:", err);
+                  toast.error("Failed to save changes");
+                });
+              }}
+              onReassignLead={(leadName, fromTableNum, toTableNum) => {
+                const roundTables = tables.filter((t) => t.round_number === activeRound);
+                const srcTable = roundTables.find((t) => t.table_number === fromTableNum);
+                const destTable = roundTables.find((t) => t.table_number === toTableNum);
+                if (!srcTable || !destTable) return;
+
+                const leadIdx = srcTable.assigned_leads.findIndex((l) => l.name === leadName);
+                if (leadIdx < 0) return;
+
+                const srcGlobal = tables.indexOf(srcTable);
+                const destGlobal = tables.indexOf(destTable);
+
+                setTables((prev) => {
+                  const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
+                  const [movedLead] = next[srcGlobal].assigned_leads.splice(leadIdx, 1);
+                  next[destGlobal].assigned_leads.push(movedLead);
+                  next[srcGlobal].suggested_lead = next[srcGlobal].assigned_leads.map((l) => l.name).join(", ");
+                  next[destGlobal].suggested_lead = next[destGlobal].assigned_leads.map((l) => l.name).join(", ");
+                  return next;
+                });
+
+                setTimeout(() => {
+                  const updated = tables.filter((t) => t.round_number === activeRound);
+                  const uSrc = updated.find((t) => t.table_number === fromTableNum);
+                  const uDest = updated.find((t) => t.table_number === toTableNum);
+                  if (uSrc && uDest) {
+                    saveLeadMove(uSrc, uDest).catch((err) => {
+                      console.error("Failed to save lead reassignment:", err);
+                      toast.error("Failed to save changes");
+                    });
+                  }
+                }, 0);
+              }}
+            />
             <Button variant="outline" onClick={() => generateMatches()} disabled={isGenerating}>
               {isGenerating ? "Regenerating..." : `Regenerate Round ${activeRound}`}
             </Button>
@@ -1421,5 +1430,105 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick,
         </Droppable>
       </CardContent>
     </Card>
+  );
+}
+
+function TableSignsPopover({
+  tables,
+  activeRound,
+  onReassignCompany,
+  onReassignLead,
+}: {
+  tables: TableGroup[];
+  activeRound: number;
+  onReassignCompany: (personName: string, company: string, fromTableNum: number, toTableNum: number) => void;
+  onReassignLead: (leadName: string, fromTableNum: number, toTableNum: number) => void;
+}) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+
+  const roundTables = tables.filter((t) => t.round_number === activeRound);
+  const tableNumbers = roundTables.map((t) => t.table_number).sort((a, b) => a - b);
+
+  const allPeople = roundTables.flatMap((t) => [
+    ...t.assigned_leads.map((l) => ({
+      name: l.name,
+      company: l.company || "",
+      tableNum: t.table_number,
+      isLead: true,
+    })),
+    ...t.companies.map((c) => ({
+      name: `${c.first_name}${c.last_name ? ` ${c.last_name}` : ""}`,
+      company: c.company_name,
+      tableNum: t.table_number,
+      isLead: false,
+    })),
+  ]).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Tag className="h-4 w-4 mr-1" /> Table Signs
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="end" className="w-96 max-h-[70vh] overflow-auto p-0">
+        <div className="px-4 py-3 border-b sticky top-0 bg-popover z-10">
+          <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Click a table number to reassign</p>
+        </div>
+        <div className="divide-y">
+          {allPeople.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No assignments for Round {activeRound}</p>
+          ) : (
+            allPeople.map((p, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-muted/50">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium truncate">{p.name}</span>
+                    {p.isLead && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">Lead</Badge>}
+                  </div>
+                  {p.company && <p className="text-xs text-muted-foreground truncate">{p.company}</p>}
+                </div>
+                <div className="shrink-0 ml-3 relative">
+                  {editingIdx === i ? (
+                    <div className="flex items-center gap-1">
+                      {tableNumbers.filter((n) => n !== p.tableNum).map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => {
+                            if (p.isLead) {
+                              onReassignLead(p.name, p.tableNum, n);
+                            } else {
+                              onReassignCompany(p.name, p.company, p.tableNum, n);
+                            }
+                            setEditingIdx(null);
+                          }}
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-primary hover:text-primary-foreground text-sm font-bold transition-colors"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setEditingIdx(null)}
+                        className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-destructive/10 text-muted-foreground text-xs transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingIdx(i)}
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:ring-2 hover:ring-primary/40 transition-all"
+                    >
+                      {p.tableNum}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
