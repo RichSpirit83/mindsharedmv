@@ -49,6 +49,9 @@ export default function PresentationView() {
   const [selectedSlide, setSelectedSlide] = useState(0);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
+  const [editingTime, setEditingTime] = useState(false);
+  const [editStart, setEditStart] = useState("");
+  const [editEnd, setEditEnd] = useState("");
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
