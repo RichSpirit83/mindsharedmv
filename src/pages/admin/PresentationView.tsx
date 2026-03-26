@@ -199,11 +199,10 @@ export default function PresentationView() {
   const tablesByRound = rounds.map((r) => tables.filter((t) => t.round_number === r));
   const hasMultipleRounds = rounds.length > 1;
 
-  // Build slide labels: Round 1 Tables, Round 2 Tables, ..., Prompts, Timer
+  // Build slide labels: Round 1 Tables, Round 2 Tables, ..., Prompts & Timer
   const slideLabels = [
     ...rounds.map((r) => hasMultipleRounds ? `Round ${r}` : "Tables"),
-    "Prompts",
-    "Timer",
+    "Prompts & Timer",
   ];
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
@@ -304,7 +303,7 @@ export default function PresentationView() {
               );
             })}
 
-            {/* Prompts Slide */}
+            {/* Prompts & Timer Slide */}
             <div className="min-w-0 shrink-0 grow-0 basis-full h-full overflow-auto px-2 flex items-center justify-center">
               <div className="max-w-4xl w-full space-y-8">
                 <h2 className="text-2xl font-bold text-center text-white/80 uppercase tracking-wider mb-8">Discussion Prompts</h2>
@@ -320,39 +319,37 @@ export default function PresentationView() {
                     ))}
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Timer Slide */}
-            <div className="min-w-0 shrink-0 grow-0 basis-full h-full flex items-center justify-center">
-              <div className="text-center space-y-8">
-                {session?.breakout_start && session?.breakout_end && (
-                  <p className="text-white/40 text-lg">{session.breakout_start} – {session.breakout_end}</p>
-                )}
-                <div className="text-[12rem] font-mono font-bold leading-none tracking-tight"
-                  style={{ color: remainingSeconds !== null && remainingSeconds <= 60 ? "hsl(0, 72%, 51%)" : "white" }}>
-                  {remainingSeconds !== null ? formatTime(remainingSeconds) : "--:--"}
-                </div>
-                <div className="flex items-center justify-center gap-4">
-                  {!timerStarted ? (
-                    <button onClick={startTimer} className="flex items-center gap-2 px-8 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg font-semibold transition">
-                      <Play className="h-6 w-6" /> Start Timer
-                    </button>
-                  ) : (
-                    <>
-                      <button onClick={toggleTimer} className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg font-semibold transition">
-                        {timerRunning ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                        {timerRunning ? "Pause" : "Resume"}
+                {/* Timer */}
+                <div className="pt-8 border-t border-white/10 text-center space-y-4">
+                  {session?.breakout_start && session?.breakout_end && (
+                    <p className="text-white/40 text-sm">{session.breakout_start} – {session.breakout_end}</p>
+                  )}
+                  <div className="text-[6rem] font-mono font-bold leading-none tracking-tight"
+                    style={{ color: remainingSeconds !== null && remainingSeconds <= 60 ? "hsl(0, 72%, 51%)" : "white" }}>
+                    {remainingSeconds !== null ? formatTime(remainingSeconds) : "--:--"}
+                  </div>
+                  <div className="flex items-center justify-center gap-3">
+                    {!timerStarted ? (
+                      <button onClick={startTimer} className="flex items-center gap-2 px-6 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-base font-semibold transition">
+                        <Play className="h-5 w-5" /> Start Timer
                       </button>
-                      <button onClick={resetTimer} className="flex items-center gap-2 px-6 py-3 rounded-full bg-white/10 hover:bg-white/20 text-white text-lg font-semibold transition">
-                        <RotateCcw className="h-5 w-5" /> Reset
-                      </button>
-                    </>
+                    ) : (
+                      <>
+                        <button onClick={toggleTimer} className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-base font-semibold transition">
+                          {timerRunning ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                          {timerRunning ? "Pause" : "Resume"}
+                        </button>
+                        <button onClick={resetTimer} className="flex items-center gap-2 px-5 py-2 rounded-full bg-white/10 hover:bg-white/20 text-white text-base font-semibold transition">
+                          <RotateCcw className="h-4 w-4" /> Reset
+                        </button>
+                      </>
+                    )}
+                  </div>
+                  {!timerStarted && session?.breakout_start && (
+                    <p className="text-white/30 text-xs">Timer will auto-start at {session.breakout_start} local time</p>
                   )}
                 </div>
-                {!timerStarted && session?.breakout_start && (
-                  <p className="text-white/30 text-sm">Timer will auto-start at {session.breakout_start} local time</p>
-                )}
               </div>
             </div>
           </div>
