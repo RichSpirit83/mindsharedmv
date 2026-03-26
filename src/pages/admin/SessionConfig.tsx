@@ -281,6 +281,7 @@ export default function SessionConfig() {
         .single();
       if (!session) { toast.error("Session not found"); navigate("/admin"); return; }
 
+      setSessionStatus(session.status || "draft");
       setSessionName(session.session_name || "");
       if (session.session_date) setSessionDate(new Date(session.session_date));
       setBreakoutStart(session.breakout_start || "10:00");
