@@ -249,6 +249,22 @@ export default function PresentationView() {
         {session?.session_date && (
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         )}
+        <div className="absolute right-8 top-1/2 -translate-y-1/2 flex gap-2">
+          <button
+            onClick={() => setShowNames((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showNames ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
+            title={showNames ? "Hide table names" : "Show table names"}
+          >
+            {showNames ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} Names
+          </button>
+          <button
+            onClick={() => setShowThemes((v) => !v)}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showThemes ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
+            title={showThemes ? "Hide descriptions" : "Show descriptions"}
+          >
+            {showThemes ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />} Themes
+          </button>
+        </div>
       </div>
 
       {/* Carousel */}
