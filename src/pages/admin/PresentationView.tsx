@@ -47,6 +47,8 @@ export default function PresentationView() {
   const [loading, setLoading] = useState(true);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [showNames, setShowNames] = useState(true);
+  const [showThemes, setShowThemes] = useState(true);
   const [editingTableId, setEditingTableId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingTime, setEditingTime] = useState(false);
