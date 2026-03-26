@@ -17,7 +17,7 @@ interface TableDisplay {
   theme: string;
   suggested_lead: string;
   leads: LeadDisplay[];
-  companies: { company_name: string; first_name: string; last_name?: string }[];
+  companies: { company_name: string; first_name: string; last_name?: string; mapped_data: Record<string, string> }[];
   round_number: number;
 }
 
