@@ -40,7 +40,7 @@ function parseTimeToToday(timeStr: string): Date {
   return d;
 }
 
-export default function PresentationView() {
+export default function PresentationView({ isPublic = false }: { isPublic?: boolean }) {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
