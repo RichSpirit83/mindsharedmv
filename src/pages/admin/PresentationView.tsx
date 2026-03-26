@@ -451,6 +451,42 @@ export default function PresentationView() {
           </button>
         </div>
       </div>
+
+      {/* Company Detail Overlay */}
+      {selectedCompany && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm" onClick={() => setSelectedCompany(null)}>
+          <div
+            className="bg-[hsl(230,25%,12%)] border border-white/15 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between p-5 border-b border-white/10">
+              <div>
+                <h3 className="text-xl font-bold text-white">
+                  {selectedCompany.first_name} {selectedCompany.last_name}
+                </h3>
+                {selectedCompany.company_name && (
+                  <p className="text-sm text-white/50">{selectedCompany.company_name}</p>
+                )}
+              </div>
+              <button onClick={() => setSelectedCompany(null)} className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              {Object.entries(selectedCompany)
+                .filter(([k, v]) => v && !["first_name", "last_name"].includes(k))
+                .map(([key, value]) => (
+                  <div key={key} className="flex gap-3">
+                    <span className="text-xs font-medium text-white/40 uppercase tracking-wider min-w-[120px] shrink-0 pt-0.5">
+                      {key.replace(/_/g, " ")}
+                    </span>
+                    <span className="text-sm text-white/80 break-words">{value}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
