@@ -481,18 +481,40 @@ export default function MatchingWorkspace() {
     navigate(`/admin/leads/${sessionId}`);
   };
 
-  const handleLeadDragEnd = useCallback((result: DropResult) => {
+  const handleDragEnd = useCallback((result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-    const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
-    const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+
+    const isCompanyDrag = source.droppableId.startsWith("companies-");
+
+    if (isCompanyDrag) {
+      const srcTableIdx = parseInt(source.droppableId.replace("companies-", ""));
+      const destTableIdx = parseInt(destination.droppableId.replace("companies-", ""));
+      setTables((prev) => {
+        const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+        const [movedCompany] = next[srcTableIdx].companies.splice(source.index, 1);
+        next[destTableIdx].companies.splice(destination.index, 0, movedCompany);
+        return next;
+      });
+    } else {
+      const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
+      const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+      setTables((prev) => {
+        const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
+        const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
+        next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
+        next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
+        next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+        return next;
+      });
+    }
+  }, []);
+
+  const handleRemoveCompany = useCallback((tableIndex: number, companyIndex: number) => {
     setTables((prev) => {
-      const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
-      const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
-      next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
-      next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
-      next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+      const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+      next[tableIndex].companies.splice(companyIndex, 1);
       return next;
     });
   }, []);
