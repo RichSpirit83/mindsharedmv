@@ -417,7 +417,7 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
                     </button>
                   ) : session?.breakout_start && session?.breakout_end ? (
                     <p className="text-white/40 text-sm">{session.breakout_start} – {session.breakout_end}</p>
-                  )}
+                  ) : null}
                   <div className="text-[6rem] font-mono font-bold leading-none tracking-tight"
                     style={{ color: remainingSeconds !== null && remainingSeconds <= 60 ? "hsl(0, 72%, 51%)" : "white" }}>
                     {remainingSeconds !== null ? formatTime(remainingSeconds) : "--:--"}
