@@ -979,7 +979,7 @@ export default function SessionConfig() {
                   <Button variant="outline" size="sm" onClick={() => setShowMapper(!showMapper)}>
                     {showMapper ? "Hide Mapper" : "Edit Mapping"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); scheduleRosterSave(); }}>
                     Replace File
                   </Button>
                 </div>
