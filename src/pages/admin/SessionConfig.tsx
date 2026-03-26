@@ -651,7 +651,8 @@ export default function SessionConfig() {
   };
 
   const handleContinue = async () => {
-    await saveToDb();
+    await saveSessionMetadata();
+    await saveRosterData();
     navigate(`/admin/match/${sessionId}`);
   };
 
