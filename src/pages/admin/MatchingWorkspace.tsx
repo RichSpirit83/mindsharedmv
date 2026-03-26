@@ -602,6 +602,34 @@ export default function MatchingWorkspace() {
     setProfileOpen(true);
   };
 
+  const handleDownloadCsv = () => {
+    if (tables.length === 0) { toast.error("No tables to export"); return; }
+    const escapeCsv = (val: string) => {
+      if (val.includes(",") || val.includes('"') || val.includes("\n")) return `"${val.replace(/"/g, '""')}"`;
+      return val;
+    };
+    const header = ["Round","Table #","Table Name","Theme","Company","First Name","Last Name","Sector","Stage","Revenue","Lead(s)"];
+    const rows = [header.map(escapeCsv).join(",")];
+    for (const t of tables) {
+      const leads = t.assigned_leads.map(l => l.name).join("; ");
+      for (const c of t.companies) {
+        rows.push([
+          String(t.round_number), String(t.table_number), t.table_name || "", t.theme || "",
+          c.company_name || "", c.first_name || "", c.last_name || "",
+          c.sector || "", c.stage || "", c.revenue || "", leads
+        ].map(escapeCsv).join(","));
+      }
+    }
+    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${sessionConfig?.session_name || "matching"}_export.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success("CSV downloaded");
+  };
+
   const handleDownloadPdf = () => {
     if (tables.length === 0) { toast.error("No tables to export"); return; }
     toast.info("Generating PDF...");
