@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste, BookmarkPlus, Library } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste, BookmarkPlus, Library, Mail } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
+import PasteEmailsDialog from "@/components/PasteEmailsDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
@@ -240,6 +241,7 @@ export default function SessionConfig() {
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
   const [leadLinkedinDialogOpen, setLeadLinkedinDialogOpen] = useState(false);
+  const [emailPasteDialogOpen, setEmailPasteDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
@@ -938,6 +940,10 @@ export default function SessionConfig() {
         contentClassName="space-y-6"
         headerRight={
           <div className="flex gap-2 flex-wrap">
+            {/* Paste Emails */}
+            <Button variant="outline" size="sm" onClick={() => setEmailPasteDialogOpen(true)}>
+              <Mail className="h-4 w-4 mr-1" /> Paste Emails
+            </Button>
             {/* LinkedIn Import */}
             <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
               <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
@@ -1153,6 +1159,20 @@ export default function SessionConfig() {
         open={leadPasteDialogOpen}
         onOpenChange={setLeadPasteDialogOpen}
         onImport={handleLeadPasteImport}
+      />
+
+      {/* Email Paste Dialog */}
+      <PasteEmailsDialog
+        open={emailPasteDialogOpen}
+        onOpenChange={setEmailPasteDialogOpen}
+        existingEmails={leads.map((l) => l.email).filter(Boolean)}
+        onImport={(poolLeads) => {
+          const newLeads = poolLeads.map((pl) => addFromPool(pl));
+          setLeads((prev) => [...prev, ...newLeads]);
+          setNumLeads((prev) => prev + newLeads.length);
+          setEmailPasteDialogOpen(false);
+          toast.success(`Added ${newLeads.length} lead${newLeads.length !== 1 ? "s" : ""} from email lookup`);
+        }}
       />
 
       {/* Lead LinkedIn Dialog */}
