@@ -52,16 +52,19 @@ serve(async (req) => {
 
     const designatedTableLeads = (leads || []).filter((l: any) => l.isTableLead);
     const hasDesignatedLeads = designatedTableLeads.length > 0;
+    const designatedLeadsCanCoverAllTables = designatedTableLeads.length >= numTables;
 
     const numLeads = (leads || []).length;
-    const leadsPerTable = numLeads > 0 ? Math.max(1, Math.round(numLeads / numTables)) : 0;
+    const minLeadsPerTable = numLeads > 0 ? Math.floor(numLeads / numTables) : 0;
+    const maxLeadsPerTable = numLeads > 0 ? Math.ceil(numLeads / numTables) : 0;
+    const hasLeadShortage = numLeads > 0 && numLeads < numTables;
 
     const leadDistributionInstruction = numLeads > 0
-      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Assign approximately ${leadsPerTable} lead(s) per table. Every lead MUST be assigned. Distribute leads as evenly as possible. Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables. The FIRST lead index in each table's list will be designated as the "Table Head".${hasDesignatedLeads ? ` ONLY leads marked with [DESIGNATED TABLE LEAD] may be placed as Table Head (first in the list). Non-designated leads must NEVER be the first lead index for any table.` : ` Choose the lead whose expertise is the strongest match for that table's theme.`}`
+      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Every lead MUST be assigned exactly once across all tables, and no lead index may appear in more than one table. ${hasLeadShortage ? `There are fewer leads than tables, so some tables should intentionally have no assigned leads. Do NOT duplicate leads to fill every table.` : `Aim for roughly ${minLeadsPerTable === maxLeadsPerTable ? `${minLeadsPerTable}` : `${minLeadsPerTable}-${maxLeadsPerTable}`} lead(s) per table when possible.`} Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables. The FIRST lead index in each table's list will be designated as the "Table Head".${hasDesignatedLeads ? designatedLeadsCanCoverAllTables ? ` ONLY leads marked with [DESIGNATED TABLE LEAD] may be placed as Table Head (first in the list). Non-designated leads must NEVER be the first lead index for any table.` : ` Prioritize leads marked with [DESIGNATED TABLE LEAD] as Table Head where assigned. Because there are only ${designatedTableLeads.length} designated leads for ${numTables} tables, tables without a designated lead may have no lead or a non-designated lead first. Never duplicate leads.` : ` Choose the lead whose expertise is the strongest match for that table's theme.`}`
       : "";
 
     const leadAlignmentInstruction = numLeads > 0
-      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.${hasDesignatedLeads ? `\n\nDESIGNATED TABLE LEADS: Leads marked with [DESIGNATED TABLE LEAD] MUST be assigned as the FIRST lead (Table Head) at their respective tables. They take priority over other leads. There are ${designatedTableLeads.length} designated table leads — assign each one to the table where their expertise is most relevant. Leads NOT marked as [DESIGNATED TABLE LEAD] must be placed AFTER designated leads in each table's assigned_lead_indices array — they should NEVER appear first.` : ""}`
+      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.${hasDesignatedLeads ? designatedLeadsCanCoverAllTables ? `\n\nDESIGNATED TABLE LEADS: Leads marked with [DESIGNATED TABLE LEAD] MUST be assigned as the FIRST lead (Table Head) at their respective tables. They take priority over other leads. There are ${designatedTableLeads.length} designated table leads — assign each one to the table where their expertise is most relevant. Leads NOT marked as [DESIGNATED TABLE LEAD] must be placed AFTER designated leads in each table's assigned_lead_indices array — they should NEVER appear first.` : `\n\nDESIGNATED TABLE LEADS: Prioritize leads marked with [DESIGNATED TABLE LEAD] as first lead where possible. Since designated leads are fewer than tables, leave some tables without leads or place a non-designated lead first when needed. Do not duplicate designated or non-designated leads.` : ""}`
       : "";
 
     const leadMatchingInstruction = leadMatchingMode === "strict"
@@ -113,6 +116,7 @@ ${shuffleConstraint}
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
 - Each table must have between ${minPerTable} and ${maxPerTable} companies (HARD CONSTRAINT)
+- A lead index may be assigned to at most one table (no duplicate lead assignments)
 ${competitorRule}
 - Each table needs a clear thematic rationale
 - Tables should foster productive peer conversation
@@ -240,8 +244,63 @@ ${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributi
       }
     }
 
+    // Post-processing: ensure lead assignments are globally unique (no lead duplication across tables)
+    const enforceUniqueLeadAssignments = (tablesInput: any[]) => {
+      const totalLeads = (leads || []).length;
+      const normalizedTables = [...tablesInput]
+        .map((table: any) => ({
+          ...table,
+          assigned_lead_indices: Array.isArray(table.assigned_lead_indices)
+            ? table.assigned_lead_indices
+            : [],
+        }))
+        .sort((a: any, b: any) => (a.table_number || 0) - (b.table_number || 0));
+
+      if (totalLeads === 0) {
+        return normalizedTables.map((table: any) => ({ ...table, assigned_lead_indices: [] }));
+      }
+
+      const usedLeadIndices = new Set<number>();
+
+      normalizedTables.forEach((table: any) => {
+        const uniqueLeadIndices: number[] = [];
+        for (const rawIndex of table.assigned_lead_indices || []) {
+          const leadIndex = Number(rawIndex);
+          if (!Number.isInteger(leadIndex) || leadIndex < 1 || leadIndex > totalLeads) continue;
+          if (usedLeadIndices.has(leadIndex)) continue;
+          if (uniqueLeadIndices.includes(leadIndex)) continue;
+          uniqueLeadIndices.push(leadIndex);
+          usedLeadIndices.add(leadIndex);
+        }
+        table.assigned_lead_indices = uniqueLeadIndices;
+      });
+
+      const unassignedLeadIndices: number[] = [];
+      for (let i = 1; i <= totalLeads; i++) {
+        if (!usedLeadIndices.has(i)) unassignedLeadIndices.push(i);
+      }
+
+      unassignedLeadIndices.forEach((leadIndex) => {
+        normalizedTables.sort(
+          (a: any, b: any) =>
+            (a.assigned_lead_indices?.length || 0) - (b.assigned_lead_indices?.length || 0)
+        );
+        const targetTable = normalizedTables[0];
+        targetTable.assigned_lead_indices = [
+          ...(targetTable.assigned_lead_indices || []),
+          leadIndex,
+        ];
+      });
+
+      return normalizedTables.sort(
+        (a: any, b: any) => (a.table_number || 0) - (b.table_number || 0)
+      );
+    };
+
+    const leadSafeTables = enforceUniqueLeadAssignments(rawTables);
+
     // Map company indices back to company data
-    const tables = rawTables.map((table: any) => ({
+    const tables = leadSafeTables.map((table: any) => ({
       table_number: table.table_number,
       table_name: table.table_name,
       theme: table.theme,
