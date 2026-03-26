@@ -15,6 +15,8 @@ serve(async (req) => {
 
     const numTables = sessionConfig?.numTables || Math.ceil(companies.length / 6);
     const targetPerTable = sessionConfig?.targetPerTable || Math.ceil(companies.length / numTables);
+    const minPerTable = Math.floor(companies.length / numTables);
+    const maxPerTable = minPerTable + (companies.length % numTables > 0 ? 1 : 0);
     const groupingPriority = sessionConfig?.groupingPriority || "hybrid";
     const allowStageMixing =
       typeof sessionConfig?.allowStageMixing === "boolean"
@@ -100,7 +102,9 @@ serve(async (req) => {
       return parts.join(" | ");
     }).join("\n");
 
-    const systemPrompt = `You are an expert event facilitator creating optimized breakout table assignments for a CEO peer-group event. You must assign ALL ${companies.length} companies to exactly ${numTables} tables with roughly ${targetPerTable} companies each.
+    const systemPrompt = `You are an expert event facilitator creating optimized breakout table assignments for a CEO peer-group event. You must assign ALL ${companies.length} companies to exactly ${numTables} tables.
+
+HARD SIZE CONSTRAINT: Each table MUST have between ${minPerTable} and ${maxPerTable} companies. No table may have fewer than ${minPerTable} or more than ${maxPerTable}. This is a strict requirement — do NOT create unbalanced tables.
 
 GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
 
@@ -108,6 +112,7 @@ ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
 ${shuffleConstraint}
 CRITICAL RULES:
 - Every company must be assigned to exactly one table
+- Each table must have between ${minPerTable} and ${maxPerTable} companies (HARD CONSTRAINT)
 ${competitorRule}
 - Each table needs a clear thematic rationale
 - Tables should foster productive peer conversation
@@ -204,8 +209,39 @@ ${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributi
 
     const parsed = JSON.parse(toolCall.function.arguments);
 
+    // Post-processing: rebalance tables if any are too small or too large
+    const rawTables = parsed.tables || [];
+    const rebalancedMin = Math.floor(companies.length / numTables);
+    const rebalancedMax = rebalancedMin + (companies.length % numTables > 0 ? 1 : 0);
+
+    // Flatten all indices and rebuild if needed
+    let needsRebalance = rawTables.some((t: any) =>
+      (t.company_indices || []).length < rebalancedMin || (t.company_indices || []).length > rebalancedMax + 1
+    );
+
+    if (needsRebalance) {
+      console.log("Rebalancing tables due to uneven distribution");
+      // Sort tables by size (smallest first) and move from largest to smallest
+      let sorted = [...rawTables].sort((a: any, b: any) =>
+        (a.company_indices || []).length - (b.company_indices || []).length
+      );
+      let maxIter = 100;
+      while (maxIter-- > 0) {
+        const smallest = sorted[0];
+        const largest = sorted[sorted.length - 1];
+        if ((smallest.company_indices || []).length >= rebalancedMin) break;
+        if ((largest.company_indices || []).length <= rebalancedMin) break;
+        // Move last company from largest to smallest
+        const moved = largest.company_indices.pop();
+        smallest.company_indices.push(moved);
+        sorted.sort((a: any, b: any) =>
+          (a.company_indices || []).length - (b.company_indices || []).length
+        );
+      }
+    }
+
     // Map company indices back to company data
-    const tables = (parsed.tables || []).map((table: any) => ({
+    const tables = rawTables.map((table: any) => ({
       table_number: table.table_number,
       table_name: table.table_name,
       theme: table.theme,
