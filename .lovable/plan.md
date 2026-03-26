@@ -1,48 +1,42 @@
 
 
-## Plan: Add Company on the Fly + Drag-and-Drop Companies + Remove Companies in Matching
+## Plan: Fix URL Scraping + Add Bulk URL Import + Manual Add
 
-Three features to implement:
+### 1. Fix the scrape-company-name edge function (bug fix)
 
-### 1. Quick-Add Company by Website URL (SessionConfig)
-Add a button/dialog in the Company Data section where the user can paste a website URL. The system will use the Firecrawl connector (already configured) to scrape the website and extract the company name, then add a new row to the company data.
+The Firecrawl API is rejecting the request because `formats` contains an object `{ type: 'json', prompt: '...' }` instead of a string. Firecrawl v1 expects `formats: ['markdown']` with extraction as a separate top-level field, or simply use metadata/title extraction.
 
-**File: `src/components/AddCompanyByUrlDialog.tsx`** (new)
-- Dialog with a text input for website URL
-- On submit, call a new edge function or use existing Firecrawl scrape to extract company name from the page title/metadata
-- Adds a new row to csvData with `company_name` and `website` populated
+**File: `supabase/functions/scrape-company-name/index.ts`**
+- Change `formats: [{ type: 'json', prompt: '...' }]` to `formats: ['markdown']`
+- Extract company name from `metadata.title` (split on `|`, `-`, etc.) with domain fallback
+- This avoids the BAD_REQUEST error entirely
+
+### 2. Convert AddCompanyByUrlDialog to support bulk URLs
+
+**File: `src/components/AddCompanyByUrlDialog.tsx`**
+- Replace single `Input` with a `Textarea` for pasting multiple URLs (one per line)
+- Parse URLs, call the edge function for each one sequentially (with progress indicator)
+- Show results: successfully scraped companies and any failures
+- User confirms to add all successful results at once
+- Keep single-URL support (Enter key on single line)
+
+### 3. Add a "Manual Add" button for companies
 
 **File: `src/pages/admin/SessionConfig.tsx`**
-- Add "Add by URL" button next to Paste Emails in the Company Data card header
-- Wire dialog's onAdd callback to append to csvData
+- Add a "Manual Add" button in the Company Data header (next to "Paste Emails" and "Add by URL")
+- Opens a small dialog with an input for company name (and optionally website)
+- On submit, appends the row to `csvData` directly — no scraping needed
 
-**File: `supabase/functions/scrape-company-name/index.ts`** (new)
-- Lightweight edge function that uses Firecrawl to scrape a URL with `formats: ['json']` and a prompt to extract the company name
-- Returns `{ success: true, company_name: "..." }`
-
-### 2. Drag-and-Drop Companies Between Tables (MatchingWorkspace)
-Currently leads are draggable but companies are static. Add drag-and-drop for company chips in the TableCard.
-
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
-- Wrap company list in each TableCard with a `<Droppable>` zone (id: `companies-{tableIndex}`)
-- Wrap each company chip in a `<Draggable>`
-- Add a new `handleCompanyDragEnd` or expand `handleLeadDragEnd` to handle both lead and company drag types (distinguish by droppableId prefix `leads-` vs `companies-`)
-- Update `DragDropContext.onDragEnd` to route to the correct handler
-
-### 3. Remove Companies from Tables (MatchingWorkspace)
-Add a small "×" button on each company chip in the TableCard.
-
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
-- Add an `onRemoveCompany` callback prop to `TableCard`
-- Render an `X` icon button on each company row
-- On click, remove the company from that table's `companies` array via `setTables`
+**File: `src/components/ManualAddCompanyDialog.tsx`** (new)
+- Simple dialog with company name input + optional website input
+- Calls `onAdd({ company_name, website })` on submit
 
 ### Changes Summary
 
 | File | Change |
 |------|--------|
-| `src/components/AddCompanyByUrlDialog.tsx` | New dialog: paste URL → scrape company name → add to data |
-| `supabase/functions/scrape-company-name/index.ts` | New edge function using Firecrawl to extract company name |
-| `src/pages/admin/SessionConfig.tsx` | Add "Add by URL" button in Company Data header |
-| `src/pages/admin/MatchingWorkspace.tsx` | Add company drag-and-drop, add remove (×) button on company chips |
+| `supabase/functions/scrape-company-name/index.ts` | Fix Firecrawl formats param from object to string `'markdown'` |
+| `src/components/AddCompanyByUrlDialog.tsx` | Convert to bulk textarea, process multiple URLs with progress |
+| `src/components/ManualAddCompanyDialog.tsx` | New simple dialog for manual company name entry |
+| `src/pages/admin/SessionConfig.tsx` | Add "Manual Add" button wired to new dialog |
 
