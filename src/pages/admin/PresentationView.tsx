@@ -254,6 +254,19 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
         )}
         <div className="absolute right-8 top-1/2 -translate-y-1/2 flex gap-2">
+          {!isPublic && (
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/present/${sessionId}`;
+                navigator.clipboard.writeText(url);
+                toast.success("Public link copied to clipboard");
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition bg-white/10 text-white/70 hover:bg-white/20"
+              title="Copy public share link"
+            >
+              <Share2 className="h-3 w-3" /> Share
+            </button>
+          )}
           <button
             onClick={() => setShowNames((v) => !v)}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition ${showNames ? "bg-white/15 text-white/80" : "bg-white/5 text-white/40"}`}
