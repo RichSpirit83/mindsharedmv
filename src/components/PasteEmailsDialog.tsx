@@ -48,7 +48,7 @@ export default function PasteEmailsDialog({ open, onOpenChange, onImport, existi
   const parseEmails = (text: string): string[] => {
     return text
       .split(/[\n,;]+/)
-      .map((e) => e.trim().toLowerCase())
+      .map((e) => e.trim())
       .filter((e) => e && e.includes("@"));
   };
 
@@ -61,16 +61,19 @@ export default function PasteEmailsDialog({ open, onOpenChange, onImport, existi
 
     setLoading(true);
     try {
-      const { data, error } = await (supabase
-        .from("lead_pool" as any)
+      // Build OR filter for case-insensitive matching
+      const ilikeFilter = emails.map((e) => `email.ilike.${e}`).join(",");
+      const { data, error } = await supabase
+        .from("lead_pool")
         .select("*")
-        .in("email", emails) as any);
+        .or(ilikeFilter);
 
       if (error) throw error;
 
       const leads = (data || []) as PoolLead[];
       const matchedEmails = new Set(leads.map((l) => l.email?.toLowerCase()));
       const existingSet = new Set(existingEmails.map((e) => e.toLowerCase()));
+      const inputEmailsLower = new Set(emails.map((e) => e.toLowerCase()));
 
       const newMatched: PoolLead[] = [];
       const alreadyIn: string[] = [];
@@ -84,7 +87,7 @@ export default function PasteEmailsDialog({ open, onOpenChange, onImport, existi
         }
       }
 
-      const unmatchedEmails = emails.filter((e) => !matchedEmails.has(e));
+      const unmatchedEmails = emails.filter((e) => !matchedEmails.has(e.toLowerCase()));
 
       setMatched(newMatched);
       setUnmatched(unmatchedEmails);
