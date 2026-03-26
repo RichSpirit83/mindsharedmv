@@ -8,6 +8,7 @@ interface WorkspaceNavProps {
   activePage: "config" | "matching" | "briefings";
   rightContent?: ReactNode;
   onDownloadPdf?: () => void;
+  onDownloadCsv?: () => void;
 }
 
 const navItems = [
