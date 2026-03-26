@@ -114,20 +114,32 @@ export default function MatchingWorkspace() {
 
       const { data: dbCompanies } = await supabase.from("breakout_companies").select("*").eq("session_id", sessionId);
       if (dbCompanies) {
-        const chips: CompanyChip[] = dbCompanies.map((c) => {
+        // Deduplicate companies by name (case-insensitive)
+        const uniqueMap = new Map<string, Record<string, string>>();
+        dbCompanies.forEach((c) => {
           const m = (c.mapped_data || {}) as Record<string, string>;
-          return {
-            company_name: m.company_name || "",
-            first_name: m.first_name || "",
-            last_name: m.last_name || "",
-            sector: m.sector || "",
-            stage: m.sales_stage || "",
-            revenue: m.revenue || "",
-            mapped_data: m,
-          };
+          const key = (m.company_name || "").toLowerCase().trim();
+          if (!key) { uniqueMap.set(c.id, m); return; }
+          const existing = uniqueMap.get(key);
+          if (existing) {
+            // Merge: prefer non-empty values from either record
+            Object.entries(m).forEach(([k, v]) => { if (v && !existing[k]) existing[k] = v; });
+          } else {
+            uniqueMap.set(key, { ...m });
+          }
         });
+        const dedupedData = Array.from(uniqueMap.values());
+        const chips: CompanyChip[] = dedupedData.map((m) => ({
+          company_name: m.company_name || "",
+          first_name: m.first_name || "",
+          last_name: m.last_name || "",
+          sector: m.sector || "",
+          stage: m.sales_stage || "",
+          revenue: m.revenue || "",
+          mapped_data: m,
+        }));
         setCompanies(chips);
-        setFullCompanyData(dbCompanies.map((c) => (c.mapped_data || {}) as Record<string, string>));
+        setFullCompanyData(dedupedData);
       }
 
       const { data: dbLeads } = await supabase.from("breakout_leads").select("*").eq("session_id", sessionId);
