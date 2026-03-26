@@ -11,6 +11,7 @@ interface LeadDisplay {
 }
 
 interface TableDisplay {
+  id: string;
   table_number: number;
   table_name: string;
   theme: string;
