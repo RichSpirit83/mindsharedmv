@@ -356,6 +356,11 @@ export default function SessionConfig() {
         }
         const companyRows = csvData.map((row) => {
           const mapped: Record<string, string> = {};
+          // First, copy any canonical fields that exist directly on the row (manual/scraped entries)
+          for (const field of CANONICAL_FIELDS) {
+            if (row[field]) mapped[field] = row[field];
+          }
+          // Then overlay with column-mapped values (CSV rows)
           for (const [canonical, csvCol] of Object.entries(columnMapping)) {
             if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
           }
