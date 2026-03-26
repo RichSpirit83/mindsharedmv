@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, Play, Pause, RotateCcw, ArrowLeft } from "lucide-react";
 import useEmblaCarousel from "embla-carousel-react";
 
 interface LeadDisplay {
@@ -11,6 +11,7 @@ interface LeadDisplay {
 }
 
 interface TableDisplay {
+  id: string;
   table_number: number;
   table_name: string;
   theme: string;
@@ -40,11 +41,14 @@ function parseTimeToToday(timeStr: string): Date {
 
 export default function PresentationView() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
   const [tables, setTables] = useState<TableDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
@@ -72,6 +76,7 @@ export default function PresentationView() {
             return lead ? { name: lead.name, company: lead.company || "", title: lead.title || "" } : { name };
           });
           return {
+            id: t.id,
             table_number: t.table_number,
             table_name: t.table_name || "",
             theme: t.theme || "",
@@ -165,6 +170,20 @@ export default function PresentationView() {
   const scrollPrev = useCallback(() => emblaApi?.scrollPrev(), [emblaApi]);
   const scrollNext = useCallback(() => emblaApi?.scrollNext(), [emblaApi]);
 
+  const handleStartEditing = (table: TableDisplay) => {
+    setEditingTableId(table.id);
+    setEditingName(table.table_name);
+  };
+
+  const handleSaveName = async (id: string) => {
+    const trimmed = editingName.trim();
+    const { error } = await supabase.from("breakout_tables").update({ table_name: trimmed }).eq("id", id);
+    if (!error) {
+      setTables((prev) => prev.map((t) => (t.id === id ? { ...t, table_name: trimmed } : t)));
+    }
+    setEditingTableId(null);
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[hsl(230,25%,8%)] flex items-center justify-center">
@@ -192,7 +211,13 @@ export default function PresentationView() {
   return (
     <div className="min-h-screen bg-[hsl(230,25%,8%)] text-white flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="text-center py-6 px-8 shrink-0">
+      <div className="text-center py-6 px-8 shrink-0 relative">
+        <button
+          onClick={() => navigate(`/admin/match/${sessionId}`)}
+          className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+        >
+          <ArrowLeft className="h-5 w-5" />
+        </button>
         <h1 className="text-3xl font-bold tracking-tight">{session?.session_name || "Breakout Session"}</h1>
         {session?.session_date && (
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
@@ -223,7 +248,18 @@ export default function PresentationView() {
                           <div className="mb-3">
                             <div className="flex items-baseline gap-3 mb-1">
                               <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                              <h2 className="text-lg font-bold leading-tight">{table.table_name}</h2>
+                              {editingTableId === table.id ? (
+                                <input
+                                  autoFocus
+                                  value={editingName}
+                                  onChange={(e) => setEditingName(e.target.value)}
+                                  onBlur={() => handleSaveName(table.id)}
+                                  onKeyDown={(e) => { if (e.key === "Enter") handleSaveName(table.id); if (e.key === "Escape") setEditingTableId(null); }}
+                                  className="text-lg font-bold leading-tight bg-transparent border-b border-white/30 outline-none text-white w-full"
+                                />
+                              ) : (
+                                <h2 className="text-lg font-bold leading-tight cursor-pointer hover:text-white/70" onDoubleClick={() => handleStartEditing(table)}>{table.table_name}</h2>
+                              )}
                             </div>
                             <p className="text-xs text-white/40">{table.theme}</p>
                           </div>
