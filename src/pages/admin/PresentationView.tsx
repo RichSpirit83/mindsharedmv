@@ -387,7 +387,7 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
 
                 {/* Timer */}
                 <div className="pt-8 border-t border-white/10 text-center space-y-4">
-                  {editingTime ? (
+                  {!isPublic && editingTime ? (
                     <div className="flex items-center justify-center gap-3">
                       <input
                         type="time"
@@ -405,16 +405,18 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
                       <button onClick={saveTime} className="px-4 py-2 rounded-lg bg-white/20 hover:bg-white/30 text-white text-sm font-semibold transition">Save</button>
                       <button onClick={() => setEditingTime(false)} className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white/60 text-sm font-semibold transition">Cancel</button>
                     </div>
-                  ) : session?.breakout_start && session?.breakout_end ? (
+                  ) : !isPublic && session?.breakout_start && session?.breakout_end ? (
                     <button onClick={startEditingTime} className="inline-flex items-center gap-2 text-white/40 text-sm hover:text-white/60 transition">
                       {session.breakout_start} – {session.breakout_end}
                       <Pencil className="h-3 w-3" />
                     </button>
-                  ) : (
+                  ) : !isPublic && !session?.breakout_start ? (
                     <button onClick={startEditingTime} className="inline-flex items-center gap-2 text-white/40 text-sm hover:text-white/60 transition">
                       Set timer
                       <Pencil className="h-3 w-3" />
                     </button>
+                  ) : session?.breakout_start && session?.breakout_end ? (
+                    <p className="text-white/40 text-sm">{session.breakout_start} – {session.breakout_end}</p>
                   )}
                   <div className="text-[6rem] font-mono font-bold leading-none tracking-tight"
                     style={{ color: remainingSeconds !== null && remainingSeconds <= 60 ? "hsl(0, 72%, 51%)" : "white" }}>
