@@ -1,38 +1,48 @@
 
 
-## Plan: Add "Paste Emails" Button to Pull Leads from Pool
+## Plan: Add Company on the Fly + Drag-and-Drop Companies + Remove Companies in Matching
 
-### What
-Add a new button in the Table Leads section header that lets the user paste a list of email addresses. The system matches each email against the Lead Pool and auto-populates the full lead profiles for any matches.
+Three features to implement:
 
-### Changes
+### 1. Quick-Add Company by Website URL (SessionConfig)
+Add a button/dialog in the Company Data section where the user can paste a website URL. The system will use the Firecrawl connector (already configured) to scrape the website and extract the company name, then add a new row to the company data.
 
-**New file: `src/components/PasteEmailsDialog.tsx`**
-- Dialog with a `Textarea` for pasting emails (one per line, or comma-separated)
-- On submit, parse emails, query `lead_pool` for matching records
-- Show results: matched leads (with name/company preview) and unmatched emails
-- User confirms to add matched leads to the session
+**File: `src/components/AddCompanyByUrlDialog.tsx`** (new)
+- Dialog with a text input for website URL
+- On submit, call a new edge function or use existing Firecrawl scrape to extract company name from the page title/metadata
+- Adds a new row to csvData with `company_name` and `website` populated
 
 **File: `src/pages/admin/SessionConfig.tsx`**
-- Add state for the new dialog (`emailPasteDialogOpen`)
-- Add a new button in the Table Leads `headerRight` section: `<Mail /> Paste Emails`
-- On confirm, add matched leads to the session leads array (same as `addFromPool` logic)
-- Sync added leads to lead pool (already in session)
+- Add "Add by URL" button next to Paste Emails in the Company Data card header
+- Wire dialog's onAdd callback to append to csvData
 
-### Flow
-1. User clicks "Paste Emails"
-2. Pastes email addresses into textarea
-3. Clicks "Look Up" — system queries lead_pool by email
-4. Shows matched leads (checkable) and any unmatched emails
-5. User confirms — leads are added to the session
+**File: `supabase/functions/scrape-company-name/index.ts`** (new)
+- Lightweight edge function that uses Firecrawl to scrape a URL with `formats: ['json']` and a prompt to extract the company name
+- Returns `{ success: true, company_name: "..." }`
 
-### Technical Details
-- Query: `supabase.from("lead_pool").select("*").in("email", parsedEmails)`
-- Reuses existing `addFromPool()` helper to create `TableLead` objects
-- Deduplicates against leads already in the session (same check as pool dialog)
+### 2. Drag-and-Drop Companies Between Tables (MatchingWorkspace)
+Currently leads are draggable but companies are static. Add drag-and-drop for company chips in the TableCard.
+
+**File: `src/pages/admin/MatchingWorkspace.tsx`**
+- Wrap company list in each TableCard with a `<Droppable>` zone (id: `companies-{tableIndex}`)
+- Wrap each company chip in a `<Draggable>`
+- Add a new `handleCompanyDragEnd` or expand `handleLeadDragEnd` to handle both lead and company drag types (distinguish by droppableId prefix `leads-` vs `companies-`)
+- Update `DragDropContext.onDragEnd` to route to the correct handler
+
+### 3. Remove Companies from Tables (MatchingWorkspace)
+Add a small "×" button on each company chip in the TableCard.
+
+**File: `src/pages/admin/MatchingWorkspace.tsx`**
+- Add an `onRemoveCompany` callback prop to `TableCard`
+- Render an `X` icon button on each company row
+- On click, remove the company from that table's `companies` array via `setTables`
+
+### Changes Summary
 
 | File | Change |
 |------|--------|
-| `src/components/PasteEmailsDialog.tsx` | New dialog component |
-| `src/pages/admin/SessionConfig.tsx` | Add button + dialog integration |
+| `src/components/AddCompanyByUrlDialog.tsx` | New dialog: paste URL → scrape company name → add to data |
+| `supabase/functions/scrape-company-name/index.ts` | New edge function using Firecrawl to extract company name |
+| `src/pages/admin/SessionConfig.tsx` | Add "Add by URL" button in Company Data header |
+| `src/pages/admin/MatchingWorkspace.tsx` | Add company drag-and-drop, add remove (×) button on company chips |
 
