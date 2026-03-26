@@ -1235,6 +1235,19 @@ export default function SessionConfig() {
         }}
       />
 
+      {/* Manual Add Company Dialog */}
+      <ManualAddCompanyDialog
+        open={manualAddDialogOpen}
+        onOpenChange={setManualAddDialogOpen}
+        onAdd={(row) => {
+          setCsvData((prev) => [...prev, row]);
+          if (csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(row));
+            const autoMap = autoMapHeaders(Object.keys(row));
+            setColumnMapping(autoMap);
+          }
+        }}
+
 
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
