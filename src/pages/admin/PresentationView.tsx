@@ -41,11 +41,14 @@ function parseTimeToToday(timeStr: string): Date {
 
 export default function PresentationView() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const navigate = useNavigate();
   const [session, setSession] = useState<any>(null);
   const [tables, setTables] = useState<TableDisplay[]>([]);
   const [loading, setLoading] = useState(true);
   const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true });
   const [selectedSlide, setSelectedSlide] = useState(0);
+  const [editingTableId, setEditingTableId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
