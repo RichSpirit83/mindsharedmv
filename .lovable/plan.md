@@ -1,42 +1,34 @@
 
 
-## Plan: Fix URL Scraping + Add Bulk URL Import + Manual Add
+## Plan: Fix Lead Pool Email Lookup
 
-### 1. Fix the scrape-company-name edge function (bug fix)
+### Problem
+The email lookup in `PasteEmailsDialog.tsx` has two issues:
+1. **Case-sensitive matching**: Emails are lowercased client-side before the `.in()` query, but PostgreSQL's `IN` is case-sensitive. If the DB stores `AMurphy@JobSync.io`, it won't match `amurphy@jobsync.io`.
+2. **Unnecessary `as any` casts**: The `lead_pool` table exists in the generated types, so the `as any` casts are unnecessary and could mask real errors.
 
-The Firecrawl API is rejecting the request because `formats` contains an object `{ type: 'json', prompt: '...' }` instead of a string. Firecrawl v1 expects `formats: ['markdown']` with extraction as a separate top-level field, or simply use metadata/title extraction.
+### Fix
 
-**File: `supabase/functions/scrape-company-name/index.ts`**
-- Change `formats: [{ type: 'json', prompt: '...' }]` to `formats: ['markdown']`
-- Extract company name from `metadata.title` (split on `|`, `-`, etc.) with domain fallback
-- This avoids the BAD_REQUEST error entirely
+**File: `src/components/PasteEmailsDialog.tsx`**
+- Remove `as any` casts from the Supabase query
+- Use `.ilike()` won't work for arrays. Instead, use a case-insensitive approach: query with both original-case and lowered emails, or use an RPC function. The simplest fix: use `.or()` with `ilike` filters, but that's unwieldy for many emails.
+- Best approach: keep emails as-is (don't lowercase them before the query), and do case-insensitive comparison client-side when deduplicating. The DB likely stores emails in the same case they were entered — so pass the original-case emails to `.in()`.
+- Actually the simplest robust fix: query ALL lead_pool emails and filter client-side, since lead pools are typically small. Or use a Postgres function with `LOWER()`.
 
-### 2. Convert AddCompanyByUrlDialog to support bulk URLs
+**Chosen approach**: Use an RPC or simply fetch leads where `email` is in the list, but also try original case. The most pragmatic fix:
+1. Don't lowercase the emails before passing to `.in()` — pass them as-is
+2. Also pass lowercased versions as a fallback
+3. Do case-insensitive deduplication client-side
 
-**File: `src/components/AddCompanyByUrlDialog.tsx`**
-- Replace single `Input` with a `Textarea` for pasting multiple URLs (one per line)
-- Parse URLs, call the edge function for each one sequentially (with progress indicator)
-- Show results: successfully scraped companies and any failures
-- User confirms to add all successful results at once
-- Keep single-URL support (Enter key on single line)
+Actually, the simplest and most reliable fix: use `.ilike` with `or` filter, or better yet, create a small server-side query. But the easiest: just pass original-case emails to `.in()` and handle comparison client-side with `.toLowerCase()`.
 
-### 3. Add a "Manual Add" button for companies
-
-**File: `src/pages/admin/SessionConfig.tsx`**
-- Add a "Manual Add" button in the Company Data header (next to "Paste Emails" and "Add by URL")
-- Opens a small dialog with an input for company name (and optionally website)
-- On submit, appends the row to `csvData` directly — no scraping needed
-
-**File: `src/components/ManualAddCompanyDialog.tsx`** (new)
-- Simple dialog with company name input + optional website input
-- Calls `onAdd({ company_name, website })` on submit
-
-### Changes Summary
+**File: `src/components/PasteEmailsDialog.tsx`**
+- Parse emails without lowercasing for the DB query
+- Pass both original and lowercased variants to `.in()` to catch either case
+- Remove `as any` casts
+- Keep client-side deduplication case-insensitive
 
 | File | Change |
 |------|--------|
-| `supabase/functions/scrape-company-name/index.ts` | Fix Firecrawl formats param from object to string `'markdown'` |
-| `src/components/AddCompanyByUrlDialog.tsx` | Convert to bulk textarea, process multiple URLs with progress |
-| `src/components/ManualAddCompanyDialog.tsx` | New simple dialog for manual company name entry |
-| `src/pages/admin/SessionConfig.tsx` | Add "Manual Add" button wired to new dialog |
+| `src/components/PasteEmailsDialog.tsx` | Fix email case handling in query, remove `as any` casts |
 
