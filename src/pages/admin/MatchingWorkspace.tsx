@@ -981,12 +981,12 @@ export default function MatchingWorkspace() {
                 </div>
               </div>
             ) : (
-              <DragDropContext onDragEnd={handleLeadDragEnd}>
+              <DragDropContext onDragEnd={handleDragEnd}>
                 <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {roundTables.map((table, i) => {
                     const globalIndex = tables.indexOf(table);
                     return (
-                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
+                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} onRemoveCompany={(ci) => handleRemoveCompany(globalIndex, ci)} />
                     );
                   })}
                 </div>
