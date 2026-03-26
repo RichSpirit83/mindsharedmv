@@ -23,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
+import PasteEmailsDialog from "@/components/PasteEmailsDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
