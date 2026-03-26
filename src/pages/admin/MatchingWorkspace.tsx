@@ -215,7 +215,7 @@ export default function MatchingWorkspace() {
             }),
           };
         });
-        setTables(tableGroups);
+        setTables(enforceUniqueLeadsAcrossTables(tableGroups));
         setHasGenerated(true);
       }
 
@@ -374,15 +374,17 @@ export default function MatchingWorkspace() {
         }),
       }));
 
+      const uniqueLeadTables = enforceUniqueLeadsAcrossTables(enrichedTables);
+
       // Merge with tables from other rounds
       setTables((prev) => {
         const otherRounds = prev.filter((t) => t.round_number !== activeRound);
-        return [...otherRounds, ...enrichedTables].sort((a, b) => a.round_number - b.round_number || a.table_number - b.table_number);
+        return [...otherRounds, ...uniqueLeadTables].sort((a, b) => a.round_number - b.round_number || a.table_number - b.table_number);
       });
       setHasGenerated(true);
-      toast.success(`Generated ${enrichedTables.length} table groupings for Round ${activeRound}`);
+      toast.success(`Generated ${uniqueLeadTables.length} table groupings for Round ${activeRound}`);
 
-      await saveTablesToDb(enrichedTables);
+      await saveTablesToDb(uniqueLeadTables);
     } catch (err: any) {
       console.error("Match generation failed:", err);
       toast.error(err.message || "Failed to generate matches");
@@ -406,11 +408,31 @@ export default function MatchingWorkspace() {
       return true;
     });
   };
+  const enforceUniqueLeadsAcrossTables = (tableGroups: TableGroup[]) => {
+    const seenByRound = new Map<number, Set<string>>();
+    return tableGroups.map((table) => {
+      const round = table.round_number ?? 1;
+      const seen = seenByRound.get(round) ?? new Set<string>();
+      const uniqueAssignedLeads = (table.assigned_leads || []).filter((lead) => {
+        const key = leadNameKey(lead.name || "");
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      seenByRound.set(round, seen);
+      return {
+        ...table,
+        assigned_leads: uniqueAssignedLeads,
+        suggested_lead: uniqueAssignedLeads.map((lead) => lead.name).join(", "),
+      };
+    });
+  };
 
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
+    const normalizedTableGroups = enforceUniqueLeadsAcrossTables(tableGroups);
 
     // Clear previous assignments for this session's tables (assignments have no session_id)
     const { data: existingTables, error: existingTablesError } = await supabase
@@ -452,7 +474,7 @@ export default function MatchingWorkspace() {
     let totalMatched = 0;
     let totalExpected = 0;
 
-    for (const table of tableGroups) {
+    for (const table of normalizedTableGroups) {
       const { data: insertedTable, error: insertTableError } = await supabase
         .from("breakout_tables")
         .insert({
