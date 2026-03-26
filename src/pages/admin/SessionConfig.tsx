@@ -902,9 +902,14 @@ export default function SessionConfig() {
 
       {/* CSV Upload */}
       <CollapsibleCard title="Company Data Upload" headerRight={
-        <Button variant="outline" size="sm" onClick={() => setCompanyEmailPasteDialogOpen(true)}>
-          <Mail className="h-4 w-4 mr-1" /> Paste Emails
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAddByUrlDialogOpen(true)}>
+            <Globe className="h-4 w-4 mr-1" /> Add by URL
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCompanyEmailPasteDialogOpen(true)}>
+            <Mail className="h-4 w-4 mr-1" /> Paste Emails
+          </Button>
+        </div>
       }>
           {csvData.length === 0 ? (
             <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer">
