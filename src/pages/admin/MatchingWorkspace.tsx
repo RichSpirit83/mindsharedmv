@@ -32,6 +32,7 @@ import {
   Settings2,
   Download,
   Plus,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -480,18 +481,40 @@ export default function MatchingWorkspace() {
     navigate(`/admin/leads/${sessionId}`);
   };
 
-  const handleLeadDragEnd = useCallback((result: DropResult) => {
+  const handleDragEnd = useCallback((result: DropResult) => {
     const { source, destination } = result;
     if (!destination) return;
     if (source.droppableId === destination.droppableId && source.index === destination.index) return;
-    const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
-    const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+
+    const isCompanyDrag = source.droppableId.startsWith("companies-");
+
+    if (isCompanyDrag) {
+      const srcTableIdx = parseInt(source.droppableId.replace("companies-", ""));
+      const destTableIdx = parseInt(destination.droppableId.replace("companies-", ""));
+      setTables((prev) => {
+        const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+        const [movedCompany] = next[srcTableIdx].companies.splice(source.index, 1);
+        next[destTableIdx].companies.splice(destination.index, 0, movedCompany);
+        return next;
+      });
+    } else {
+      const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
+      const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+      setTables((prev) => {
+        const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
+        const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
+        next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
+        next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
+        next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+        return next;
+      });
+    }
+  }, []);
+
+  const handleRemoveCompany = useCallback((tableIndex: number, companyIndex: number) => {
     setTables((prev) => {
-      const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
-      const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
-      next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
-      next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
-      next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
+      const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+      next[tableIndex].companies.splice(companyIndex, 1);
       return next;
     });
   }, []);
@@ -958,12 +981,12 @@ export default function MatchingWorkspace() {
                 </div>
               </div>
             ) : (
-              <DragDropContext onDragEnd={handleLeadDragEnd}>
+              <DragDropContext onDragEnd={handleDragEnd}>
                 <div id="matching-tables-grid" className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
                   {roundTables.map((table, i) => {
                     const globalIndex = tables.indexOf(table);
                     return (
-                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} />
+                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} onRemoveCompany={(ci) => handleRemoveCompany(globalIndex, ci)} />
                     );
                   })}
                 </div>
@@ -993,7 +1016,7 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void }) {
+function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick, onRemoveCompany }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void; onRemoveCompany: (companyIndex: number) => void }) {
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
@@ -1085,24 +1108,53 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick 
           </Droppable>
         )}
 
-        {/* Companies */}
+        {/* Companies - Droppable */}
         <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-2">Companies</p>
-        {table.companies.length === 0 ? (
-          <p className="text-xs text-muted-foreground italic">No companies assigned yet</p>
-        ) : (
-          <div className="space-y-1">
-            {table.companies.map((c, i) => (
-              <div
-                key={i}
-                className="text-xs flex items-center justify-between p-1.5 rounded bg-muted/50 cursor-pointer hover:bg-muted transition-colors"
-                onClick={() => c.mapped_data && onCompanyClick(c.mapped_data)}
-              >
-                <span className="font-medium">{c.company_name}</span>
-                <span className="text-muted-foreground">{c.first_name}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        <Droppable droppableId={`companies-${tableIndex}`}>
+          {(provided, snapshot) => (
+            <div
+              ref={provided.innerRef}
+              {...provided.droppableProps}
+              className={cn(
+                "space-y-1 min-h-[32px] rounded p-1 transition-colors",
+                snapshot.isDraggingOver && "bg-accent/30 ring-1 ring-accent/40"
+              )}
+            >
+              {table.companies.length === 0 ? (
+                <p className="text-xs text-muted-foreground/50 text-center py-1">Drop company here</p>
+              ) : (
+                table.companies.map((c, i) => (
+                  <Draggable key={`${tableIndex}-company-${i}`} draggableId={`${tableIndex}-company-${i}-${c.company_name}`} index={i}>
+                    {(dragProvided, dragSnapshot) => (
+                      <div
+                        ref={dragProvided.innerRef}
+                        {...dragProvided.draggableProps}
+                        {...dragProvided.dragHandleProps}
+                        className={cn(
+                          "text-xs flex items-center justify-between p-1.5 rounded bg-muted/50 cursor-grab hover:bg-muted transition-colors group",
+                          dragSnapshot.isDragging && "shadow-lg ring-2 ring-accent/40"
+                        )}
+                        onClick={() => c.mapped_data && onCompanyClick(c.mapped_data)}
+                      >
+                        <span className="font-medium">{c.company_name}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-muted-foreground">{c.first_name}</span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onRemoveCompany(i); }}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 rounded hover:bg-destructive/10 hover:text-destructive"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </Draggable>
+                ))
+              )}
+              {provided.placeholder}
+            </div>
+          )}
+        </Droppable>
       </CardContent>
     </Card>
   );

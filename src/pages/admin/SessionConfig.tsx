@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste, BookmarkPlus, Library, Mail } from "lucide-react";
+import { CalendarIcon, Upload, Plus, Trash2, FileSpreadsheet, Check, Linkedin, Loader2, Sparkles, FileUp, Save, Users, ClipboardPaste, BookmarkPlus, Library, Mail, Globe } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -25,6 +25,7 @@ import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog
 import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 import PasteEmailsDialog from "@/components/PasteEmailsDialog";
 import PasteCompanyEmailsDialog from "@/components/PasteCompanyEmailsDialog";
+import AddCompanyByUrlDialog from "@/components/AddCompanyByUrlDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
@@ -244,6 +245,7 @@ export default function SessionConfig() {
   const [leadLinkedinDialogOpen, setLeadLinkedinDialogOpen] = useState(false);
   const [emailPasteDialogOpen, setEmailPasteDialogOpen] = useState(false);
   const [companyEmailPasteDialogOpen, setCompanyEmailPasteDialogOpen] = useState(false);
+  const [addByUrlDialogOpen, setAddByUrlDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
@@ -900,9 +902,14 @@ export default function SessionConfig() {
 
       {/* CSV Upload */}
       <CollapsibleCard title="Company Data Upload" headerRight={
-        <Button variant="outline" size="sm" onClick={() => setCompanyEmailPasteDialogOpen(true)}>
-          <Mail className="h-4 w-4 mr-1" /> Paste Emails
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setAddByUrlDialogOpen(true)}>
+            <Globe className="h-4 w-4 mr-1" /> Add by URL
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setCompanyEmailPasteDialogOpen(true)}>
+            <Mail className="h-4 w-4 mr-1" /> Paste Emails
+          </Button>
+        </div>
       }>
           {csvData.length === 0 ? (
             <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer">
@@ -1209,7 +1216,21 @@ export default function SessionConfig() {
         }}
       />
 
-      {/* Actions */}
+      {/* Add Company by URL Dialog */}
+      <AddCompanyByUrlDialog
+        open={addByUrlDialogOpen}
+        onOpenChange={setAddByUrlDialogOpen}
+        onAdd={(row) => {
+          setCsvData((prev) => [...prev, row]);
+          if (csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(row));
+            const autoMap = autoMapHeaders(Object.keys(row));
+            setColumnMapping(autoMap);
+          }
+        }}
+      />
+
+
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
