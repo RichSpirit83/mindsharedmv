@@ -26,6 +26,7 @@ import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 import PasteEmailsDialog from "@/components/PasteEmailsDialog";
 import PasteCompanyEmailsDialog from "@/components/PasteCompanyEmailsDialog";
 import AddCompanyByUrlDialog from "@/components/AddCompanyByUrlDialog";
+import ManualAddCompanyDialog from "@/components/ManualAddCompanyDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
@@ -246,6 +247,7 @@ export default function SessionConfig() {
   const [emailPasteDialogOpen, setEmailPasteDialogOpen] = useState(false);
   const [companyEmailPasteDialogOpen, setCompanyEmailPasteDialogOpen] = useState(false);
   const [addByUrlDialogOpen, setAddByUrlDialogOpen] = useState(false);
+  const [manualAddDialogOpen, setManualAddDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
@@ -903,6 +905,9 @@ export default function SessionConfig() {
       {/* CSV Upload */}
       <CollapsibleCard title="Company Data Upload" headerRight={
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setManualAddDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Manual Add
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setAddByUrlDialogOpen(true)}>
             <Globe className="h-4 w-4 mr-1" /> Add by URL
           </Button>
@@ -1230,6 +1235,19 @@ export default function SessionConfig() {
         }}
       />
 
+      {/* Manual Add Company Dialog */}
+      <ManualAddCompanyDialog
+        open={manualAddDialogOpen}
+        onOpenChange={setManualAddDialogOpen}
+        onAdd={(row) => {
+          setCsvData((prev) => [...prev, row]);
+          if (csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(row));
+            const autoMap = autoMapHeaders(Object.keys(row));
+            setColumnMapping(autoMap);
+          }
+        }}
+      />
 
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>

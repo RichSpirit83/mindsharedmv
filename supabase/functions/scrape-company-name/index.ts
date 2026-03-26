@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         url: formattedUrl,
-        formats: [{ type: 'json', prompt: 'Extract the company name from this website. Return just the company name.' }],
+        formats: ['markdown'],
         onlyMainContent: true,
       }),
     });
@@ -55,23 +55,20 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extract company name from response
-    const jsonData = data?.data?.json || data?.json;
     const metadata = data?.data?.metadata || data?.metadata;
-    
     let companyName = '';
-    
-    if (jsonData) {
-      // Try common field names from the JSON extraction
-      companyName = jsonData.company_name || jsonData.companyName || jsonData.name || jsonData.company || '';
-    }
-    
-    // Fallback to page title
-    if (!companyName && metadata?.title) {
-      companyName = metadata.title.split(/[|\-–—]/)[0].trim();
+
+    // Extract from page title (most reliable)
+    if (metadata?.title) {
+      companyName = metadata.title.split(/[|\-–—:]/)[0].trim();
     }
 
-    // Fallback to domain
+    // Fallback: og:site_name
+    if (!companyName && metadata?.ogSiteName) {
+      companyName = metadata.ogSiteName;
+    }
+
+    // Fallback to domain name
     if (!companyName) {
       try {
         const hostname = new URL(formattedUrl).hostname.replace('www.', '');
