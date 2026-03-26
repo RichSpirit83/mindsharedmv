@@ -1085,7 +1085,7 @@ export default function SessionConfig() {
                 )}
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); }}>
+            <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); scheduleRosterSave(); }}>
               <Plus className="h-4 w-4 mr-1" /> Add Lead
             </Button>
           </div>
