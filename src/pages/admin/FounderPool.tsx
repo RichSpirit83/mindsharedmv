@@ -337,15 +337,15 @@ export default function FounderPool() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((r) => (
+                  {filtered.map((r, idx) => (
                     <TableRow
-                      key={r.id}
+                      key={r.ids[0] || idx}
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => { setSelectedFounder(r.mapped_data); setDialogOpen(true); }}
+                      onClick={() => { setSelectedFounder(r); setDialogOpen(true); }}
                     >
                       {displayColumns.map((col) => {
                         if (col === "_stage_score") {
-                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const score = computeStageScoreFromMapped(r.data);
                           const pct = Math.round((score.score / 3) * 100);
                           return (
                             <TableCell key={col} className="whitespace-nowrap text-sm">
@@ -364,7 +364,7 @@ export default function FounderPool() {
                           );
                         }
                         if (col === "_stage") {
-                          const score = computeStageScoreFromMapped(r.mapped_data);
+                          const score = computeStageScoreFromMapped(r.data);
                           return (
                             <TableCell key={col} className="whitespace-nowrap text-sm">
                               <span
@@ -382,9 +382,13 @@ export default function FounderPool() {
                         return (
                           <TableCell key={col} className="whitespace-nowrap text-sm max-w-[300px] truncate">
                             {col === "session_name" ? (
-                              <Badge variant="outline" className="text-xs">{r.session_name}</Badge>
+                              <div className="flex flex-wrap gap-1">
+                                {r.sessionNames.map((s, i) => (
+                                  <Badge key={i} variant="outline" className="text-xs">{s}</Badge>
+                                ))}
+                              </div>
                             ) : (
-                              r.mapped_data[col] || ""
+                              r.data[col] || ""
                             )}
                           </TableCell>
                         );
@@ -401,7 +405,10 @@ export default function FounderPool() {
       <FounderProfileDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        data={selectedFounder}
+        data={selectedFounder?.data || null}
+        ids={selectedFounder?.ids || []}
+        sessionNames={selectedFounder?.sessionNames || []}
+        onSaved={() => queryClient.invalidateQueries({ queryKey: ["founder_pool"] })}
       />
 
       {/* Hidden file input */}
