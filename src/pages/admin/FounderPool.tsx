@@ -65,15 +65,41 @@ export default function FounderPool() {
     },
   });
 
+  // De-duplicate founders across sessions
+  const dedupedData = useMemo(() => {
+    const groups = new Map<string, { data: Record<string, string>; ids: string[]; sessionNames: string[] }>();
+    rawData.forEach((r) => {
+      const email = (r.mapped_data.email || "").toLowerCase().trim();
+      const key = email || `${(r.mapped_data.first_name || "").toLowerCase().trim()}|${(r.mapped_data.last_name || "").toLowerCase().trim()}|${(r.mapped_data.company_name || "").toLowerCase().trim()}`;
+      if (!key || key === "||") {
+        // Can't dedup, treat as unique
+        groups.set(r.id, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
+        return;
+      }
+      const existing = groups.get(key);
+      if (existing) {
+        existing.ids.push(r.id);
+        if (!existing.sessionNames.includes(r.session_name)) existing.sessionNames.push(r.session_name);
+        // Merge: prefer non-empty values
+        Object.entries(r.mapped_data).forEach(([k, v]) => {
+          if (v && !existing.data[k]) existing.data[k] = v;
+        });
+      } else {
+        groups.set(key, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
+      }
+    });
+    return Array.from(groups.values());
+  }, [rawData]);
+
   const allColumns = useMemo(() => {
     const keySet = new Set<string>();
-    rawData.forEach((r) => Object.keys(r.mapped_data).forEach((k) => keySet.add(k)));
+    dedupedData.forEach((r) => Object.keys(r.data).forEach((k) => keySet.add(k)));
     const priority = ["first_name", "last_name", "company_name", "email", "sector", "sales_stage", "revenue", "city", "state_province", "country"];
     const ordered: string[] = [];
     priority.forEach((p) => { if (keySet.has(p)) { ordered.push(p); keySet.delete(p); } });
     Array.from(keySet).sort().forEach((k) => ordered.push(k));
     return ordered;
-  }, [rawData]);
+  }, [dedupedData]);
 
   const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
 
