@@ -532,6 +532,55 @@ export default function MatchingWorkspace() {
     if (statusError) throw statusError;
   };
 
+  // Incremental save: move a company from one table to another
+  const saveCompanyMove = async (company: CompanyChip, srcTable: TableGroup, destTable: TableGroup) => {
+    if (!company.db_company_id || !srcTable.db_id || !destTable.db_id) {
+      console.warn("[Match] Missing db IDs for incremental save, falling back to full save");
+      return saveTablesToDb(tables);
+    }
+    // Delete old assignment, insert new one
+    const { error: delErr } = await supabase
+      .from("breakout_table_assignments")
+      .delete()
+      .eq("table_id", srcTable.db_id)
+      .eq("company_id", company.db_company_id);
+    if (delErr) throw delErr;
+
+    const { error: insErr } = await supabase
+      .from("breakout_table_assignments")
+      .insert({ table_id: destTable.db_id, company_id: company.db_company_id });
+    if (insErr) throw insErr;
+  };
+
+  // Incremental save: move a lead between tables (update suggested_lead text)
+  const saveLeadMove = async (srcTable: TableGroup, destTable: TableGroup) => {
+    if (!srcTable.db_id || !destTable.db_id) {
+      console.warn("[Match] Missing db IDs for incremental save, falling back to full save");
+      return saveTablesToDb(tables);
+    }
+    const srcLeadStr = dedupeLeadNames(srcTable.assigned_leads.map((l) => l.name)).join(", ");
+    const destLeadStr = dedupeLeadNames(destTable.assigned_leads.map((l) => l.name)).join(", ");
+
+    await Promise.all([
+      supabase.from("breakout_tables").update({ suggested_lead: srcLeadStr }).eq("id", srcTable.db_id),
+      supabase.from("breakout_tables").update({ suggested_lead: destLeadStr }).eq("id", destTable.db_id),
+    ]);
+  };
+
+  // Incremental save: remove a company from a table
+  const saveCompanyRemoval = async (company: CompanyChip, table: TableGroup) => {
+    if (!company.db_company_id || !table.db_id) {
+      console.warn("[Match] Missing db IDs for incremental save, falling back to full save");
+      return saveTablesToDb(tables);
+    }
+    const { error } = await supabase
+      .from("breakout_table_assignments")
+      .delete()
+      .eq("table_id", table.db_id)
+      .eq("company_id", company.db_company_id);
+    if (error) throw error;
+  };
+
   const handleFinalize = async () => {
     if (!sessionId) return;
     await supabase.from("breakout_sessions").update({ status: "finalized" }).eq("id", sessionId);
@@ -546,54 +595,67 @@ export default function MatchingWorkspace() {
 
     const isCompanyDrag = source.droppableId.startsWith("companies-");
 
-    let updatedTables: TableGroup[] = [];
-
     if (isCompanyDrag) {
       const srcTableIdx = parseInt(source.droppableId.replace("companies-", ""));
       const destTableIdx = parseInt(destination.droppableId.replace("companies-", ""));
+      let movedCompany: CompanyChip | null = null;
+      let srcTableRef: TableGroup | null = null;
+      let destTableRef: TableGroup | null = null;
       setTables((prev) => {
         const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
-        const [movedCompany] = next[srcTableIdx].companies.splice(source.index, 1);
+        [movedCompany] = next[srcTableIdx].companies.splice(source.index, 1);
         next[destTableIdx].companies.splice(destination.index, 0, movedCompany);
-        updatedTables = next;
+        srcTableRef = prev[srcTableIdx];
+        destTableRef = prev[destTableIdx];
         return next;
       });
+      setTimeout(() => {
+        if (movedCompany && srcTableRef && destTableRef) {
+          saveCompanyMove(movedCompany, srcTableRef, destTableRef).catch((err) => {
+            console.error("Failed to save drag changes:", err);
+            toast.error("Failed to save changes");
+          });
+        }
+      }, 0);
     } else {
       const srcTableIdx = parseInt(source.droppableId.replace("leads-", ""));
       const destTableIdx = parseInt(destination.droppableId.replace("leads-", ""));
+      let updatedSrc: TableGroup | null = null;
+      let updatedDest: TableGroup | null = null;
       setTables((prev) => {
         const next = prev.map((t) => ({ ...t, assigned_leads: [...t.assigned_leads] }));
         const [movedLead] = next[srcTableIdx].assigned_leads.splice(source.index, 1);
         next[destTableIdx].assigned_leads.splice(destination.index, 0, movedLead);
         next[srcTableIdx].suggested_lead = next[srcTableIdx].assigned_leads[0]?.name || "";
         next[destTableIdx].suggested_lead = next[destTableIdx].assigned_leads[0]?.name || "";
-        updatedTables = next;
+        updatedSrc = next[srcTableIdx];
+        updatedDest = next[destTableIdx];
         return next;
       });
+      setTimeout(() => {
+        if (updatedSrc && updatedDest) {
+          saveLeadMove(updatedSrc, updatedDest).catch((err) => {
+            console.error("Failed to save lead move:", err);
+            toast.error("Failed to save changes");
+          });
+        }
+      }, 0);
     }
-
-    // Persist the updated tables to DB
-    setTimeout(() => {
-      if (updatedTables.length > 0) {
-        saveTablesToDb(updatedTables).catch((err) => {
-          console.error("Failed to save drag changes:", err);
-          toast.error("Failed to save changes");
-        });
-      }
-    }, 0);
-  }, [sessionId, fullCompanyData]);
+  }, [sessionId, fullCompanyData, tables]);
 
   const handleRemoveCompany = useCallback((tableIndex: number, companyIndex: number) => {
-    let updatedTables: TableGroup[] = [];
+    let removedCompany: CompanyChip | null = null;
+    let tableRef: TableGroup | null = null;
     setTables((prev) => {
       const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
+      tableRef = prev[tableIndex];
+      removedCompany = next[tableIndex].companies[companyIndex];
       next[tableIndex].companies.splice(companyIndex, 1);
-      updatedTables = next;
       return next;
     });
     setTimeout(() => {
-      if (updatedTables.length > 0) {
-        saveTablesToDb(updatedTables).catch((err) => {
+      if (removedCompany && tableRef) {
+        saveCompanyRemoval(removedCompany, tableRef).catch((err) => {
           console.error("Failed to save removal:", err);
           toast.error("Failed to save changes");
         });
