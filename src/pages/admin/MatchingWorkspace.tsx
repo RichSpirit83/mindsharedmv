@@ -1445,6 +1445,7 @@ function TableSignsPopover({
   onReassignLead: (leadName: string, fromTableNum: number, toTableNum: number) => void;
 }) {
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [sortBy, setSortBy] = useState<"name" | "company" | "table">("name");
 
   const roundTables = tables.filter((t) => t.round_number === activeRound);
   const tableNumbers = roundTables.map((t) => t.table_number).sort((a, b) => a - b);
@@ -1462,7 +1463,11 @@ function TableSignsPopover({
       tableNum: t.table_number,
       isLead: false,
     })),
-  ]).sort((a, b) => a.name.localeCompare(b.name));
+  ]).sort((a, b) =>
+    sortBy === "company" ? a.company.localeCompare(b.company) || a.name.localeCompare(b.name)
+    : sortBy === "table" ? a.tableNum - b.tableNum || a.name.localeCompare(b.name)
+    : a.name.localeCompare(b.name)
+  );
 
   return (
     <Popover>
