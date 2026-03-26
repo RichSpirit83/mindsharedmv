@@ -243,6 +243,7 @@ export default function SessionConfig() {
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
   const [leadLinkedinDialogOpen, setLeadLinkedinDialogOpen] = useState(false);
   const [emailPasteDialogOpen, setEmailPasteDialogOpen] = useState(false);
+  const [companyEmailPasteDialogOpen, setCompanyEmailPasteDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
