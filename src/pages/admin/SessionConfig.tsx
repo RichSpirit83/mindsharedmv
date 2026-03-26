@@ -240,6 +240,8 @@ export default function SessionConfig() {
   const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
   const [pdfLoading, setPdfLoading] = useState<Record<number, boolean>>({});
   const [loaded, setLoaded] = useState(false);
+  const [rosterDirty, setRosterDirty] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
