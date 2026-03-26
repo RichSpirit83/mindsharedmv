@@ -767,6 +767,7 @@ export default function SessionConfig() {
     setNumLeads((prev) => prev + newLeads.length);
     setLeadPasteDialogOpen(false);
     toast.success(`Added ${newLeads.length} leads`);
+    scheduleRosterSave();
 
     // Sync to lead pool
     for (const l of newLeads) { await syncToLeadPool(l); }
