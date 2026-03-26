@@ -26,6 +26,7 @@ import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 import PasteEmailsDialog from "@/components/PasteEmailsDialog";
 import PasteCompanyEmailsDialog from "@/components/PasteCompanyEmailsDialog";
 import AddCompanyByUrlDialog from "@/components/AddCompanyByUrlDialog";
+import ManualAddCompanyDialog from "@/components/ManualAddCompanyDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
