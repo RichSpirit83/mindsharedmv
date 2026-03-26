@@ -241,12 +241,14 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
     <div className="min-h-screen bg-[hsl(230,25%,8%)] text-white flex flex-col overflow-hidden">
       {/* Header */}
       <div className="text-center py-6 px-8 shrink-0 relative">
-        <button
-          onClick={() => navigate(`/admin/match/${sessionId}`)}
-          className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
-        >
-          <ArrowLeft className="h-5 w-5" />
-        </button>
+        {!isPublic && (
+          <button
+            onClick={() => navigate(`/admin/match/${sessionId}`)}
+            className="absolute left-8 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/10 hover:bg-white/20 transition"
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </button>
+        )}
         <h1 className="text-3xl font-bold tracking-tight">{session?.session_name || "Breakout Session"}</h1>
         {session?.session_date && (
           <p className="text-base text-white/50 mt-1">{new Date(session.session_date).toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}</p>
