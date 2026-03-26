@@ -199,11 +199,10 @@ export default function PresentationView() {
   const tablesByRound = rounds.map((r) => tables.filter((t) => t.round_number === r));
   const hasMultipleRounds = rounds.length > 1;
 
-  // Build slide labels: Round 1 Tables, Round 2 Tables, ..., Prompts, Timer
+  // Build slide labels: Round 1 Tables, Round 2 Tables, ..., Prompts & Timer
   const slideLabels = [
     ...rounds.map((r) => hasMultipleRounds ? `Round ${r}` : "Tables"),
-    "Prompts",
-    "Timer",
+    "Prompts & Timer",
   ];
 
   const formatTime = (s: number) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
