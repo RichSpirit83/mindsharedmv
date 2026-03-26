@@ -391,6 +391,22 @@ export default function MatchingWorkspace() {
     }
   };
 
+  const normalizeLeadName = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+  const leadNameKey = (s: string) => {
+    const parts = normalizeLeadName(s).split(" ").filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1]}`;
+    return parts.join(" ");
+  };
+  const dedupeLeadNames = (names: string[]) => {
+    const seen = new Set<string>();
+    return names.filter((name) => {
+      const key = leadNameKey(name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+  };
+
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
