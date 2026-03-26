@@ -207,8 +207,8 @@ export default function MatchingWorkspace() {
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
             round_number: (t as any).round_number ?? 1,
-            assigned_leads: [...new Set((t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean))].map((name: string) => {
-              const lead = (dbLeads || []).find((l: any) => l.name === name);
+            assigned_leads: dedupeLeadNames((t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean)).map((name: string) => {
+              const lead = (dbLeads || []).find((l: any) => leadNameKey(l.name || "") === leadNameKey(name));
               return lead
                 ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [], background: lead.background || "", email: lead.email || "", linkedinUrl: lead.linkedin_url || "", website: lead.website || "" }
                 : { name, company: "", title: "", expertiseTags: [] };
@@ -365,11 +365,12 @@ export default function MatchingWorkspace() {
           ...c,
           mapped_data: fullByName.get(normalizeCompany(c.company_name || "")) || c,
         })),
-        assigned_leads: (t.assigned_leads || []).map((al: any) => {
-          const dbLead = leads.find((l: any) => l.name === al.name);
+        assigned_leads: dedupeLeadNames((t.assigned_leads || []).map((al: any) => al.name || "")).map((name: string) => {
+          const aiLead = (t.assigned_leads || []).find((al: any) => leadNameKey(al.name || "") === leadNameKey(name)) || { name };
+          const dbLead = leads.find((l: any) => leadNameKey(l.name || "") === leadNameKey(name));
           return dbLead
-            ? { ...al, company: dbLead.company || al.company || "", background: dbLead.background || "", email: dbLead.email || "", linkedinUrl: dbLead.linkedin_url || "", website: dbLead.website || "", expertiseTags: (dbLead.expertise_tags as string[]) || al.expertiseTags || [] }
-            : al;
+            ? { ...aiLead, name: dbLead.name || aiLead.name || name, company: dbLead.company || aiLead.company || "", background: dbLead.background || "", email: dbLead.email || "", linkedinUrl: dbLead.linkedin_url || "", website: dbLead.website || "", expertiseTags: (dbLead.expertise_tags as string[]) || aiLead.expertiseTags || [] }
+            : aiLead;
         }),
       }));
 
@@ -388,6 +389,22 @@ export default function MatchingWorkspace() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const normalizeLeadName = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ");
+  const leadNameKey = (s: string) => {
+    const parts = normalizeLeadName(s).split(" ").filter(Boolean);
+    if (parts.length >= 2) return `${parts[0]} ${parts[parts.length - 1]}`;
+    return parts.join(" ");
+  };
+  const dedupeLeadNames = (names: string[]) => {
+    const seen = new Set<string>();
+    return names.filter((name) => {
+      const key = leadNameKey(name);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
   };
 
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
@@ -444,7 +461,7 @@ export default function MatchingWorkspace() {
           table_name: table.table_name,
           theme: table.theme,
           stage_mix: table.stage_mix,
-          suggested_lead: (table.assigned_leads || []).map((l: any) => l.name).join(", ") || table.suggested_lead,
+          suggested_lead: dedupeLeadNames((table.assigned_leads || []).map((l: any) => l.name || "")).join(", ") || table.suggested_lead,
           rationale: table.rationale,
           shared_challenges: table.shared_challenges as any,
           round_number: table.round_number ?? 1,
