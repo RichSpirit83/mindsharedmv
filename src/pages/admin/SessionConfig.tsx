@@ -527,6 +527,7 @@ export default function SessionConfig() {
       };
       setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Extracted profile from PDF for ${profile.name || 'lead'}`);
+      scheduleRosterSave();
       // Auto-sync to lead pool
       await syncToLeadPool(updatedLead);
     } catch (err: any) {
