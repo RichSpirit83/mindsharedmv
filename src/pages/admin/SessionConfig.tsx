@@ -1260,6 +1260,7 @@ export default function SessionConfig() {
           }
           setCompanyEmailPasteDialogOpen(false);
           toast.success(`Added ${companies.length} compan${companies.length !== 1 ? "ies" : "y"} from email lookup`);
+          scheduleRosterSave();
         }}
       />
 
