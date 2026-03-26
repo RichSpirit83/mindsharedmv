@@ -240,6 +240,8 @@ export default function SessionConfig() {
   const [linkedinLoading, setLinkedinLoading] = useState<Record<number, boolean>>({});
   const [pdfLoading, setPdfLoading] = useState<Record<number, boolean>>({});
   const [loaded, setLoaded] = useState(false);
+  const [rosterDirty, setRosterDirty] = useState(false);
+  const [sessionStatus, setSessionStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [poolDialogOpen, setPoolDialogOpen] = useState(false);
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
@@ -255,7 +257,8 @@ export default function SessionConfig() {
   const [leadCsvStep, setLeadCsvStep] = useState<"mapping" | "preview">("mapping");
   const [poolSelection, setPoolSelection] = useState<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
-
+  const rosterSaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const rosterDirtyRef = useRef(false);
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   // Load lead pool for "Add from Pool" dialog
@@ -279,6 +282,7 @@ export default function SessionConfig() {
         .single();
       if (!session) { toast.error("Session not found"); navigate("/admin"); return; }
 
+      setSessionStatus(session.status || "draft");
       setSessionName(session.session_name || "");
       if (session.session_date) setSessionDate(new Date(session.session_date));
       setBreakoutStart(session.breakout_start || "10:00");
@@ -329,7 +333,7 @@ export default function SessionConfig() {
   }, [sessionId]);
 
   // Auto-save (debounced)
-  const saveToDb = useCallback(async () => {
+  const saveSessionMetadata = useCallback(async () => {
     if (!sessionId || !loaded) return;
     setSaving(true);
     try {
@@ -346,7 +350,17 @@ export default function SessionConfig() {
         prompts: prompts as any,
         column_mapping: columnMapping as any,
       }).eq("id", sessionId);
+    } catch (err) {
+      console.error("Auto-save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionId, loaded, sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping]);
 
+  const saveRosterData = useCallback(async () => {
+    if (!sessionId || !loaded) return;
+    setSaving(true);
+    try {
       // Save companies
       if (csvData.length > 0) {
         const { error: deleteError } = await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
@@ -356,11 +370,9 @@ export default function SessionConfig() {
         }
         const companyRows = csvData.map((row) => {
           const mapped: Record<string, string> = {};
-          // First, copy any canonical fields that exist directly on the row (manual/scraped entries)
           for (const field of CANONICAL_FIELDS) {
             if (row[field]) mapped[field] = row[field];
           }
-          // Then overlay with column-mapped values (CSV rows)
           for (const [canonical, csvCol] of Object.entries(columnMapping)) {
             if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
           }
@@ -403,22 +415,38 @@ export default function SessionConfig() {
           }
         }
       }
+
+      // Mark roster as stale if session was already matched
+      if (sessionStatus === "matched") {
+        setRosterDirty(true);
+      }
     } catch (err) {
-      console.error("Auto-save error:", err);
+      console.error("Roster save error:", err);
     } finally {
       setSaving(false);
     }
-  }, [sessionId, loaded, sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads]);
+  }, [sessionId, loaded, csvData, leads, columnMapping, sessionStatus]);
 
-  // Debounce auto-save
+  // Debounce auto-save — metadata only, never touches roster/matching data
   useEffect(() => {
     if (!loaded || !sessionId) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(saveToDb, 2000);
+    saveTimer.current = setTimeout(saveSessionMetadata, 2000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads, saveToDb]);
+  }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, saveSessionMetadata]);
 
-  // Auto-sync imported lead to lead_pool
+  // Schedule a debounced roster save (called after state-setting roster mutations)
+  const scheduleRosterSave = useCallback(() => {
+    rosterDirtyRef.current = true;
+    if (rosterSaveTimer.current) clearTimeout(rosterSaveTimer.current);
+    rosterSaveTimer.current = setTimeout(() => {
+      if (rosterDirtyRef.current) {
+        rosterDirtyRef.current = false;
+        saveRosterData();
+      }
+    }, 2500);
+  }, [saveRosterData]);
+
   const syncToLeadPool = async (lead: TableLead) => {
     try {
       await (supabase.from("lead_pool" as any).insert({
@@ -458,6 +486,7 @@ export default function SessionConfig() {
       };
       setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Imported profile for ${profile.name || 'lead'}`);
+      scheduleRosterSave();
       // Auto-sync to lead pool
       await syncToLeadPool(updatedLead);
     } catch (err: any) {
@@ -498,6 +527,7 @@ export default function SessionConfig() {
       };
       setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Extracted profile from PDF for ${profile.name || 'lead'}`);
+      scheduleRosterSave();
       // Auto-sync to lead pool
       await syncToLeadPool(updatedLead);
     } catch (err: any) {
@@ -533,6 +563,7 @@ export default function SessionConfig() {
     setPoolSelection(new Set());
     setPoolDialogOpen(false);
     toast.success(`Added ${newLeads.length} lead${newLeads.length > 1 ? "s" : ""} from pool`);
+    scheduleRosterSave();
   };
 
   const togglePoolSelection = (id: string) => {
@@ -568,6 +599,7 @@ export default function SessionConfig() {
         setColumnMapping(autoMap);
         if (CANONICAL_FIELDS.filter((f) => !autoMap[f]).length > 0) setShowMapper(true);
         toast.success(`Imported ${results.data.length} companies`);
+        scheduleRosterSave();
       },
       error: () => toast.error("Failed to parse CSV"),
     });
@@ -587,6 +619,7 @@ export default function SessionConfig() {
         setColumnMapping(autoMap);
         if (CANONICAL_FIELDS.filter((f) => !autoMap[f]).length > 0) setShowMapper(true);
         toast.success(`Imported ${results.data.length} companies`);
+        scheduleRosterSave();
       },
     });
   }, []);
@@ -635,7 +668,8 @@ export default function SessionConfig() {
   };
 
   const handleContinue = async () => {
-    await saveToDb();
+    await saveSessionMetadata();
+    await saveRosterData();
     navigate(`/admin/match/${sessionId}`);
   };
 
@@ -712,7 +746,7 @@ export default function SessionConfig() {
     setLeadCsvDialogOpen(false);
     setLeadCsvData([]);
     toast.success(`Added ${newLeads.length} leads`);
-
+    scheduleRosterSave();
     // Sync to lead pool
     for (const l of newLeads) { await syncToLeadPool(l); }
   };
@@ -733,6 +767,7 @@ export default function SessionConfig() {
     setNumLeads((prev) => prev + newLeads.length);
     setLeadPasteDialogOpen(false);
     toast.success(`Added ${newLeads.length} leads`);
+    scheduleRosterSave();
 
     // Sync to lead pool
     for (const l of newLeads) { await syncToLeadPool(l); }
@@ -944,7 +979,7 @@ export default function SessionConfig() {
                   <Button variant="outline" size="sm" onClick={() => setShowMapper(!showMapper)}>
                     {showMapper ? "Hide Mapper" : "Edit Mapping"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); }}>
+                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); scheduleRosterSave(); }}>
                     Replace File
                   </Button>
                 </div>
@@ -952,7 +987,7 @@ export default function SessionConfig() {
               {showMapper && (
                 <ColumnMapper csvHeaders={csvHeaders} canonicalFields={CANONICAL_FIELDS} mapping={columnMapping} onMappingChange={(m) => setColumnMapping(m)} onConfirm={() => setShowMapper(false)} />
               )}
-              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => setCsvData((prev) => prev.filter((_, i) => i !== index))} />}
+              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => { setCsvData((prev) => prev.filter((_, i) => i !== index)); scheduleRosterSave(); }} />}
             </div>
           )}
       </CollapsibleCard>
@@ -1050,7 +1085,7 @@ export default function SessionConfig() {
                 )}
               </DialogContent>
             </Dialog>
-            <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); }}>
+            <Button variant="outline" size="sm" onClick={() => { setLeads((prev) => [...prev, emptyLead()]); setNumLeads((prev) => prev + 1); scheduleRosterSave(); }}>
               <Plus className="h-4 w-4 mr-1" /> Add Lead
             </Button>
           </div>
@@ -1065,6 +1100,7 @@ export default function SessionConfig() {
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
                   setLeads((prev) => prev.filter((_, idx) => idx !== i));
                   setNumLeads((prev) => prev - 1);
+                  scheduleRosterSave();
                 }}>
                   <Trash2 className="h-3.5 w-3.5" />
                 </Button>
@@ -1195,6 +1231,7 @@ export default function SessionConfig() {
           setNumLeads((prev) => prev + newLeads.length);
           setEmailPasteDialogOpen(false);
           toast.success(`Added ${newLeads.length} lead${newLeads.length !== 1 ? "s" : ""} from email lookup`);
+          scheduleRosterSave();
         }}
       />
 
@@ -1223,6 +1260,7 @@ export default function SessionConfig() {
           }
           setCompanyEmailPasteDialogOpen(false);
           toast.success(`Added ${companies.length} compan${companies.length !== 1 ? "ies" : "y"} from email lookup`);
+          scheduleRosterSave();
         }}
       />
 
@@ -1237,6 +1275,7 @@ export default function SessionConfig() {
             const autoMap = autoMapHeaders(Object.keys(row));
             setColumnMapping(autoMap);
           }
+          scheduleRosterSave();
         }}
       />
 
@@ -1251,11 +1290,17 @@ export default function SessionConfig() {
             const autoMap = autoMapHeaders(Object.keys(row));
             setColumnMapping(autoMap);
           }
+          scheduleRosterSave();
         }}
       />
 
-      <div className="flex gap-3 justify-end pb-8">
-        <Button variant="outline" onClick={saveToDb} disabled={saving}>
+      <div className="flex gap-3 justify-end pb-8 items-center">
+        {rosterDirty && (
+          <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
+            ⚠ Roster changed — matching may be stale
+          </Badge>
+        )}
+        <Button variant="outline" onClick={async () => { await saveSessionMetadata(); await saveRosterData(); }} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
         </Button>
         <Button disabled={(csvData.length === 0 && leads.length === 0) || !sessionName} onClick={handleContinue}>
