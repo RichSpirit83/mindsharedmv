@@ -905,6 +905,9 @@ export default function SessionConfig() {
       {/* CSV Upload */}
       <CollapsibleCard title="Company Data Upload" headerRight={
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setManualAddDialogOpen(true)}>
+            <Plus className="h-4 w-4 mr-1" /> Manual Add
+          </Button>
           <Button variant="outline" size="sm" onClick={() => setAddByUrlDialogOpen(true)}>
             <Globe className="h-4 w-4 mr-1" /> Add by URL
           </Button>
