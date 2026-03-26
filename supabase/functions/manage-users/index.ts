@@ -30,14 +30,16 @@ serve(async (req) => {
       if (!isAdmin) throw new Error("Admin access required");
     }
 
-    const { action, email, userId, role, password } = await req.json();
+    const { action, email, userId, role, password, username } = await req.json();
 
     if (action === "invite") {
-      if (!email) throw new Error("Email is required");
+      if (!email && !username) throw new Error("Email or username is required");
+      const userEmail = email || `${username}@viewer.local`;
+      const userPassword = password || crypto.randomUUID();
       const { data, error } = await adminClient.auth.admin.createUser({
-        email,
+        email: userEmail,
         email_confirm: true,
-        password: crypto.randomUUID(),
+        password: userPassword,
       });
       if (error) throw error;
 

@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,9 @@ export default function UserManagement() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("viewer");
+  const [inviteTab, setInviteTab] = useState<string>("email");
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [invitePassword, setInvitePassword] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<UserWithRole | null>(null);
   const [resetTarget, setResetTarget] = useState<UserWithRole | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -70,18 +74,22 @@ export default function UserManagement() {
 
   const inviteMutation = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("manage-users", {
-        body: { action: "invite", email: inviteEmail, role: inviteRole },
-      });
+      const body = inviteTab === "email"
+        ? { action: "invite", email: inviteEmail, role: inviteRole }
+        : { action: "invite", username: inviteUsername, password: invitePassword, role: "viewer" };
+      const { data, error } = await supabase.functions.invoke("manage-users", { body });
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
       return data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users_with_roles"] });
-      toast({ title: "User added", description: `${inviteEmail} has been added as ${inviteRole}` });
+      const label = inviteTab === "email" ? inviteEmail : inviteUsername;
+      toast({ title: "User added", description: `${label} has been added` });
       setInviteOpen(false);
       setInviteEmail("");
+      setInviteUsername("");
+      setInvitePassword("");
       setInviteRole("viewer");
     },
     onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
@@ -134,7 +142,18 @@ export default function UserManagement() {
     }
   };
 
+  const displayEmail = (email: string) => {
+    if (email.endsWith("@viewer.local")) {
+      return email.replace("@viewer.local", "") + " (username)";
+    }
+    return email;
+  };
+
   const pendingCount = users.filter((u) => u.role === "pending").length;
+
+  const canInvite = inviteTab === "email"
+    ? !!inviteEmail
+    : inviteUsername.length >= 3 && invitePassword.length >= 6;
 
   return (
     <div className="p-6 space-y-6">
@@ -161,7 +180,7 @@ export default function UserManagement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Email</TableHead>
+                  <TableHead>User</TableHead>
                   <TableHead>Current Role</TableHead>
                   <TableHead className="w-[180px]">Change Role</TableHead>
                   <TableHead className="w-[100px]">Actions</TableHead>
@@ -170,7 +189,7 @@ export default function UserManagement() {
               <TableBody>
                 {users.map((u) => (
                   <TableRow key={u.user_id} className={u.role === "pending" ? "bg-warning/5" : ""}>
-                    <TableCell className="font-medium">{u.email}</TableCell>
+                    <TableCell className="font-medium">{displayEmail(u.email)}</TableCell>
                     <TableCell>{roleBadge(u.role)}</TableCell>
                     <TableCell>
                       <Select
@@ -222,34 +241,62 @@ export default function UserManagement() {
           <DialogHeader>
             <DialogTitle>Add User</DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                placeholder="user@example.com"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select value={inviteRole} onValueChange={setInviteRole}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="admin">Admin</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+          <Tabs value={inviteTab} onValueChange={setInviteTab}>
+            <TabsList className="grid w-full grid-cols-2 mb-2">
+              <TabsTrigger value="email">By Email</TabsTrigger>
+              <TabsTrigger value="username">By Username</TabsTrigger>
+            </TabsList>
+            <TabsContent value="email" className="space-y-4">
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input
+                  type="email"
+                  placeholder="user@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Role</Label>
+                <Select value={inviteRole} onValueChange={setInviteRole}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="viewer">Viewer</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </TabsContent>
+            <TabsContent value="username" className="space-y-4">
+              <p className="text-xs text-muted-foreground">Create a view-only account with a username and password. No email needed.</p>
+              <div className="space-y-2">
+                <Label>Username</Label>
+                <Input
+                  placeholder="e.g. john.smith"
+                  value={inviteUsername}
+                  onChange={(e) => setInviteUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ""))}
+                  minLength={3}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Password</Label>
+                <Input
+                  type="password"
+                  placeholder="Minimum 6 characters"
+                  value={invitePassword}
+                  onChange={(e) => setInvitePassword(e.target.value)}
+                  minLength={6}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
           <DialogFooter>
             <Button variant="outline" onClick={() => setInviteOpen(false)}>Cancel</Button>
             <Button
               onClick={() => inviteMutation.mutate()}
-              disabled={!inviteEmail || inviteMutation.isPending}
+              disabled={!canInvite || inviteMutation.isPending}
             >
               {inviteMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
               Add User
@@ -264,7 +311,7 @@ export default function UserManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete user?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will permanently remove <span className="font-semibold">{deleteTarget?.email}</span> and revoke their access. This action cannot be undone.
+              This will permanently remove <span className="font-semibold">{deleteTarget && displayEmail(deleteTarget.email)}</span> and revoke their access. This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -287,7 +334,7 @@ export default function UserManagement() {
           <DialogHeader>
             <DialogTitle>Reset Password</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">Set a new password for <span className="font-medium text-foreground">{resetTarget?.email}</span></p>
+          <p className="text-sm text-muted-foreground">Set a new password for <span className="font-medium text-foreground">{resetTarget && displayEmail(resetTarget.email)}</span></p>
           <div className="space-y-2">
             <Label>New Password</Label>
             <Input
