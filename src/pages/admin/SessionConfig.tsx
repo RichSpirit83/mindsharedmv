@@ -940,6 +940,10 @@ export default function SessionConfig() {
         contentClassName="space-y-6"
         headerRight={
           <div className="flex gap-2 flex-wrap">
+            {/* Paste Emails */}
+            <Button variant="outline" size="sm" onClick={() => setEmailPasteDialogOpen(true)}>
+              <Mail className="h-4 w-4 mr-1" /> Paste Emails
+            </Button>
             {/* LinkedIn Import */}
             <Button variant="outline" size="sm" onClick={() => setLeadLinkedinDialogOpen(true)}>
               <Linkedin className="h-4 w-4 mr-1" /> Import LinkedIn
