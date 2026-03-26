@@ -308,7 +308,7 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
                           <div className="mb-3">
                             <div className="flex items-baseline gap-3 mb-1">
                               <span className="text-3xl font-black" style={{ color: accent }}>{table.table_number}</span>
-                              {showNames && (editingTableId === table.id ? (
+                              {showNames && (editingTableId === table.id && !isPublic ? (
                                 <input
                                   autoFocus
                                   value={editingName}
@@ -318,7 +318,7 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
                                   className="text-lg font-bold leading-tight bg-transparent border-b border-white/30 outline-none text-white w-full"
                                 />
                               ) : (
-                                <h2 className="text-lg font-bold leading-tight cursor-pointer hover:text-white/70" onDoubleClick={() => handleStartEditing(table)}>{table.table_name}</h2>
+                                <h2 className={`text-lg font-bold leading-tight ${!isPublic ? "cursor-pointer hover:text-white/70" : ""}`} onDoubleClick={() => !isPublic && handleStartEditing(table)}>{table.table_name}</h2>
                               ))}
                             </div>
                             {showThemes && <p className="text-xs text-white/40">{table.theme}</p>}
