@@ -1,34 +1,37 @@
 
 
-## Plan: Fix Manually Added Companies Showing as Unnamed
+## Plan: Editable Founder Records + De-duplication
 
-### Problem
-When companies are added manually (or via URL scraping), the row keys use canonical field names like `company_name`. But when saving to the database, the code maps through `columnMapping` which translates canonical names to CSV header names (e.g., `company_name` → `"Company Name"`), then looks up `row["Company Name"]`. Since manual rows use `company_name` as the key, the lookup fails and `mapped_data` ends up empty.
+### 1. Editable Founder Profile Dialog
 
-### Fix
+**File: `src/components/FounderProfileDialog.tsx`**
 
-**File: `src/pages/admin/SessionConfig.tsx`** (lines 357-362)
+- Add an "Edit" toggle button in the dialog header
+- When in edit mode, render each field as an `Input` instead of plain text
+- Track edits in local state; on "Save", update `mapped_data` in `breakout_companies` for all DB rows belonging to that founder (important for deduped founders spanning multiple sessions)
+- Pass the founder's DB row IDs and a `queryClient.invalidateQueries` callback from the parent
 
-In the save logic, after mapping via `columnMapping`, also check if the row already has canonical field values directly. This way manually added rows (which already use canonical keys) will have their data preserved:
+**File: `src/pages/admin/FounderPool.tsx`**
 
-```typescript
-const companyRows = csvData.map((row) => {
-  const mapped: Record<string, string> = {};
-  // First, copy any canonical fields that exist directly on the row
-  for (const field of CANONICAL_FIELDS) {
-    if (row[field]) mapped[field] = row[field];
-  }
-  // Then overlay with column-mapped values (CSV rows)
-  for (const [canonical, csvCol] of Object.entries(columnMapping)) {
-    if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
-  }
-  return { session_id: sessionId, raw_data: row as any, mapped_data: mapped as any };
-});
-```
+- Pass the list of underlying `breakout_companies` IDs to the dialog so it knows which rows to update
+- After save, invalidate the `founder_pool` query to refresh the table
 
-This ensures manually added companies (which use `company_name` directly) get their data into `mapped_data`, while CSV-imported rows continue to work through the column mapping.
+### 2. De-duplicate Founders Across Sessions
+
+**File: `src/pages/admin/FounderPool.tsx`**
+
+- After fetching `rawData`, group rows by a dedup key: `email` (if present) or `first_name|last_name|company_name`
+- Merge grouped rows into a single display record with:
+  - Combined `session_names: string[]` (shown as multiple badges)
+  - Combined `ids: string[]` (all underlying DB row IDs, needed for editing)
+  - Merged `mapped_data` (union of fields, preferring the most complete record)
+- Update the table rendering to show multiple session badges per row instead of a single one
+- The `session_name` column becomes a list of badge tags
+
+### Changes Summary
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/SessionConfig.tsx` | Add canonical field fallback before column mapping in save logic |
+| `src/components/FounderProfileDialog.tsx` | Add edit mode with inline inputs and save-to-DB logic |
+| `src/pages/admin/FounderPool.tsx` | Dedup founders by email/name+company, merge sessions into tags, pass IDs to dialog |
 
