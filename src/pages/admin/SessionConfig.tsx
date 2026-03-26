@@ -1271,8 +1271,13 @@ export default function SessionConfig() {
         }}
       />
 
-      <div className="flex gap-3 justify-end pb-8">
-        <Button variant="outline" onClick={saveToDb} disabled={saving}>
+      <div className="flex gap-3 justify-end pb-8 items-center">
+        {rosterDirty && (
+          <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
+            ⚠ Roster changed — matching may be stale
+          </Badge>
+        )}
+        <Button variant="outline" onClick={async () => { await saveSessionMetadata(); await saveRosterData(); }} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
         </Button>
         <Button disabled={(csvData.length === 0 && leads.length === 0) || !sessionName} onClick={handleContinue}>
