@@ -157,6 +157,29 @@ export default function PresentationView() {
     }
   };
 
+  const startEditingTime = () => {
+    setEditStart(session?.breakout_start || "00:00");
+    setEditEnd(session?.breakout_end || "00:00");
+    setEditingTime(true);
+  };
+
+  const saveTime = async () => {
+    if (!sessionId) return;
+    const { error } = await supabase.from("breakout_sessions").update({
+      breakout_start: editStart,
+      breakout_end: editEnd,
+    }).eq("id", sessionId);
+    if (!error) {
+      setSession((prev: any) => ({ ...prev, breakout_start: editStart, breakout_end: editEnd }));
+      setTimerRunning(false);
+      setTimerStarted(false);
+      const start = parseTimeToToday(editStart);
+      const end = parseTimeToToday(editEnd);
+      setRemainingSeconds(Math.floor((end.getTime() - start.getTime()) / 1000));
+    }
+    setEditingTime(false);
+  };
+
   // Embla callbacks
   const onSelect = useCallback(() => {
     if (!emblaApi) return;
