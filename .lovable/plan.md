@@ -1,21 +1,19 @@
 
 
-## Plan: De-duplicate Companies Before Matching
+## Plan: Add Total People Count per Table
 
-### Problem
-The `breakout_companies` table can contain duplicate rows for the same company within a session (e.g., SUSA appears twice). The matching engine sends all rows to the AI, causing duplicates in table assignments.
+### Change
 
-### Fix
+**File: `src/pages/admin/MatchingWorkspace.tsx`** — In the `TableCard` component header (line ~1062-1063), add a badge showing the total headcount (founders + leads) next to the existing stage_mix badge.
 
-**File: `src/pages/admin/MatchingWorkspace.tsx`**
-
-After fetching `dbCompanies` and building `fullCompanyData` (line ~130), deduplicate by company name (case-insensitive) before setting state. Merge `mapped_data` from duplicates (prefer non-empty values), keeping only one record per unique company.
-
-Same dedup logic should also apply to the `companies` (chips) array.
-
-This is a ~10-line change: wrap the `dbCompanies` array in a dedup function before `.map()` calls on lines 117-130.
+```tsx
+// After the stage_mix badge on line 1063, add:
+<Badge variant="secondary" className="text-xs">
+  {table.companies.length + (table.assigned_leads?.length || 0)} people
+</Badge>
+```
 
 | File | Change |
 |------|--------|
-| `src/pages/admin/MatchingWorkspace.tsx` | Deduplicate `dbCompanies` by company name before building chips and `fullCompanyData` |
+| `src/pages/admin/MatchingWorkspace.tsx` | Add total people count badge in TableCard header |
 
