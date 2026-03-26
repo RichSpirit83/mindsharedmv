@@ -15,6 +15,8 @@ serve(async (req) => {
 
     const numTables = sessionConfig?.numTables || Math.ceil(companies.length / 6);
     const targetPerTable = sessionConfig?.targetPerTable || Math.ceil(companies.length / numTables);
+    const minPerTable = Math.floor(companies.length / numTables);
+    const maxPerTable = minPerTable + (companies.length % numTables > 0 ? 1 : 0);
     const groupingPriority = sessionConfig?.groupingPriority || "hybrid";
     const allowStageMixing =
       typeof sessionConfig?.allowStageMixing === "boolean"
