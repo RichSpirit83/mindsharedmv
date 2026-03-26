@@ -24,7 +24,7 @@ export default function FounderPool() {
   const [search, setSearch] = useState("");
   const [sortField, setSortField] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [selectedFounder, setSelectedFounder] = useState<Record<string, string> | null>(null);
+  const [selectedFounder, setSelectedFounder] = useState<{ data: Record<string, string>; ids: string[]; sessionNames: string[] } | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Import state
