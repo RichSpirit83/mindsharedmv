@@ -1188,6 +1188,27 @@ export default function SessionConfig() {
         onImport={handleLeadPasteImport}
       />
 
+      {/* Company Email Paste Dialog */}
+      <PasteCompanyEmailsDialog
+        open={companyEmailPasteDialogOpen}
+        onOpenChange={setCompanyEmailPasteDialogOpen}
+        existingEmails={csvData.map((row) => {
+          const emailKey = columnMapping.email || Object.keys(row).find((k) => k.toLowerCase().includes("email")) || "";
+          return (row[emailKey] || "").toLowerCase();
+        }).filter(Boolean)}
+        onImport={(companies) => {
+          const newRows = companies.map((c) => c.raw_data);
+          setCsvData((prev) => [...prev, ...newRows]);
+          if (newRows[0] && csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(newRows[0]));
+            const autoMap = autoMapHeaders(Object.keys(newRows[0]));
+            setColumnMapping(autoMap);
+          }
+          setCompanyEmailPasteDialogOpen(false);
+          toast.success(`Added ${companies.length} compan${companies.length !== 1 ? "ies" : "y"} from email lookup`);
+        }}
+      />
+
       {/* Actions */}
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
