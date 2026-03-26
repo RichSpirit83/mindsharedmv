@@ -17,7 +17,7 @@ const navItems = [
   { key: "briefings" as const, label: "Lead Briefings", pathPrefix: "/admin/leads/" },
 ];
 
-export default function WorkspaceNav({ sessionId, activePage, rightContent, onDownloadPdf }: WorkspaceNavProps) {
+export default function WorkspaceNav({ sessionId, activePage, rightContent, onDownloadPdf, onDownloadCsv }: WorkspaceNavProps) {
   const navigate = useNavigate();
 
   return (
