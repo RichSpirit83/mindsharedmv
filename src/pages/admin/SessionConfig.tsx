@@ -486,6 +486,7 @@ export default function SessionConfig() {
       };
       setLeads((prev) => prev.map((l, i) => i === index ? updatedLead : l));
       toast.success(`Imported profile for ${profile.name || 'lead'}`);
+      scheduleRosterSave();
       // Auto-sync to lead pool
       await syncToLeadPool(updatedLead);
     } catch (err: any) {
