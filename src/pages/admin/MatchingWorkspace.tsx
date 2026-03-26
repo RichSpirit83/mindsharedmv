@@ -526,12 +526,22 @@ export default function MatchingWorkspace() {
   }, [sessionId, fullCompanyData]);
 
   const handleRemoveCompany = useCallback((tableIndex: number, companyIndex: number) => {
+    let updatedTables: TableGroup[] = [];
     setTables((prev) => {
       const next = prev.map((t) => ({ ...t, companies: [...t.companies] }));
       next[tableIndex].companies.splice(companyIndex, 1);
+      updatedTables = next;
       return next;
     });
-  }, []);
+    setTimeout(() => {
+      if (updatedTables.length > 0) {
+        saveTablesToDb(updatedTables).catch((err) => {
+          console.error("Failed to save removal:", err);
+          toast.error("Failed to save changes");
+        });
+      }
+    }, 0);
+  }, [sessionId, fullCompanyData]);
 
   const openProfile = (data: Record<string, string>) => {
     setSelectedProfile(data);
