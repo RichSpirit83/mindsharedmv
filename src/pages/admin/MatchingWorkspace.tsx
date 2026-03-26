@@ -1478,8 +1478,26 @@ function TableSignsPopover({
       </PopoverTrigger>
       <PopoverContent side="top" align="end" className="w-96 max-h-[70vh] overflow-auto p-0">
         <div className="px-4 py-3 border-b sticky top-0 bg-popover z-10">
-          <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">Click a table number to reassign</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
+              <p className="text-xs text-muted-foreground mt-0.5">Click a table number to reassign</p>
+            </div>
+          </div>
+          <div className="flex gap-1 mt-2">
+            {(["name", "company", "table"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => { setSortBy(s); setEditingIdx(null); }}
+                className={cn(
+                  "px-2 py-1 rounded text-xs font-medium transition-colors capitalize",
+                  sortBy === s ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
+                )}
+              >
+                {s === "table" ? "Table #" : s}
+              </button>
+            ))}
+          </div>
         </div>
         <div className="divide-y">
           {allPeople.length === 0 ? (
