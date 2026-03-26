@@ -207,8 +207,8 @@ export default function MatchingWorkspace() {
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
             round_number: (t as any).round_number ?? 1,
-            assigned_leads: [...new Set((t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean))].map((name: string) => {
-              const lead = (dbLeads || []).find((l: any) => l.name === name);
+            assigned_leads: dedupeLeadNames((t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean)).map((name: string) => {
+              const lead = (dbLeads || []).find((l: any) => leadNameKey(l.name || "") === leadNameKey(name));
               return lead
                 ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [], background: lead.background || "", email: lead.email || "", linkedinUrl: lead.linkedin_url || "", website: lead.website || "" }
                 : { name, company: "", title: "", expertiseTags: [] };
