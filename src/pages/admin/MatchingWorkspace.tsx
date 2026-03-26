@@ -541,6 +541,7 @@ export default function MatchingWorkspace() {
       .update({ status: "matched" })
       .eq("id", sessionId);
     if (statusError) throw statusError;
+    return updatedTableGroups;
   };
 
   // Incremental save: move a company from one table to another
