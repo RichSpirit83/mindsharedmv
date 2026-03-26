@@ -90,7 +90,7 @@ export default function PresentationView() {
             round_number: (t as any).round_number ?? 1,
             companies: tableAssignments.map((a) => {
               const m = ((a as any).breakout_companies?.mapped_data || {}) as Record<string, string>;
-              return { company_name: m.company_name || "", first_name: m.first_name || "", last_name: m.last_name || "" };
+              return { company_name: m.company_name || "", first_name: m.first_name || "", last_name: m.last_name || "", mapped_data: m };
             }),
           };
         });
