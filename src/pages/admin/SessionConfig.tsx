@@ -332,7 +332,7 @@ export default function SessionConfig() {
   }, [sessionId]);
 
   // Auto-save (debounced)
-  const saveToDb = useCallback(async () => {
+  const saveSessionMetadata = useCallback(async () => {
     if (!sessionId || !loaded) return;
     setSaving(true);
     try {
@@ -349,7 +349,17 @@ export default function SessionConfig() {
         prompts: prompts as any,
         column_mapping: columnMapping as any,
       }).eq("id", sessionId);
+    } catch (err) {
+      console.error("Auto-save error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionId, loaded, sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping]);
 
+  const saveRosterData = useCallback(async () => {
+    if (!sessionId || !loaded) return;
+    setSaving(true);
+    try {
       // Save companies
       if (csvData.length > 0) {
         const { error: deleteError } = await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
@@ -359,11 +369,9 @@ export default function SessionConfig() {
         }
         const companyRows = csvData.map((row) => {
           const mapped: Record<string, string> = {};
-          // First, copy any canonical fields that exist directly on the row (manual/scraped entries)
           for (const field of CANONICAL_FIELDS) {
             if (row[field]) mapped[field] = row[field];
           }
-          // Then overlay with column-mapped values (CSV rows)
           for (const [canonical, csvCol] of Object.entries(columnMapping)) {
             if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
           }
@@ -406,20 +414,25 @@ export default function SessionConfig() {
           }
         }
       }
+
+      // Mark roster as stale if session was already matched
+      if (sessionStatus === "matched") {
+        setRosterDirty(true);
+      }
     } catch (err) {
-      console.error("Auto-save error:", err);
+      console.error("Roster save error:", err);
     } finally {
       setSaving(false);
     }
-  }, [sessionId, loaded, sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads]);
+  }, [sessionId, loaded, csvData, leads, columnMapping, sessionStatus]);
 
-  // Debounce auto-save
+  // Debounce auto-save — metadata only, never touches roster/matching data
   useEffect(() => {
     if (!loaded || !sessionId) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(saveToDb, 2000);
+    saveTimer.current = setTimeout(saveSessionMetadata, 2000);
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
-  }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, csvData, leads, saveToDb]);
+  }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, saveSessionMetadata]);
 
   // Auto-sync imported lead to lead_pool
   const syncToLeadPool = async (lead: TableLead) => {
