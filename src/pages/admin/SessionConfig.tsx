@@ -596,6 +596,7 @@ export default function SessionConfig() {
         setColumnMapping(autoMap);
         if (CANONICAL_FIELDS.filter((f) => !autoMap[f]).length > 0) setShowMapper(true);
         toast.success(`Imported ${results.data.length} companies`);
+        scheduleRosterSave();
       },
       error: () => toast.error("Failed to parse CSV"),
     });
