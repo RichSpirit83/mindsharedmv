@@ -1,34 +1,25 @@
 
 
-## Plan: Fix Lead Pool Email Lookup
+## Plan: Fix Uneven Table Sizes in Matching
 
 ### Problem
-The email lookup in `PasteEmailsDialog.tsx` has two issues:
-1. **Case-sensitive matching**: Emails are lowercased client-side before the `.in()` query, but PostgreSQL's `IN` is case-sensitive. If the DB stores `AMurphy@JobSync.io`, it won't match `amurphy@jobsync.io`.
-2. **Unnecessary `as any` casts**: The `lead_pool` table exists in the generated types, so the `as any` casts are unnecessary and could mask real errors.
+The AI matching engine asks for "roughly" N companies per table but doesn't enforce even distribution, so some tables (like table 7) end up with significantly fewer founders.
 
 ### Fix
 
-**File: `src/components/PasteEmailsDialog.tsx`**
-- Remove `as any` casts from the Supabase query
-- Use `.ilike()` won't work for arrays. Instead, use a case-insensitive approach: query with both original-case and lowered emails, or use an RPC function. The simplest fix: use `.or()` with `ilike` filters, but that's unwieldy for many emails.
-- Best approach: keep emails as-is (don't lowercase them before the query), and do case-insensitive comparison client-side when deduplicating. The DB likely stores emails in the same case they were entered — so pass the original-case emails to `.in()`.
-- Actually the simplest robust fix: query ALL lead_pool emails and filter client-side, since lead pools are typically small. Or use a Postgres function with `LOWER()`.
+**File: `supabase/functions/generate-matches/index.ts`**
 
-**Chosen approach**: Use an RPC or simply fetch leads where `email` is in the list, but also try original case. The most pragmatic fix:
-1. Don't lowercase the emails before passing to `.in()` — pass them as-is
-2. Also pass lowercased versions as a fallback
-3. Do case-insensitive deduplication client-side
+1. **Strengthen the prompt constraint** — Add explicit min/max bounds to the system prompt:
+   - Calculate `minPerTable = Math.floor(companies.length / numTables)` and `maxPerTable = minPerTable + 1`
+   - Add rule: `"Each table MUST have between ${minPerTable} and ${maxPerTable} companies. No table may have fewer than ${minPerTable}. This is a hard constraint — do NOT create unbalanced tables."`
 
-Actually, the simplest and most reliable fix: use `.ilike` with `or` filter, or better yet, create a small server-side query. But the easiest: just pass original-case emails to `.in()` and handle comparison client-side with `.toLowerCase()`.
+2. **Add post-processing validation** — After parsing the AI response, check table sizes and rebalance if needed:
+   - If any table has fewer than `minPerTable` companies, move companies from the largest table(s) to the smallest until balanced
+   - This acts as a safety net regardless of what the AI returns
 
-**File: `src/components/PasteEmailsDialog.tsx`**
-- Parse emails without lowercasing for the DB query
-- Pass both original and lowercased variants to `.in()` to catch either case
-- Remove `as any` casts
-- Keep client-side deduplication case-insensitive
+### Changes Summary
 
 | File | Change |
 |------|--------|
-| `src/components/PasteEmailsDialog.tsx` | Fix email case handling in query, remove `as any` casts |
+| `supabase/functions/generate-matches/index.ts` | Add hard min/max constraint to prompt + post-processing rebalance |
 
