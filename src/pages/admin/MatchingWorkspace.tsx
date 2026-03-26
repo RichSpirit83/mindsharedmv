@@ -193,6 +193,7 @@ export default function MatchingWorkspace() {
           const tableCompanies = tableAssignments.map((a) => {
             const m = ((a as any).breakout_companies?.mapped_data || {}) as Record<string, string>;
             return {
+              db_company_id: (a as any).breakout_companies?.id || a.company_id,
               company_name: m.company_name || "",
               first_name: m.first_name || "",
               last_name: m.last_name || "",
@@ -203,6 +204,7 @@ export default function MatchingWorkspace() {
             };
           });
           return {
+            db_id: t.id,
             table_number: t.table_number,
             table_name: t.table_name || "",
             theme: t.theme || "",
