@@ -41,6 +41,9 @@ serve(async (req) => {
         email_confirm: true,
         password: userPassword,
       });
+      if (error?.code === "email_exists") {
+        throw new Error(username ? `Username "${username}" is already taken` : `A user with email "${email}" already exists`);
+      }
       if (error) throw error;
 
       const assignRole = role || "viewer";
