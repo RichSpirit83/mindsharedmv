@@ -257,7 +257,8 @@ export default function SessionConfig() {
   const [leadCsvStep, setLeadCsvStep] = useState<"mapping" | "preview">("mapping");
   const [poolSelection, setPoolSelection] = useState<Set<string>>(new Set());
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
-
+  const rosterSaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const rosterDirtyRef = useRef(false);
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   // Load lead pool for "Add from Pool" dialog
