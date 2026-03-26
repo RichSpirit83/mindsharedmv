@@ -1290,6 +1290,7 @@ export default function SessionConfig() {
             const autoMap = autoMapHeaders(Object.keys(row));
             setColumnMapping(autoMap);
           }
+          scheduleRosterSave();
         }}
       />
 
