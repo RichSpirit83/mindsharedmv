@@ -287,7 +287,7 @@ export default function FounderPool() {
         <div className="flex items-center gap-3">
           <Building2 className="h-6 w-6 text-primary" />
           <h1 className="text-2xl font-heading font-bold">Founder Participants</h1>
-          <Badge variant="secondary">{rawData.length} founders</Badge>
+          <Badge variant="secondary">{dedupedData.length} founders</Badge>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={() => startImport("csv")}>
