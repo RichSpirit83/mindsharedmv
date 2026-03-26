@@ -207,7 +207,7 @@ export default function MatchingWorkspace() {
             shared_challenges: (t.shared_challenges as string[]) || [],
             companies: tableCompanies,
             round_number: (t as any).round_number ?? 1,
-            assigned_leads: (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean).map((name: string) => {
+            assigned_leads: [...new Set((t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean))].map((name: string) => {
               const lead = (dbLeads || []).find((l: any) => l.name === name);
               return lead
                 ? { name: lead.name, company: lead.company || "", title: lead.title || "", expertiseTags: (lead.expertise_tags as string[]) || [], background: lead.background || "", email: lead.email || "", linkedinUrl: lead.linkedin_url || "", website: lead.website || "" }
