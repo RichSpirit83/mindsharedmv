@@ -18,14 +18,16 @@ import PresentationView from "@/pages/admin/PresentationView";
 import PublicAttendeeView from "@/pages/PublicAttendeeView";
 import Login from "@/pages/Login";
 import ResetPassword from "@/pages/ResetPassword";
+import ViewerBreakouts from "@/pages/ViewerBreakouts";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
 function HomeRedirect() {
-  const { user, loading } = useAuth();
+  const { user, isAdmin, loading } = useAuth();
   if (loading) return null;
-  return user ? <Navigate to="/admin" replace /> : <Navigate to="/login" replace />;
+  if (!user) return <Navigate to="/login" replace />;
+  return isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/view" replace />;
 }
 
 const App = () => (
@@ -56,6 +58,22 @@ const App = () => (
             </Route>
             <Route
               path="/admin/present/:sessionId"
+              element={
+                <RequireAuth>
+                  <PresentationView />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/view"
+              element={
+                <RequireAuth>
+                  <ViewerBreakouts />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/view/present/:sessionId"
               element={
                 <RequireAuth>
                   <PresentationView />
