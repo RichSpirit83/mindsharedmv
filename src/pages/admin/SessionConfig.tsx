@@ -24,6 +24,7 @@ import { useQuery } from "@tanstack/react-query";
 import PasteLeadsDialog, { type ParsedLead } from "@/components/PasteLeadsDialog";
 import BulkLinkedInDialog from "@/components/BulkLinkedInDialog";
 import PasteEmailsDialog from "@/components/PasteEmailsDialog";
+import PasteCompanyEmailsDialog from "@/components/PasteCompanyEmailsDialog";
 import CohortSummary from "@/components/CohortSummary";
 import WorkspaceNav from "@/components/WorkspaceNav";
 
@@ -242,6 +243,7 @@ export default function SessionConfig() {
   const [leadPasteDialogOpen, setLeadPasteDialogOpen] = useState(false);
   const [leadLinkedinDialogOpen, setLeadLinkedinDialogOpen] = useState(false);
   const [emailPasteDialogOpen, setEmailPasteDialogOpen] = useState(false);
+  const [companyEmailPasteDialogOpen, setCompanyEmailPasteDialogOpen] = useState(false);
   const [leadCsvDialogOpen, setLeadCsvDialogOpen] = useState(false);
   const [leadCsvData, setLeadCsvData] = useState<Record<string, string>[]>([]);
   const [leadCsvHeaders, setLeadCsvHeaders] = useState<string[]>([]);
@@ -897,7 +899,11 @@ export default function SessionConfig() {
       )}
 
       {/* CSV Upload */}
-      <CollapsibleCard title="Company Data Upload">
+      <CollapsibleCard title="Company Data Upload" headerRight={
+        <Button variant="outline" size="sm" onClick={() => setCompanyEmailPasteDialogOpen(true)}>
+          <Mail className="h-4 w-4 mr-1" /> Paste Emails
+        </Button>
+      }>
           {csvData.length === 0 ? (
             <div onDragOver={(e) => e.preventDefault()} onDrop={handleDrop} className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-primary/50 transition-colors cursor-pointer">
               <input type="file" accept=".csv" onChange={handleCsvUpload} className="hidden" id="csv-upload" />
@@ -1180,6 +1186,27 @@ export default function SessionConfig() {
         open={leadLinkedinDialogOpen}
         onOpenChange={setLeadLinkedinDialogOpen}
         onImport={handleLeadPasteImport}
+      />
+
+      {/* Company Email Paste Dialog */}
+      <PasteCompanyEmailsDialog
+        open={companyEmailPasteDialogOpen}
+        onOpenChange={setCompanyEmailPasteDialogOpen}
+        existingEmails={csvData.map((row) => {
+          const emailKey = columnMapping.email || Object.keys(row).find((k) => k.toLowerCase().includes("email")) || "";
+          return (row[emailKey] || "").toLowerCase();
+        }).filter(Boolean)}
+        onImport={(companies) => {
+          const newRows = companies.map((c) => c.raw_data);
+          setCsvData((prev) => [...prev, ...newRows]);
+          if (newRows[0] && csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(newRows[0]));
+            const autoMap = autoMapHeaders(Object.keys(newRows[0]));
+            setColumnMapping(autoMap);
+          }
+          setCompanyEmailPasteDialogOpen(false);
+          toast.success(`Added ${companies.length} compan${companies.length !== 1 ? "ies" : "y"} from email lookup`);
+        }}
       />
 
       {/* Actions */}
