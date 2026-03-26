@@ -33,6 +33,8 @@ import {
   Download,
   Plus,
   X,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
@@ -103,6 +105,7 @@ export default function MatchingWorkspace() {
   const [leadPoolData, setLeadPoolData] = useState<any[]>([]);
   const [leadSelectionOpen, setLeadSelectionOpen] = useState(false);
   const [pendingTableLeads, setPendingTableLeads] = useState<any[]>([]);
+  const [companiesPanelOpen, setCompaniesPanelOpen] = useState(true);
 
   // Load from DB
   useEffect(() => {
@@ -748,47 +751,62 @@ export default function MatchingWorkspace() {
       />
 
       {/* Left Panel */}
-      <div className="w-80 border-r bg-card flex flex-col">
-        <div className="p-4 border-b space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="font-heading font-semibold text-sm">Companies</h2>
-            <Badge variant="secondary" className="text-xs">{companies.length}</Badge>
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search companies..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="flex-1 overflow-auto p-4 space-y-1">
-          {companies.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <p className="text-sm">No companies loaded.</p>
-              <p className="text-xs mt-1">Go back to Session Config to upload a CSV.</p>
-            </div>
-          ) : (
-            filteredCompanies.map((c, i) => (
-              <div
-                key={i}
-                className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 text-sm cursor-pointer"
-                onClick={() => c.mapped_data && openProfile(c.mapped_data)}
-              >
-                <div>
-                  <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
-                  <p className="text-xs text-muted-foreground">{c.first_name} {c.last_name}</p>
+      <div className={cn("border-r bg-card flex flex-col transition-all duration-300", companiesPanelOpen ? "w-80" : "w-10")}>
+        {companiesPanelOpen ? (
+          <>
+            <div className="p-4 border-b space-y-3">
+              <div className="flex items-center justify-between">
+                <h2 className="font-heading font-semibold text-sm">Companies</h2>
+                <div className="flex items-center gap-1">
+                  <Badge variant="secondary" className="text-xs">{companies.length}</Badge>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setCompaniesPanelOpen(false)}>
+                    <PanelLeftClose className="h-4 w-4" />
+                  </Button>
                 </div>
-                {c.sector && (
-                  <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>
-                )}
               </div>
-            ))
-          )}
-        </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search companies..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-auto p-4 space-y-1">
+              {companies.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">
+                  <p className="text-sm">No companies loaded.</p>
+                  <p className="text-xs mt-1">Go back to Session Config to upload a CSV.</p>
+                </div>
+              ) : (
+                filteredCompanies.map((c, i) => (
+                  <div
+                    key={i}
+                    className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 text-sm cursor-pointer"
+                    onClick={() => c.mapped_data && openProfile(c.mapped_data)}
+                  >
+                    <div>
+                      <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
+                      <p className="text-xs text-muted-foreground">{c.first_name} {c.last_name}</p>
+                    </div>
+                    {c.sector && (
+                      <Badge variant="outline" className="text-xs shrink-0 ml-2">{c.sector}</Badge>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-col items-center pt-3">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCompaniesPanelOpen(true)}>
+              <PanelLeftOpen className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
 
         <div className="border-t p-3">
           <Popover>
