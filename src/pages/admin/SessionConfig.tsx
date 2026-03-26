@@ -1161,6 +1161,20 @@ export default function SessionConfig() {
         onImport={handleLeadPasteImport}
       />
 
+      {/* Email Paste Dialog */}
+      <PasteEmailsDialog
+        open={emailPasteDialogOpen}
+        onOpenChange={setEmailPasteDialogOpen}
+        existingEmails={leads.map((l) => l.email).filter(Boolean)}
+        onImport={(poolLeads) => {
+          const newLeads = poolLeads.map((pl) => addFromPool(pl));
+          setLeads((prev) => [...prev, ...newLeads]);
+          setNumLeads((prev) => prev + newLeads.length);
+          setEmailPasteDialogOpen(false);
+          toast.success(`Added ${newLeads.length} lead${newLeads.length !== 1 ? "s" : ""} from email lookup`);
+        }}
+      />
+
       {/* Lead LinkedIn Dialog */}
       <BulkLinkedInDialog
         open={leadLinkedinDialogOpen}
