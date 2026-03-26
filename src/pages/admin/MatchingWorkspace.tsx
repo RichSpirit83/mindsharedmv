@@ -481,6 +481,7 @@ export default function MatchingWorkspace() {
     let totalMatched = 0;
     let totalExpected = 0;
 
+    const updatedTableGroups: TableGroup[] = [];
     for (const table of normalizedTableGroups) {
       const { data: insertedTable, error: insertTableError } = await supabase
         .from("breakout_tables")
@@ -505,23 +506,33 @@ export default function MatchingWorkspace() {
         .map((c) => {
           totalExpected++;
           const byName = companyByName.get(normalize(c.company_name || ""));
-          if (byName) return { table_id: insertedTable.id, company_id: byName };
+          if (byName) return { table_id: insertedTable.id, company_id: byName, orig_company: c };
           const byPerson = companyByPerson.get(
             normalize((c.first_name || "") + (c.last_name || ""))
           );
-          if (byPerson) return { table_id: insertedTable.id, company_id: byPerson };
+          if (byPerson) return { table_id: insertedTable.id, company_id: byPerson, orig_company: c };
           console.warn(`[Match] Unmatched company: "${c.company_name}" / "${c.first_name} ${c.last_name}"`);
           return null;
         })
-        .filter(Boolean);
+        .filter(Boolean) as { table_id: string; company_id: string; orig_company: CompanyChip }[];
 
       totalMatched += assignments.length;
       if (assignments.length > 0) {
         const { error: insertAssignmentsError } = await supabase
           .from("breakout_table_assignments")
-          .insert(assignments as any);
+          .insert(assignments.map(a => ({ table_id: a.table_id, company_id: a.company_id })));
         if (insertAssignmentsError) throw insertAssignmentsError;
       }
+
+      // Build updated table with db_id and db_company_id
+      updatedTableGroups.push({
+        ...table,
+        db_id: insertedTable.id,
+        companies: table.companies.map((c) => {
+          const matched = assignments.find(a => a.orig_company === c);
+          return { ...c, db_company_id: matched?.company_id };
+        }),
+      });
     }
 
     console.log(`[Match] Saved ${totalMatched}/${totalExpected} assignments`);
