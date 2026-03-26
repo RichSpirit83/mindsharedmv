@@ -391,7 +391,14 @@ export default function MatchingWorkspace() {
       setHasGenerated(true);
       toast.success(`Generated ${uniqueLeadTables.length} table groupings for Round ${activeRound}`);
 
-      await saveTablesToDb(uniqueLeadTables);
+      const savedTables = await saveTablesToDb(uniqueLeadTables);
+      // Update state with DB IDs for incremental saves
+      if (savedTables) {
+        setTables((prev) => {
+          const otherRounds = prev.filter((t) => t.round_number !== activeRound);
+          return [...otherRounds, ...savedTables].sort((a, b) => a.round_number - b.round_number || a.table_number - b.table_number);
+        });
+      }
     } catch (err: any) {
       console.error("Match generation failed:", err);
       toast.error(err.message || "Failed to generate matches");
