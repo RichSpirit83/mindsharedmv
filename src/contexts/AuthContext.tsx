@@ -36,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const fetchRole = async () => {
     const { data } = await supabase.rpc("assign_initial_role");
     setRole(data as AppRole);
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -44,11 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
         if (currentUser) {
-          setTimeout(() => fetchRole(), 0);
+          fetchRole();
         } else {
           setRole(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
@@ -56,9 +57,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const currentUser = session?.user ?? null;
       setUser(currentUser);
       if (currentUser) {
-        setTimeout(() => fetchRole(), 0);
+        fetchRole();
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
