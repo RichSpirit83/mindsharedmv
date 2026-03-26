@@ -461,7 +461,7 @@ export default function MatchingWorkspace() {
           table_name: table.table_name,
           theme: table.theme,
           stage_mix: table.stage_mix,
-          suggested_lead: (table.assigned_leads || []).map((l: any) => l.name).join(", ") || table.suggested_lead,
+          suggested_lead: dedupeLeadNames((table.assigned_leads || []).map((l: any) => l.name || "")).join(", ") || table.suggested_lead,
           rationale: table.rationale,
           shared_challenges: table.shared_challenges as any,
           round_number: table.round_number ?? 1,
