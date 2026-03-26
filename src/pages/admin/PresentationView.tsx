@@ -54,6 +54,7 @@ export default function PresentationView() {
   const [editingTime, setEditingTime] = useState(false);
   const [editStart, setEditStart] = useState("");
   const [editEnd, setEditEnd] = useState("");
+  const [selectedCompany, setSelectedCompany] = useState<Record<string, string> | null>(null);
 
   // Timer state
   const [timerRunning, setTimerRunning] = useState(false);
