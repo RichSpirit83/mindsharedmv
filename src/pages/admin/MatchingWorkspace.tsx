@@ -1432,3 +1432,103 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick,
     </Card>
   );
 }
+
+function TableSignsPopover({
+  tables,
+  activeRound,
+  onReassignCompany,
+  onReassignLead,
+}: {
+  tables: TableGroup[];
+  activeRound: number;
+  onReassignCompany: (personName: string, company: string, fromTableNum: number, toTableNum: number) => void;
+  onReassignLead: (leadName: string, fromTableNum: number, toTableNum: number) => void;
+}) {
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+
+  const roundTables = tables.filter((t) => t.round_number === activeRound);
+  const tableNumbers = roundTables.map((t) => t.table_number).sort((a, b) => a - b);
+
+  const allPeople = roundTables.flatMap((t) => [
+    ...t.assigned_leads.map((l) => ({
+      name: l.name,
+      company: l.company || "",
+      tableNum: t.table_number,
+      isLead: true,
+    })),
+    ...t.companies.map((c) => ({
+      name: `${c.first_name}${c.last_name ? ` ${c.last_name}` : ""}`,
+      company: c.company_name,
+      tableNum: t.table_number,
+      isLead: false,
+    })),
+  ]).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Tag className="h-4 w-4 mr-1" /> Table Signs
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent side="top" align="end" className="w-96 max-h-[70vh] overflow-auto p-0">
+        <div className="px-4 py-3 border-b sticky top-0 bg-popover z-10">
+          <h3 className="font-heading font-semibold text-sm">Table Assignments</h3>
+          <p className="text-xs text-muted-foreground mt-0.5">Click a table number to reassign</p>
+        </div>
+        <div className="divide-y">
+          {allPeople.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-6">No assignments for Round {activeRound}</p>
+          ) : (
+            allPeople.map((p, i) => (
+              <div key={i} className="flex items-center justify-between px-4 py-2 hover:bg-muted/50">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium truncate">{p.name}</span>
+                    {p.isLead && <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 shrink-0">Lead</Badge>}
+                  </div>
+                  {p.company && <p className="text-xs text-muted-foreground truncate">{p.company}</p>}
+                </div>
+                <div className="shrink-0 ml-3 relative">
+                  {editingIdx === i ? (
+                    <div className="flex items-center gap-1">
+                      {tableNumbers.filter((n) => n !== p.tableNum).map((n) => (
+                        <button
+                          key={n}
+                          onClick={() => {
+                            if (p.isLead) {
+                              onReassignLead(p.name, p.tableNum, n);
+                            } else {
+                              onReassignCompany(p.name, p.company, p.tableNum, n);
+                            }
+                            setEditingIdx(null);
+                          }}
+                          className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-primary hover:text-primary-foreground text-sm font-bold transition-colors"
+                        >
+                          {n}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setEditingIdx(null)}
+                        className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-muted hover:bg-destructive/10 text-muted-foreground text-xs transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setEditingIdx(i)}
+                      className="inline-flex items-center justify-center h-7 w-7 rounded-full bg-primary text-primary-foreground text-sm font-bold hover:ring-2 hover:ring-primary/40 transition-all"
+                    >
+                      {p.tableNum}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
