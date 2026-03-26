@@ -1216,7 +1216,21 @@ export default function SessionConfig() {
         }}
       />
 
-      {/* Actions */}
+      {/* Add Company by URL Dialog */}
+      <AddCompanyByUrlDialog
+        open={addByUrlDialogOpen}
+        onOpenChange={setAddByUrlDialogOpen}
+        onAdd={(row) => {
+          setCsvData((prev) => [...prev, row]);
+          if (csvHeaders.length === 0) {
+            setCsvHeaders(Object.keys(row));
+            const autoMap = autoMapHeaders(Object.keys(row));
+            setColumnMapping(autoMap);
+          }
+        }}
+      />
+
+
       <div className="flex gap-3 justify-end pb-8">
         <Button variant="outline" onClick={saveToDb} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
