@@ -105,6 +105,7 @@ export default function MatchingWorkspace() {
   const [leadPoolData, setLeadPoolData] = useState<any[]>([]);
   const [leadSelectionOpen, setLeadSelectionOpen] = useState(false);
   const [pendingTableLeads, setPendingTableLeads] = useState<any[]>([]);
+  const [companiesPanelOpen, setCompaniesPanelOpen] = useState(true);
 
   // Load from DB
   useEffect(() => {
