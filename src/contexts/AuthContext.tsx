@@ -34,34 +34,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const fetchRole = async () => {
-    const { data } = await supabase.rpc("assign_initial_role");
-    setRole(data as AppRole);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase.rpc("assign_initial_role");
+      if (error) {
+        console.error("assign_initial_role error:", error);
+        return;
+      }
+      setRole(data as AppRole);
+    } catch (err) {
+      console.error("assign_initial_role threw:", err);
+    }
   };
 
   useEffect(() => {
+    // 1. Set up listener FIRST — never await inside the callback.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (event, session) => {
         const currentUser = session?.user ?? null;
         setUser(currentUser);
+
+        if (event === "SIGNED_OUT") {
+          setRole(null);
+          return;
+        }
+
         if (currentUser) {
-          fetchRole();
+          // Defer RPC to avoid deadlocks inside the auth callback.
+          setTimeout(() => { fetchRole(); }, 0);
         } else {
           setRole(null);
-          setLoading(false);
         }
       }
     );
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      const currentUser = session?.user ?? null;
-      setUser(currentUser);
-      if (currentUser) {
-        fetchRole();
-      } else {
+    // 2. Then fetch existing session.
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        const currentUser = session?.user ?? null;
+        setUser(currentUser);
+        if (currentUser) {
+          setTimeout(() => { fetchRole(); }, 0);
+        }
+      })
+      .catch((err) => {
+        console.error("getSession error:", err);
+      })
+      .finally(() => {
+        // Always release the loading gate so the UI is never stuck.
         setLoading(false);
-      }
-    });
+      });
 
     return () => subscription.unsubscribe();
   }, []);
