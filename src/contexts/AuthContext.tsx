@@ -35,14 +35,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const fetchRole = async () => {
     try {
+      // Primary: read directly from user_roles (allowed by users_read_own_role policy)
+      const { data: rows, error: selErr } = await supabase
+        .from("user_roles")
+        .select("role")
+        .limit(1);
+
+      if (selErr) {
+        console.error("user_roles select error:", selErr);
+      } else if (rows && rows.length > 0) {
+        console.log("Resolved role from user_roles:", rows[0].role);
+        setRole(rows[0].role as AppRole);
+        return;
+      }
+
+      // Fallback: bootstrap via RPC if no row exists yet
       const { data, error } = await supabase.rpc("assign_initial_role");
       if (error) {
         console.error("assign_initial_role error:", error);
         return;
       }
+      console.log("Resolved role from assign_initial_role RPC:", data);
       setRole(data as AppRole);
     } catch (err) {
-      console.error("assign_initial_role threw:", err);
+      console.error("fetchRole threw:", err);
     }
   };
 
