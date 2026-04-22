@@ -1,35 +1,34 @@
 
 
-## Fix: Login screen stuck after password reset
+## Fix: Admin sent to /view instead of /admin
 
-The login page is stuck on "Loading…" because of a race condition in the auth flow. After your password recovery, Supabase fires a `PASSWORD_RECOVERY` / `SIGNED_IN` event, and our `AuthContext` calls the `assign_initial_role` RPC inside the `onAuthStateChange` callback. If that RPC hangs or the event fires before the session is fully restored, `loading` never flips back to `false` — so the Login page renders the "Loading…" state forever and you can't even submit the form.
+Your account IS admin in the database, confirmed:
+```
+user_id: 3f7bb5d7-6a36-4042-a9d3-391efccda544
+email:   ade.omit@gmail.com
+role:    admin
+```
 
-**Please do NOT share your password.** I never need it — I'll fix the stuck screen directly so you can sign in normally.
+But the client is showing the viewer UI. The cause is in `src/contexts/AuthContext.tsx`: when `assign_initial_role` RPC fails or returns unexpectedly, `role` stays `null`, `isAdmin` becomes `false`, and `HomeRedirect` routes you to `/view`. There's no fallback that reads directly from `user_roles`.
 
 ### What I'll change
 
-1. **`src/contexts/AuthContext.tsx`** — make auth initialization bulletproof:
-   - Set up `onAuthStateChange` listener FIRST, then call `getSession()` (correct Supabase order).
-   - Never `await` async work inside the `onAuthStateChange` callback (known deadlock pitfall) — defer the `assign_initial_role` RPC with `setTimeout(..., 0)`.
-   - Always flip `loading` to `false` once the initial session check resolves, even if the role fetch is still in flight or fails. Role fetch updates state independently when it returns.
-   - Wrap the RPC in try/catch so a transient failure can't freeze the UI.
-   - On `SIGNED_OUT`, clear user + role immediately.
+1. **`src/contexts/AuthContext.tsx`** — make role resolution resilient:
+   - Replace the single `assign_initial_role` RPC call with a two-step fetch:
+     - **Primary**: `SELECT role FROM user_roles WHERE user_id = auth.uid()` (allowed by the existing `users_read_own_role` policy). This is the source of truth and bypasses any RPC quirk.
+     - **Fallback**: only if no row exists, call `assign_initial_role` to bootstrap.
+   - Log the resolved role + any errors to the console so we can diagnose if it ever happens again.
+   - Keep the existing deferred-`setTimeout` pattern and the `loading=false` safety release.
 
-2. **`src/pages/Login.tsx`** — defensive timeout:
-   - If `loading` is still true after ~3 seconds, show the login form anyway with a small "Session check timed out — try signing in" hint, so you're never trapped on the spinner again.
-
-3. **`src/pages/ResetPassword.tsx`** — no logic change needed; it already handles the recovery event correctly.
+2. **`src/pages/ViewerBreakouts.tsx`** — add a small "Go to admin" link visible only when `isAdmin` is true, as a safety net so an admin who somehow lands on `/view` can click straight through to `/admin` without re-logging in.
 
 ### After deploy — what you do
 
-1. Hard refresh the `/login` page (Cmd/Ctrl+Shift+R) to clear any stale session state.
-2. Make sure the **Email** tab is selected (not Username) and the **Sign In** sub-tab is active (not Request Access).
-3. Enter `ade.omit@gmail.com` and the new password you just set.
-4. You'll land on `/admin` and all your data (1 session, 40 companies, 8 tables, 22 leads) will be visible again.
-
-If sign-in still fails with "Invalid login credentials" after the fix, the password reset email link may have expired before you submitted the new password — in that case use "Forgot password" once more, click the fresh link, set a password, and sign in immediately.
+1. Hard-refresh `/view` (Cmd/Ctrl+Shift+R).
+2. You'll be auto-redirected to `/admin` (or you can click the new "Go to admin" link).
+3. All your data (1 session, 40 companies, 8 tables, 22 leads) will be visible in the admin panel.
 
 ### Files touched
-- `src/contexts/AuthContext.tsx` (rework init + role fetch)
-- `src/pages/Login.tsx` (loading-state safety timeout)
+- `src/contexts/AuthContext.tsx` — direct `user_roles` query as primary, RPC as fallback, console logging
+- `src/pages/ViewerBreakouts.tsx` — defensive "Go to admin" link for admin users
 
