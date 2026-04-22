@@ -228,15 +228,47 @@ export default function FounderPool() {
     if (!selectedSessionId || csvData.length === 0) return;
     setImporting(true);
 
+    const MAX_FIELD_CHARS = 8000;
+    const MAX_RAW_BYTES = 32_000;
+    const BATCH_SIZE = 200;
+
+    const truncateField = (v: any): string => {
+      if (v == null) return "";
+      const s = String(v);
+      return s.length > MAX_FIELD_CHARS ? s.slice(0, MAX_FIELD_CHARS) + "…[truncated]" : s;
+    };
+
+    const trimRawData = (raw: Record<string, any>): Record<string, string> => {
+      const out: Record<string, string> = {};
+      Object.entries(raw).forEach(([k, v]) => { out[k] = truncateField(v); });
+      // If still too large, drop longest fields until under limit
+      let json = JSON.stringify(out);
+      if (json.length <= MAX_RAW_BYTES) return out;
+      const keysBySize = Object.keys(out).sort((a, b) => out[b].length - out[a].length);
+      for (const k of keysBySize) {
+        out[k] = out[k].slice(0, 500) + "…[truncated]";
+        json = JSON.stringify(out);
+        if (json.length <= MAX_RAW_BYTES) break;
+      }
+      return out;
+    };
+
     try {
       // Build mapped rows
-      const newRows = csvData.map((row) => {
+      const builtRows = csvData.map((row) => {
         const mapped: Record<string, string> = {};
         Object.entries(columnMapping).forEach(([canonical, csvHeader]) => {
-          if (csvHeader && row[csvHeader]) mapped[canonical] = row[csvHeader];
+          if (csvHeader && row[csvHeader]) mapped[canonical] = truncateField(row[csvHeader]);
         });
-        return { raw_data: row, mapped_data: mapped };
+        return { raw_data: trimRawData(row), mapped_data: mapped };
       });
+
+      // Skip empty rows (no first/last/company)
+      const nonEmptyRows = builtRows.filter(r => {
+        const m = r.mapped_data;
+        return (m.first_name || m.last_name || m.company_name);
+      });
+      const emptySkipped = builtRows.length - nonEmptyRows.length;
 
       // Dedup: check existing companies in this session
       const existingInSession = rawData.filter(r => r.session_id === selectedSessionId);
@@ -247,32 +279,70 @@ export default function FounderPool() {
         )
       );
 
-      const uniqueRows = newRows.filter(r => {
+      const uniqueRows = nonEmptyRows.filter(r => {
         const key = `${normalize(r.mapped_data.first_name)}|${normalize(r.mapped_data.last_name)}|${normalize(r.mapped_data.company_name)}`;
         return !existingKeys.has(key);
       });
+      const dupSkipped = nonEmptyRows.length - uniqueRows.length;
 
-      const skipped = newRows.length - uniqueRows.length;
+      const inserts = uniqueRows.map(r => ({
+        session_id: selectedSessionId,
+        raw_data: r.raw_data,
+        mapped_data: r.mapped_data,
+      }));
 
-      if (uniqueRows.length > 0) {
-        const inserts = uniqueRows.map(r => ({
-          session_id: selectedSessionId,
-          raw_data: r.raw_data,
-          mapped_data: r.mapped_data,
-        }));
+      let inserted = 0;
+      const failures: { name: string; message: string }[] = [];
 
-        const { error } = await supabase.from("breakout_companies").insert(inserts);
-        if (error) throw error;
+      for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
+        const batch = inserts.slice(i, i + BATCH_SIZE);
+        const { error } = await supabase.from("breakout_companies").insert(batch);
+        if (!error) {
+          inserted += batch.length;
+          continue;
+        }
+        console.error("[FounderPool] batch insert failed, falling back per-row:", error);
+        // Per-row fallback
+        for (const row of batch) {
+          const { error: rowErr } = await supabase.from("breakout_companies").insert(row);
+          if (rowErr) {
+            const m = row.mapped_data as Record<string, string>;
+            const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || m.company_name || "(unnamed)";
+            console.error("[FounderPool] row insert failed:", name, rowErr, row);
+            failures.push({ name, message: rowErr.message });
+          } else {
+            inserted += 1;
+          }
+        }
       }
 
       queryClient.invalidateQueries({ queryKey: ["founder_pool"] });
-      toast({
-        title: "Import complete",
-        description: `${uniqueRows.length} companies added${skipped > 0 ? `, ${skipped} duplicates skipped` : ""}`,
-      });
-      resetImport();
+
+      const parts: string[] = [`Added: ${inserted}`];
+      if (dupSkipped > 0) parts.push(`Skipped duplicates: ${dupSkipped}`);
+      if (emptySkipped > 0) parts.push(`Empty rows skipped: ${emptySkipped}`);
+      if (failures.length > 0) parts.push(`Failed: ${failures.length}`);
+
+      const description = parts.join(" · ") + (
+        failures.length > 0
+          ? `\nFirst failure — "${failures[0].name}": ${failures[0].message}`
+          : ""
+      );
+
+      if (inserted === 0 && failures.length > 0) {
+        toast({ title: "Import failed", description, variant: "destructive" });
+        // keep dialog open
+      } else {
+        toast({
+          title: failures.length > 0 ? "Import completed with errors" : "Import complete",
+          description,
+          variant: failures.length > 0 ? "destructive" : "default",
+        });
+        resetImport();
+      }
     } catch (err: any) {
-      toast({ title: "Import failed", description: err.message, variant: "destructive" });
+      console.error("[FounderPool] import crashed:", err);
+      toast({ title: "Import failed", description: err.message || "Unknown error", variant: "destructive" });
     } finally {
       setImporting(false);
     }
