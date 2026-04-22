@@ -53,6 +53,11 @@ export default function ViewerBreakouts() {
           <Badge variant="outline" className="text-xs">View Only</Badge>
         </div>
         <div className="flex items-center gap-3">
+          {isAdmin && (
+            <Button variant="outline" size="sm" onClick={() => navigate("/admin")}>
+              Go to admin
+            </Button>
+          )}
           <span className="text-sm text-muted-foreground">{displayName}</span>
           <Button variant="ghost" size="sm" onClick={() => signOut()}>
             <LogOut className="h-4 w-4 mr-1" /> Sign out
