@@ -24,10 +24,7 @@ import NotFound from "./pages/NotFound";
 const queryClient = new QueryClient();
 
 function HomeRedirect() {
-  const { user, isAdmin, loading } = useAuth();
-  if (loading) return null;
-  if (!user) return <Navigate to="/login" replace />;
-  return isAdmin ? <Navigate to="/admin" replace /> : <Navigate to="/view" replace />;
+  return <Navigate to="/admin" replace />;
 }
 
 const App = () => (
