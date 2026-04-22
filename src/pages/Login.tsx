@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Navigate } from "react-router-dom";
 import { LayoutDashboard, ArrowRight, Lock, Mail, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -19,8 +19,14 @@ export default function Login() {
   const [tab, setTab] = useState<string>("signin");
   const [loginMode, setLoginMode] = useState<"email" | "username">("email");
   const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [loadingTimedOut, setLoadingTimedOut] = useState(false);
 
-  if (loading) {
+  useEffect(() => {
+    const t = setTimeout(() => setLoadingTimedOut(true), 3000);
+    return () => clearTimeout(t);
+  }, []);
+
+  if (loading && !loadingTimedOut) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="animate-pulse text-muted-foreground">Loading…</div>
@@ -123,6 +129,11 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-heading">Mindshare</CardTitle>
           <CardDescription>Sign in to access the breakout engine</CardDescription>
+          {loading && loadingTimedOut && (
+            <p className="text-xs text-destructive">
+              Session check timed out — try signing in.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {magicLinkSent ? (
