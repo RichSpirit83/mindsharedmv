@@ -130,7 +130,7 @@ export default function Login() {
           <CardTitle className="text-2xl font-heading">Mindshare</CardTitle>
           <CardDescription>Sign in to access the breakout engine</CardDescription>
           {loading && loadingTimedOut && (
-            <p className="text-xs text-amber-600 dark:text-amber-400">
+            <p className="text-xs text-destructive">
               Session check timed out — try signing in.
             </p>
           )}
