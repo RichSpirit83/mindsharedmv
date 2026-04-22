@@ -1,53 +1,35 @@
 
 
-## Plan: Prevent Session Config Saves from Destroying Matching Data
+## Fix: Login screen stuck after password reset
 
-### Root Cause
+The login page is stuck on "Loading…" because of a race condition in the auth flow. After your password recovery, Supabase fires a `PASSWORD_RECOVERY` / `SIGNED_IN` event, and our `AuthContext` calls the `assign_initial_role` RPC inside the `onAuthStateChange` callback. If that RPC hangs or the event fires before the session is fully restored, `loading` never flips back to `false` — so the Login page renders the "Loading…" state forever and you can't even submit the form.
 
-The `saveToDb` function in `SessionConfig.tsx` runs on a 2-second debounce whenever **any** field changes -- including dates, times, and session name. Every save:
+**Please do NOT share your password.** I never need it — I'll fix the stuck screen directly so you can sign in normally.
 
-1. Deletes ALL `breakout_companies` for the session
-2. Re-inserts them with **new UUIDs**
-3. Since `breakout_table_assignments.company_id` has `ON DELETE CASCADE`, deleting companies **cascades and destroys all table assignments**
+### What I'll change
 
-So changing a date wipes all matching progress.
+1. **`src/contexts/AuthContext.tsx`** — make auth initialization bulletproof:
+   - Set up `onAuthStateChange` listener FIRST, then call `getSession()` (correct Supabase order).
+   - Never `await` async work inside the `onAuthStateChange` callback (known deadlock pitfall) — defer the `assign_initial_role` RPC with `setTimeout(..., 0)`.
+   - Always flip `loading` to `false` once the initial session check resolves, even if the role fetch is still in flight or fails. Role fetch updates state independently when it returns.
+   - Wrap the RPC in try/catch so a transient failure can't freeze the UI.
+   - On `SIGNED_OUT`, clear user + role immediately.
 
-### Solution
+2. **`src/pages/Login.tsx`** — defensive timeout:
+   - If `loading` is still true after ~3 seconds, show the login form anyway with a small "Session check timed out — try signing in" hint, so you're never trapped on the spinner again.
 
-Split `saveToDb` into two functions:
+3. **`src/pages/ResetPassword.tsx`** — no logic change needed; it already handles the recovery event correctly.
 
-1. **`saveSessionMetadata`** -- saves only session-level fields (name, date, times, format, prompts, grouping, etc.) to `breakout_sessions`. This is what the debounced auto-save calls.
+### After deploy — what you do
 
-2. **`saveRosterData`** -- saves companies and leads (the destructive delete-reinsert). Only called explicitly when roster data actually changes (CSV upload, lead add/remove, company add/remove).
+1. Hard refresh the `/login` page (Cmd/Ctrl+Shift+R) to clear any stale session state.
+2. Make sure the **Email** tab is selected (not Username) and the **Sign In** sub-tab is active (not Request Access).
+3. Enter `ade.omit@gmail.com` and the new password you just set.
+4. You'll land on `/admin` and all your data (1 session, 40 companies, 8 tables, 22 leads) will be visible again.
 
-### Changes
+If sign-in still fails with "Invalid login credentials" after the fix, the password reset email link may have expired before you submitted the new password — in that case use "Forgot password" once more, click the fresh link, set a password, and sign in immediately.
 
-**File: `src/pages/admin/SessionConfig.tsx`**
-
-1. Extract session metadata update into `saveSessionMetadata()` -- just the `supabase.from("breakout_sessions").update(...)` call. No company/lead deletion.
-
-2. Extract company + lead persistence into `saveRosterData()` -- the delete-reinsert logic for companies and leads.
-
-3. Change the debounced auto-save (line 414-419) to only call `saveSessionMetadata()`. Remove `csvData` and `leads` from its dependency array.
-
-4. Call `saveRosterData()` explicitly after roster-changing actions:
-   - CSV upload (`handleCsvUpload`, `handleDrop`)
-   - Company add/remove (paste emails, add by URL, manual add, delete row)
-   - Lead add/remove (paste, CSV import, pool add, individual add/delete, LinkedIn import, PDF upload)
-
-5. Update `handleContinue` to call both `saveSessionMetadata()` and `saveRosterData()`.
-
-6. Add a "stale matching" warning: after roster changes, if the session status is `"matched"`, show a warning badge in the UI indicating matching may be out-of-date.
-
-### Technical Details
-
-| Area | Detail |
-|------|--------|
-| Auto-save deps | Remove `csvData`, `leads` from the `useEffect` dependency array |
-| Roster save trigger | Call `saveRosterData()` inside each roster-mutation handler |
-| Stale indicator | Track `rosterDirty` state; set true after roster changes when status is "matched" |
-| Warning UI | Show amber badge near "Continue to Matching" button |
-
-### Files Modified
-- `src/pages/admin/SessionConfig.tsx`
+### Files touched
+- `src/contexts/AuthContext.tsx` (rework init + role fetch)
+- `src/pages/Login.tsx` (loading-state safety timeout)
 
