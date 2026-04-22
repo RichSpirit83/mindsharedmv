@@ -129,6 +129,11 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-heading">Mindshare</CardTitle>
           <CardDescription>Sign in to access the breakout engine</CardDescription>
+          {loading && loadingTimedOut && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Session check timed out — try signing in.
+            </p>
+          )}
         </CardHeader>
         <CardContent>
           {magicLinkSent ? (
