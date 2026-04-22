@@ -24,7 +24,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function ViewerBreakouts() {
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const { signOut, user, isAdmin } = useAuth();
   const [sessions, setSessions] = useState<BreakoutSession[]>([]);
   const [loading, setLoading] = useState(true);
 
