@@ -1,51 +1,44 @@
 
 
-## Fix: Founder import "Import failed"
+## Remember CSV column mappings across imports
 
-### What's actually wrong
+Right now every CSV import on `/admin/founders` makes you re-map columns from scratch, even when the headers are nearly identical to last time. The auto-mapper (`autoMapHeaders` in `src/lib/founderFields.ts`) only knows the hardcoded aliases in `FIELD_ALIASES` — it has no memory of what *you* mapped last time.
 
-Looking at `src/pages/admin/FounderPool.tsx` (the import handler, lines 227–279), I see two real problems — and **duplicates are NOT one of them**. The code already handles duplicates correctly (lines 241–253: it skips rows whose `first_name|last_name|company_name` already exist in the session, then only inserts the rest).
-
-The actual failure modes:
-
-1. **All-or-nothing single insert.** Every row is sent in ONE `supabase.from("breakout_companies").insert(inserts)` call. If even one row violates something (e.g. an oversized `raw_data` JSON, an odd character, or the whole payload exceeds Supabase's request limit), the entire import fails and you see "Import failed" with a cryptic message — even rows that were fine never land.
-
-2. **No visibility into what went wrong.** The toast just shows `err.message`, which for a Supabase batch error is often unhelpful (e.g. "Failed to fetch", "payload too large", or a Postgres error mentioning only the first offending row). You can't tell which row broke it or how many succeeded.
-
-3. **No row-level validation.** Empty rows, rows missing both name and company, or rows with massive freeform `additional_info` text get pushed straight into the batch.
+I'll add a learning layer so mappings you confirm get remembered and re-applied automatically.
 
 ### What I'll change
 
-**`src/pages/admin/FounderPool.tsx` — `handleImport` only:**
+1. **New file: `src/lib/mappingMemory.ts`**
+   - Stores a dictionary of `{ normalizedCsvHeader → canonicalField }` in `localStorage` under key `founder_mapping_memory_v1`.
+   - Exports `getRememberedMapping(headers)`, `rememberMapping(mapping, headers)`, and `clearMappingMemory()`.
+   - Normalization (lowercase, strip punctuation/whitespace) matches what `fuzzyMatchHeader` already does, so "First Name", "first_name", and "FirstName" all collapse to the same key.
 
-1. **Batch inserts (200 rows per batch).** Loop through `uniqueRows` in chunks so a single bad row or a payload-size limit can't kill the whole import. Track `insertedCount` and `failedBatches` separately.
+2. **Update `src/pages/admin/FounderPool.tsx`** (CSV upload handler around the auto-map step)
+   - When CSV is parsed: build mapping by layering **(a) hardcoded aliases → (b) remembered user mappings**, with remembered taking precedence. This way headers never seen before still get the built-in fuzzy match, and headers you've mapped manually before get YOUR choice.
+   - When the user clicks **Confirm Mapping**: call `rememberMapping(mapping, csvHeaders)` to persist every header→field pair they confirmed (skipping unmapped ones).
 
-2. **Per-row fallback on batch failure.** If a batch insert errors, retry that batch row-by-row so good rows still land and bad rows are isolated. Collect the first ~3 row-level error messages with the offending name/company to show the user.
+3. **Update `src/components/ColumnMapper.tsx`** — small UX additions:
+   - Show a subtle badge "✓ Remembered from last import" next to fields whose value came from memory (so you know which ones to double-check).
+   - Add a small **"Clear remembered mappings"** link in the header that calls `clearMappingMemory()` and resets the dropdowns to the hardcoded auto-map. Useful if you ever want a clean slate.
 
-3. **Skip empty rows up front.** Filter out rows where `first_name`, `last_name`, AND `company_name` are all empty before inserting (these are usually trailing CSV blanks and serve no purpose).
-
-4. **Trim oversized fields.** Cap any single mapped field at 8,000 chars and `raw_data` JSON at ~32KB total before insert, to avoid Postgres/Supabase payload limits. Long `additional_info` / `critical_challenges` will be truncated with a `…[truncated]` suffix.
-
-5. **Honest result toast.** Replace the single success/fail toast with a structured summary:
-   - `✓ Added: 37 · Skipped duplicates: 4 · Empty rows skipped: 2 · Failed: 1`
-   - If failures > 0, include the first failed row's name + the actual error message.
-   - Keep the dialog open if everything failed so you can retry; close it on partial/full success.
-
-6. **Console-log the full error** for any failed row so we can debug further if needed.
+4. **Apply the same to leads (optional but cheap)** — `src/components/PasteLeadsDialog.tsx` has its own `autoMapHeaders`. I'll wire it to the same memory module under a separate key (`lead_mapping_memory_v1`) so leads imports also get smarter over time. Say no if you'd rather keep this scoped to founders only.
 
 ### What stays the same
 
-- Existing duplicate detection (name + company match within the session) — unchanged.
-- CSV parsing, column mapping UI, preview step — unchanged.
-- Database schema and RLS — no changes needed.
+- All existing hardcoded aliases in `FIELD_ALIASES` keep working as the baseline.
+- The mapping UI, preview step, and import logic are unchanged — you can still override any remembered mapping before confirming.
+- Memory is per-browser (localStorage). It's not synced across devices; that would need a new DB table, which I'd only add if you ask for it.
 
 ### After deploy — what you do
 
-1. Re-run the same upload that just failed.
-2. You'll see a precise breakdown (e.g. "Added: 38, Skipped duplicates: 0, Failed: 2 — first failure: 'Acme Corp' — value too long for type…").
-3. If specific rows fail, the message will tell you which field/row to fix in the CSV; re-upload and the duplicate-detection will skip the 38 already added.
+1. Upload your next founder CSV. Headers you've previously mapped will already be filled in (marked with the "Remembered" badge).
+2. Adjust anything that's wrong, click **Confirm Mapping** — your tweaks become the new memory.
+3. If headers ever get badly out of sync, click **Clear remembered mappings** in the mapper and start fresh.
 
 ### Files touched
 
-- `src/pages/admin/FounderPool.tsx` — rewrite `handleImport` (lines ~227–279) with batching, per-row fallback, validation, and a detailed result toast. No other files affected.
+- **New**: `src/lib/mappingMemory.ts`
+- **Updated**: `src/pages/admin/FounderPool.tsx` (load memory on parse, save memory on confirm)
+- **Updated**: `src/components/ColumnMapper.tsx` (badge + clear link, accepts optional `rememberedFields` prop)
+- **Updated** (if you want it): `src/components/PasteLeadsDialog.tsx` (same pattern, separate storage key)
 
