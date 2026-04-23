@@ -16,6 +16,13 @@ import FounderProfileDialog from "@/components/FounderProfileDialog";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
 import { CANONICAL_FIELDS, autoMapHeaders } from "@/lib/founderFields";
+import {
+  FOUNDER_MAPPING_MEMORY_KEY,
+  getRememberedMapping,
+  rememberMapping,
+  clearMappingMemory,
+  getRememberedFields,
+} from "@/lib/mappingMemory";
 import { computeStageScoreFromMapped } from "@/components/cohort/companyData";
 
 type ImportStep = "idle" | "select-session" | "mapping" | "preview";
@@ -185,7 +192,8 @@ export default function FounderPool() {
         setCsvHeaders(headers);
         setCsvData(results.data as Record<string, string>[]);
         const autoMap = autoMapHeaders(headers);
-        setColumnMapping(autoMap);
+        const remembered = getRememberedMapping(FOUNDER_MAPPING_MEMORY_KEY, headers);
+        setColumnMapping({ ...autoMap, ...remembered });
         setImportStep("mapping");
       },
     });
@@ -210,7 +218,9 @@ export default function FounderPool() {
         });
         setCsvHeaders(defaultHeaders);
         setCsvData(asObjects);
-        setColumnMapping(autoMapHeaders(defaultHeaders));
+        const autoMapFb = autoMapHeaders(defaultHeaders);
+        const rememberedFb = getRememberedMapping(FOUNDER_MAPPING_MEMORY_KEY, defaultHeaders);
+        setColumnMapping({ ...autoMapFb, ...rememberedFb });
         setImportStep("mapping");
         return;
       }
@@ -220,7 +230,9 @@ export default function FounderPool() {
 
     setCsvHeaders(headers);
     setCsvData(data);
-    setColumnMapping(autoMapHeaders(headers));
+    const autoMap2 = autoMapHeaders(headers);
+    const remembered2 = getRememberedMapping(FOUNDER_MAPPING_MEMORY_KEY, headers);
+    setColumnMapping({ ...autoMap2, ...remembered2 });
     setImportStep("mapping");
   };
 
@@ -552,7 +564,16 @@ export default function FounderPool() {
                 canonicalFields={CANONICAL_FIELDS}
                 mapping={columnMapping}
                 onMappingChange={setColumnMapping}
-                onConfirm={() => setImportStep("preview")}
+                rememberedFields={getRememberedFields(FOUNDER_MAPPING_MEMORY_KEY, columnMapping)}
+                onClearMemory={() => {
+                  clearMappingMemory(FOUNDER_MAPPING_MEMORY_KEY);
+                  setColumnMapping(autoMapHeaders(csvHeaders));
+                  toast({ title: "Remembered mappings cleared" });
+                }}
+                onConfirm={() => {
+                  rememberMapping(FOUNDER_MAPPING_MEMORY_KEY, columnMapping, csvHeaders);
+                  setImportStep("preview");
+                }}
               />
               <div className="flex gap-2 justify-start">
                 <Button variant="outline" size="sm" onClick={() => setImportStep("select-session")}>
