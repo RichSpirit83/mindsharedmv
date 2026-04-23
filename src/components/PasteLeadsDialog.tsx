@@ -7,6 +7,14 @@ import { ClipboardPaste } from "lucide-react";
 import Papa from "papaparse";
 import ColumnMapper from "@/components/ColumnMapper";
 import CsvPreviewTable from "@/components/CsvPreviewTable";
+import {
+  LEAD_MAPPING_MEMORY_KEY,
+  getRememberedMapping,
+  rememberMapping,
+  clearMappingMemory,
+  getRememberedFields,
+} from "@/lib/mappingMemory";
+import { toast } from "@/hooks/use-toast";
 
 const LEAD_FIELDS = [
   "name", "company", "title", "email", "website", "linkedin_url", "expertise_tags", "background",
@@ -102,7 +110,9 @@ export default function PasteLeadsDialog({ open, onOpenChange, onImport }: Paste
         });
         setCsvHeaders(usedHeaders);
         setCsvData(asObjects);
-        setMapping(autoMapHeaders(usedHeaders));
+        const autoFb = autoMapHeaders(usedHeaders);
+        const remFb = getRememberedMapping(LEAD_MAPPING_MEMORY_KEY, usedHeaders);
+        setMapping({ ...autoFb, ...remFb });
         setStep("mapping");
         return;
       }
@@ -111,12 +121,15 @@ export default function PasteLeadsDialog({ open, onOpenChange, onImport }: Paste
 
     setCsvHeaders(headers);
     setCsvData(data);
-    setMapping(autoMapHeaders(headers));
+    const auto = autoMapHeaders(headers);
+    const rem = getRememberedMapping(LEAD_MAPPING_MEMORY_KEY, headers);
+    setMapping({ ...auto, ...rem });
     setStep("mapping");
   };
 
   const confirmMapping = () => {
     if (!mapping.name) return;
+    rememberMapping(LEAD_MAPPING_MEMORY_KEY, mapping, csvHeaders);
     setStep("preview");
   };
 
@@ -188,6 +201,12 @@ export default function PasteLeadsDialog({ open, onOpenChange, onImport }: Paste
               canonicalFields={LEAD_FIELDS}
               mapping={mapping}
               onMappingChange={setMapping}
+              rememberedFields={getRememberedFields(LEAD_MAPPING_MEMORY_KEY, mapping)}
+              onClearMemory={() => {
+                clearMappingMemory(LEAD_MAPPING_MEMORY_KEY);
+                setMapping(autoMapHeaders(csvHeaders));
+                toast({ title: "Remembered mappings cleared" });
+              }}
               onConfirm={confirmMapping}
             />
             <div className="flex gap-2 justify-start">
