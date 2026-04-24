@@ -1215,7 +1215,15 @@ export default function SessionConfig() {
                   <Button variant="outline" size="sm" onClick={() => setShowMapper(!showMapper)}>
                     {showMapper ? "Hide Mapper" : "Edit Mapping"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); scheduleRosterSave(); }}>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    // Queue every existing DB-backed row for deletion (gated by
+                    // the explicit "Save changes" button) — clearing local
+                    // state alone would orphan rows in the DB.
+                    csvData.forEach((row) => {
+                      if (row.__rowId) queueCompanyDelete(row.__rowId);
+                    });
+                    setCsvData([]); setCsvHeaders([]); setColumnMapping({});
+                  }}>
                     Replace File
                   </Button>
                 </div>
@@ -1225,9 +1233,8 @@ export default function SessionConfig() {
               )}
               {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => {
                 const removed = csvData[index];
-                if (removed?.__rowId) deletedCompanyIdsRef.current.add(removed.__rowId);
+                if (removed?.__rowId) queueCompanyDelete(removed.__rowId);
                 setCsvData((prev) => prev.filter((_, i) => i !== index));
-                scheduleRosterSave();
               }} />}
             </div>
           )}
