@@ -1,57 +1,66 @@
-## Why your imports keep disappearing
+## Why "some fields are remembered, others not"
 
-Looked at the network log. At **14:18:42** the FounderPool inserted 49 rows into `breakout_companies` for "Breakout 2". At **14:19:25** — 43 seconds later — there is a single `DELETE breakout_companies?id=in.(...)` request with **exactly those 49 IDs**. After that delete, "Breakout 2" has 0 companies. That's why "Paste Emails" later finds nothing — the rows are gone.
+I traced through the mapping-memory feature on `/admin/founders` (CSV upload). The core read/write logic works, but the **header normalizer in `src/lib/mappingMemory.ts` is too narrow**, so headers that *look* identical to a human end up with different storage keys and the memory misses them.
 
-Querying the DB now: 0 rows for "Breakout 2", 40 for "Mindshare Breakout 1". So the data persisted briefly, then SessionConfig deleted it.
+### The bug
 
-The only code path in the entire app that deletes from `breakout_companies` is `saveRosterData` in `SessionConfig.tsx` (the one I last edited). It deletes whatever IDs are in `deletedCompanyIdsRef.current`. The previous "incremental save" fix narrowed this down from "delete everything" to "delete only IDs in the ref" — but several flows still dump IDs into that ref (or bypass it in ways that still cause data loss):
+`normalizeHeader` only strips this character class:
 
-1. **"Replace File" button** (line 1115) — clears local `csvData` but does NOT add rows to the delete ref. So those rows become invisible to the tab. Not the cause of *this* delete, but a latent bug.
-2. **Per-row delete button** in `CsvPreviewTable` — adds `__rowId` to the ref. If the user (or a stale reconciliation effect) ever triggered this for the focus-refreshed rows, they'd be queued for deletion.
-3. **Most likely culprit here:** the focus-refresh effect (lines 347-396) merges new DB rows into local state by `__rowId`. If the user had SessionConfig open with the *old* (pre-import) roster, then imported via FounderPool in another tab, then came back and edited *anything* in SessionConfig, the auto-save runs `saveRosterData` — and although the current code only deletes ref IDs, an earlier session of this tab (before today's fix shipped) could have left the ref populated, OR a re-render races such that some rows get marked stale.
+```
+[\s _ - / ? ( ) # , . ' "]
+```
 
-Regardless of the exact trigger, the architecture is fundamentally fragile: a long-lived SessionConfig tab can issue destructive deletes against a session it no longer has authoritative state for.
+Real-world CSV headers from Google Sheets / Excel / pasted-in form exports very often contain characters this regex does NOT match, so they normalize to different keys across imports:
 
-## The fix
+| What you see | Normalizes to |
+|---|---|
+| `What's your sector` (straight apostrophe) | `whatsyoursector` |
+| `What's your sector` (curly apostrophe `'` U+2019) | `what'syoursector` ← **mismatch** |
+| `Revenue – 2024` (en dash) | `revenue–2024` ← **mismatch** |
+| `Sector [Primary]` (square brackets) | `sector[primary]` ← **mismatch** |
+| `Notes:` (colon) | `notes:` ← **mismatch** |
+| `Email\u00A0Address` (non-breaking space) | `email\u00A0address` ← **mismatch** |
 
-### 1. Make SessionConfig deletes opt-in and verifiable
+So fields with "plain" headers (Company Name, Email, First Name) get remembered, while fields with typographic punctuation — exactly the long form-question headers like the DMV question, "What topics are you most interested in…", "What's your most critical challenge?" — silently fail to match across imports.
 
-In `src/pages/admin/SessionConfig.tsx`:
+There are also two smaller issues worth fixing while we're in this file:
 
-- **Require an explicit confirm modal** for any roster delete that affects more than 3 rows at once. If `deletedCompanyIdsRef.current.size > 3` when `saveRosterData` runs, show "About to remove N companies — continue?" instead of silently deleting.
-- **Re-validate every queued delete ID against the DB at save time.** Before calling `.delete().in("id", ids)`, fetch `select id, created_at from breakout_companies where id in (ids) and session_id = sessionId`. If any of those rows were created *after* the current SessionConfig tab was loaded (compare to a `tabLoadedAtRef`), drop them from the delete set — they are imports from another tab and were never meant to be deleted by this tab.
-- **Fix "Replace File"** (line 1115) to also enqueue every existing `__rowId` into `deletedCompanyIdsRef` so the destructive intent is explicit and would trip the confirm modal above.
-- **Don't auto-save deletes at all.** Keep insert/update auto-saving (those are non-destructive), but require an explicit "Save changes" button click to flush queued deletes. This single change would have prevented today's loss.
+- **Stale memory entries don't get removed.** If you map header X → field A, then later re-map header X → field B (or skip it), the old `X → A` entry stays in memory and can resurface in a future import.
+- **The "remembered" badge in `ColumnMapper` lights up even when memory only confirmed what the auto-mapper already had.** Minor, but it makes it look like memory is working when actually the auto-mapper is doing the work.
 
-### 2. Make the FounderPool import survive race conditions
+### Fix
 
-In `src/pages/admin/FounderPool.tsx`:
+1. **`src/lib/mappingMemory.ts` — broaden `normalizeHeader`**
+   - Replace the hand-picked character class with: lowercase, NFKD-normalize, strip combining marks, replace **all** non-alphanumerics with empty string. This collapses straight + curly quotes, all dash variants, brackets, colons, NBSP, em-spaces, etc., to the same key.
+   - Concretely:
+     ```ts
+     function normalizeHeader(h: string): string {
+       return h
+         .normalize("NFKD")
+         .replace(/[\u0300-\u036f]/g, "")  // strip diacritics
+         .toLowerCase()
+         .replace(/[^a-z0-9]+/g, "")
+         .trim();
+     }
+     ```
 
-- After a successful import, also invalidate `["session_companies", sessionId]` and broadcast a `BroadcastChannel("breakout_companies")` message so any open SessionConfig tab refreshes immediately rather than waiting for window-focus.
-- Switch the dedup key to **`email` first, then `first|last|company`**, so re-uploading the same CSV truly skips already-present rows even if the company-name spelling drifts.
+2. **`src/lib/mappingMemory.ts` — prune stale entries on save**
+   - In `rememberMapping`, before writing the new pairs, remove any existing memory entry whose **value (canonical field)** is one we're about to re-assign to a different header from the *current* CSV. This stops orphan entries from a previous import from hijacking future ones.
+   - Also: if a CSV header is present in this CSV but the user explicitly left it unmapped (`""`), delete its entry from memory so we don't keep auto-mapping it back.
 
-### 3. Tighten the Paste Emails lookup so it can't silently miss matches
+3. **`src/lib/mappingMemory.ts` — one-time migration of existing memory**
+   - Old keys saved under the narrow normalizer won't match keys read by the broad normalizer. On first read after this change, walk the stored object and re-key every entry through the new normalizer (collapsing duplicates), then write it back. Gate this with a version flag (`mapping_memory_version`) so it runs once.
 
-In `src/components/PasteCompanyEmailsDialog.tsx` (`handleLookup`, lines 64-92):
+4. **`src/components/ColumnMapper.tsx` — tighter "remembered" badge**
+   - Show the badge only for fields that were remembered **but the auto-mapper would not have found**. This requires passing the auto-map result alongside the remembered set, or computing "remembered AND not-in-autoMap" before passing it in. Optional polish — happy to skip if you'd rather keep it as is.
 
-- Currently selects only 3 columns and pages over all sessions client-side. That's fine at 40 rows but will silently truncate at 1000+. Add `.limit(10000)` explicitly and surface a warning if the limit is hit.
-- Broaden the email match: also check `raw_data["Email Address"]`, `raw_data["E-mail"]`, and any key whose lowercase name contains `"email"`. The current logic only checks three exact keys, so a CSV whose email column is named anything else won't match even after a correct mapping (because the mapping lives on the session, not on the row).
-- Show *which session* each matched company came from in the results list so you can tell at a glance whether you're pulling from a stale session.
+### Files touched
 
-### 4. Add a session-companies count badge
+- **Updated**: `src/lib/mappingMemory.ts` (normalizer, pruning logic, one-time migration)
+- **Updated** (optional polish): `src/components/ColumnMapper.tsx` + `src/pages/admin/FounderPool.tsx` + `src/components/PasteLeadsDialog.tsx` to make the "remembered" badge stricter
 
-In `src/pages/admin/BreakoutsList.tsx`, show "N founders" on each session card. If "Breakout 2" had said "0 founders" you'd have caught the wipe immediately instead of after the next email-paste attempt.
+### What you should see after the fix
 
-## What you'll do after deploy
-
-1. Re-run the FounderPool import for "Breakout 2".
-2. Confirm the count badge on the session card shows the right number.
-3. Open Paste Emails in the breakout tool — matches should appear with session names attached.
-4. If you ever see the new confirm modal "About to remove N companies", that's the old bug trying to fire — say No.
-
-## Files touched
-
-- `src/pages/admin/SessionConfig.tsx` — confirm modal for bulk deletes, re-validate IDs against DB before deleting, never auto-flush deletes, fix Replace File.
-- `src/pages/admin/FounderPool.tsx` — broadcast channel + email-first dedup.
-- `src/components/PasteCompanyEmailsDialog.tsx` — broader email key matching, explicit limit, session-name in results.
-- `src/pages/admin/BreakoutsList.tsx` — founder count badge per session.
+- Re-importing the same founder CSV (or any CSV with similar headers, even with curly quotes / dashes / brackets) should now restore every field you mapped last time, including the long form-question fields like the DMV one and "What topics…".
+- If you re-map a header to a different field, the old association won't come back.
+- Existing memory in your browser is preserved (migrated automatically on first load).
