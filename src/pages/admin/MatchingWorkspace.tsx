@@ -491,10 +491,11 @@ export default function MatchingWorkspace() {
       if (delAssignmentsError) throw delAssignmentsError;
     }
 
-    const { error: delTablesError } = await supabase
-      .from("breakout_tables")
+    const { error: delTablesError } = await (supabase
+      .from("breakout_tables") as any)
       .delete()
-      .eq("session_id", sessionId);
+      .eq("session_id", sessionId)
+      .eq("is_backup", false);
     if (delTablesError) throw delTablesError;
 
     const { data: dbCompanies, error: companiesError } = await supabase
