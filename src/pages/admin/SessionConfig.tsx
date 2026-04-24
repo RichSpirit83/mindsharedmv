@@ -259,6 +259,11 @@ export default function SessionConfig() {
   const saveTimer = useRef<ReturnType<typeof setTimeout>>();
   const rosterSaveTimer = useRef<ReturnType<typeof setTimeout>>();
   const rosterDirtyRef = useRef(false);
+  // DB ids the user explicitly removed in this tab. saveRosterData uses these
+  // to delete only what the user removed — never the whole roster — so concurrent
+  // imports from /admin/founders aren't wiped by this tab's debounced save.
+  const deletedCompanyIdsRef = useRef<Set<string>>(new Set());
+  const deletedLeadIdsRef = useRef<Set<string>>(new Set());
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   // Load lead pool for "Add from Pool" dialog
