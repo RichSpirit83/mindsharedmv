@@ -444,17 +444,42 @@ export default function MatchingWorkspace() {
     });
   };
 
+  // Ensure no founder/company appears at two tables in the same round.
+  // Keeps the first occurrence (by table_number order) and drops later duplicates.
+  const enforceUniqueCompaniesAcrossTables = (tableGroups: TableGroup[]) => {
+    const seenByRound = new Map<number, Set<string>>();
+    // Sort within each round by table_number to make "first occurrence" deterministic
+    return tableGroups.map((table) => {
+      const round = table.round_number ?? 1;
+      const seen = seenByRound.get(round) ?? new Set<string>();
+      const uniqueCompanies = (table.companies || []).filter((c) => {
+        const key =
+          (c.db_company_id && `id:${c.db_company_id}`) ||
+          (c.company_name && `name:${normalize(c.company_name)}`) ||
+          `person:${normalize((c.first_name || "") + (c.last_name || ""))}`;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      seenByRound.set(round, seen);
+      return { ...table, companies: uniqueCompanies };
+    });
+  };
+
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
-    const normalizedTableGroups = enforceUniqueLeadsAcrossTables(tableGroups);
+    const normalizedTableGroups = enforceUniqueCompaniesAcrossTables(
+      enforceUniqueLeadsAcrossTables(tableGroups)
+    );
 
-    // Clear previous assignments for this session's tables (assignments have no session_id)
-    const { data: existingTables, error: existingTablesError } = await supabase
-      .from("breakout_tables")
+    // Clear previous LIVE assignments only — never touch backup snapshots.
+    const { data: existingTables, error: existingTablesError } = await (supabase
+      .from("breakout_tables") as any)
       .select("id")
-      .eq("session_id", sessionId);
+      .eq("session_id", sessionId)
+      .eq("is_backup", false);
     if (existingTablesError) throw existingTablesError;
 
     const existingTableIds = (existingTables || []).map((t) => t.id);
