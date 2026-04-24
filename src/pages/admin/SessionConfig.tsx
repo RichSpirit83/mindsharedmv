@@ -549,6 +549,117 @@ export default function SessionConfig() {
     }
   }, [sessionId, loaded, csvData, leads, columnMapping, sessionStatus]);
 
+  // Helper called by row delete buttons / Replace File. Adds an id to the
+  // delete queue and bumps the badge counter that drives the explicit
+  // "Save changes" UI.
+  const queueCompanyDelete = useCallback((id: string) => {
+    deletedCompanyIdsRef.current.add(id);
+    setPendingDeleteCount(deletedCompanyIdsRef.current.size + deletedLeadIdsRef.current.size);
+  }, []);
+  const queueLeadDelete = useCallback((id: string) => {
+    deletedLeadIdsRef.current.add(id);
+    setPendingDeleteCount(deletedCompanyIdsRef.current.size + deletedLeadIdsRef.current.size);
+  }, []);
+
+  // Explicit, user-initiated flush. Re-validates every queued company id
+  // against the DB and DROPS any row created after this tab loaded — those
+  // are imports from another tab and were never meant to be deleted here.
+  const flushPendingDeletes = useCallback(async () => {
+    if (!sessionId) return;
+    setSaving(true);
+    try {
+      const companyIds = Array.from(deletedCompanyIdsRef.current);
+      const leadIds = Array.from(deletedLeadIdsRef.current);
+
+      let safeCompanyIds = companyIds;
+      if (companyIds.length > 0 && tabLoadedAtRef.current) {
+        const { data: live } = await supabase
+          .from("breakout_companies")
+          .select("id, created_at")
+          .in("id", companyIds);
+        const safe = new Set<string>();
+        const dropped: string[] = [];
+        (live || []).forEach((r) => {
+          if (r.created_at && r.created_at > (tabLoadedAtRef.current as string)) {
+            dropped.push(r.id);
+          } else {
+            safe.add(r.id);
+          }
+        });
+        companyIds.forEach((id) => {
+          if (!live?.find((r) => r.id === id)) safe.add(id);
+        });
+        if (dropped.length > 0) {
+          toast.warning(
+            `Skipped removing ${dropped.length} compan${dropped.length === 1 ? "y" : "ies"} that were imported after this tab opened.`
+          );
+        }
+        safeCompanyIds = Array.from(safe);
+      }
+
+      if (safeCompanyIds.length > 0) {
+        const { error } = await supabase
+          .from("breakout_companies")
+          .delete()
+          .in("id", safeCompanyIds);
+        if (error) {
+          toast.error("Error removing companies: " + error.message);
+          throw error;
+        }
+      }
+      if (leadIds.length > 0) {
+        const { error } = await supabase
+          .from("breakout_leads")
+          .delete()
+          .in("id", leadIds);
+        if (error) {
+          toast.error("Error removing leads: " + error.message);
+          throw error;
+        }
+      }
+      deletedCompanyIdsRef.current.clear();
+      deletedLeadIdsRef.current.clear();
+      setPendingDeleteCount(0);
+      toast.success("Changes saved");
+    } catch (err) {
+      console.error("Flush deletes error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionId]);
+
+  const cancelPendingDeletes = useCallback(async () => {
+    deletedCompanyIdsRef.current.clear();
+    deletedLeadIdsRef.current.clear();
+    setPendingDeleteCount(0);
+    if (!sessionId) return;
+    const [{ data: companies }, { data: dbLeads }] = await Promise.all([
+      supabase.from("breakout_companies").select("*").eq("session_id", sessionId),
+      supabase.from("breakout_leads").select("*").eq("session_id", sessionId),
+    ]);
+    if (companies) {
+      const rows = companies.map((c) => ({
+        ...(c.raw_data as Record<string, string>),
+        __rowId: c.id,
+      }));
+      setCsvData(rows);
+    }
+    if (dbLeads) {
+      setLeads(dbLeads.map((l) => ({
+        id: l.id,
+        name: l.name || "",
+        company: l.company || "",
+        title: l.title || "",
+        email: l.email || "",
+        website: l.website || "",
+        expertiseTags: (l.expertise_tags as string[]) || [],
+        background: l.background || "",
+        linkedinUrl: l.linkedin_url || "",
+      })));
+    }
+    toast.info("Pending removals discarded");
+  }, [sessionId]);
+
   // Debounce auto-save — metadata only, never touches roster/matching data
   useEffect(() => {
     if (!loaded || !sessionId) return;
