@@ -716,31 +716,50 @@ export default function MatchingWorkspace() {
   };
 
   const handleDownloadCsv = () => {
-    if (tables.length === 0) { toast.error("No tables to export"); return; }
-    const escapeCsv = (val: string) => {
-      if (val.includes(",") || val.includes('"') || val.includes("\n")) return `"${val.replace(/"/g, '""')}"`;
-      return val;
-    };
-    const header = ["Round","Table #","Table Name","Theme","Company","First Name","Last Name","Sector","Stage","Revenue","Lead(s)"];
-    const rows = [header.map(escapeCsv).join(",")];
-    for (const t of tables) {
-      const leads = t.assigned_leads.map(l => l.name).join("; ");
-      for (const c of t.companies) {
-        rows.push([
-          String(t.round_number), String(t.table_number), t.table_name || "", t.theme || "",
-          c.company_name || "", c.first_name || "", c.last_name || "",
-          c.sector || "", c.stage || "", c.revenue || "", leads
-        ].map(escapeCsv).join(","));
+    try {
+      const liveTables = (tables || []).filter((t: any) => !t?.is_backup);
+      if (liveTables.length === 0) { toast.error("No tables to export"); return; }
+      const escapeCsv = (val: unknown) => {
+        const s = val === null || val === undefined ? "" : String(val);
+        if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+        return s;
+      };
+      const header = ["Round","Table #","Table Name","Theme","Company","First Name","Last Name","Sector","Stage","Revenue","Lead(s)"];
+      const rows: string[] = [header.map(escapeCsv).join(",")];
+      let cellCount = 0;
+      for (const t of liveTables) {
+        const leads = (t.assigned_leads || []).map((l: any) => l?.name).filter(Boolean).join("; ");
+        const companies = t.companies || [];
+        if (companies.length === 0) {
+          rows.push([t.round_number, t.table_number, t.table_name, t.theme, "", "", "", "", "", "", leads].map(escapeCsv).join(","));
+          continue;
+        }
+        for (const c of companies) {
+          rows.push([
+            t.round_number, t.table_number, t.table_name, t.theme,
+            c.company_name, c.first_name, c.last_name,
+            c.sector, c.stage, c.revenue, leads,
+          ].map(escapeCsv).join(","));
+          cellCount++;
+        }
       }
+      // Add UTF-8 BOM so Excel renders accents correctly
+      const csvContent = "\uFEFF" + rows.join("\r\n");
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(sessionConfig?.session_name || "matching").replace(/[^a-z0-9-_]+/gi, "_")}_export.csv`;
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+      toast.success(`CSV downloaded (${cellCount} founders, ${liveTables.length} tables)`);
+    } catch (err) {
+      console.error("[CSV] Export failed:", err);
+      toast.error("CSV export failed — see console for details");
     }
-    const blob = new Blob([rows.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${sessionConfig?.session_name || "matching"}_export.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
-    toast.success("CSV downloaded");
   };
 
   const handleDownloadPdf = () => {
