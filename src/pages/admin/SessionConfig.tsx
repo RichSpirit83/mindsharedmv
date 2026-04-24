@@ -565,8 +565,11 @@ export default function SessionConfig() {
     return () => { if (saveTimer.current) clearTimeout(saveTimer.current); };
   }, [sessionName, sessionDate, breakoutStart, breakoutEnd, numTables, targetPerTable, groupingPriority, allowStageMixing, sessionFormat, prompts, columnMapping, saveSessionMetadata]);
 
-  // Schedule a debounced roster save (called after state-setting roster mutations)
+  // Schedule a debounced roster save (called after state-setting roster mutations).
+  // Gated on `loaded` so we never run before the initial DB hydration completes
+  // (otherwise we could persist an empty roster over real data).
   const scheduleRosterSave = useCallback(() => {
+    if (!loaded) return;
     rosterDirtyRef.current = true;
     if (rosterSaveTimer.current) clearTimeout(rosterSaveTimer.current);
     rosterSaveTimer.current = setTimeout(() => {
@@ -575,7 +578,7 @@ export default function SessionConfig() {
         saveRosterData();
       }
     }, 2500);
-  }, [saveRosterData]);
+  }, [loaded, saveRosterData]);
 
   const syncToLeadPool = async (lead: TableLead) => {
     try {
