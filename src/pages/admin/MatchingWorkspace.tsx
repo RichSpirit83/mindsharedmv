@@ -183,7 +183,8 @@ export default function MatchingWorkspace() {
           }
         }
       }
-      const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).eq("is_backup" as any, false).order("table_number");
+      const { data: dbTablesRaw } = await (supabase.from("breakout_tables") as any).select("*").eq("session_id", sessionId).eq("is_backup", false).order("table_number");
+      const dbTables = dbTablesRaw as any[] | null;
       if (dbTables && dbTables.length > 0) {
         // Load assignments
         const tableIds = dbTables.map((t) => t.id);
