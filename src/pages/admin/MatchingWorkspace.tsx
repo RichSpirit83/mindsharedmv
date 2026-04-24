@@ -1480,8 +1480,20 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick,
                         )}
                         onClick={() => c.mapped_data && onCompanyClick(c.mapped_data)}
                       >
-                        <span className="font-medium">{c.company_name}</span>
-                        <div className="flex items-center gap-1">
+                        <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                          <span className="font-medium truncate">{c.company_name}</span>
+                          {c.mapped_data?.revenue && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0 font-normal">
+                              {c.mapped_data.revenue}
+                            </Badge>
+                          )}
+                          {c.mapped_data?.capital_raised && (
+                            <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 shrink-0 font-normal">
+                              {c.mapped_data.capital_raised}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0 ml-1">
                           <span className="text-muted-foreground">{c.first_name}</span>
                           <button
                             onClick={(e) => { e.stopPropagation(); onRemoveCompany(i); }}
