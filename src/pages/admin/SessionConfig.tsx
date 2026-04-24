@@ -1544,11 +1544,24 @@ export default function SessionConfig() {
         }}
       />
 
-      <div className="flex gap-3 justify-end pb-8 items-center">
+      <div className="flex gap-3 justify-end pb-8 items-center flex-wrap">
         {rosterDirty && (
           <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
             ⚠ Roster changed — matching may be stale
           </Badge>
+        )}
+        {pendingDeleteCount > 0 && (
+          <>
+            <Badge variant="outline" className="border-destructive text-destructive bg-destructive/5">
+              {pendingDeleteCount} pending removal{pendingDeleteCount === 1 ? "" : "s"}
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={cancelPendingDeletes} disabled={saving}>
+              Discard
+            </Button>
+            <Button variant="destructive" size="sm" onClick={flushPendingDeletes} disabled={saving}>
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : `Confirm remove ${pendingDeleteCount}`}
+            </Button>
+          </>
         )}
         <Button variant="outline" onClick={async () => { await saveSessionMetadata(); await saveRosterData(); }} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
