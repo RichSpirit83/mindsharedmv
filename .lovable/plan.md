@@ -1,44 +1,48 @@
+## Fix: Founder pool import not saving
 
+### Root cause (confirmed)
 
-## Remember CSV column mappings across imports
+`src/pages/admin/SessionConfig.tsx` `saveRosterData` (lines 360–428) does a **destructive wipe-and-reinsert**:
 
-Right now every CSV import on `/admin/founders` makes you re-map columns from scratch, even when the headers are nearly identical to last time. The auto-mapper (`autoMapHeaders` in `src/lib/founderFields.ts`) only knows the hardcoded aliases in `FIELD_ALIASES` — it has no memory of what *you* mapped last time.
+```ts
+await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
+// then re-inserts only what's in the local csvData state
+await supabase.from("breakout_leads").delete().eq("session_id", sessionId);
+// then re-inserts only what's in the local leads state
+```
 
-I'll add a learning layer so mappings you confirm get remembered and re-applied automatically.
+This fires on a 2.5s debounce (`scheduleRosterSave`) any time roster state changes. If `/admin/session/:id` is open in another tab with stale state when you import founders from `/admin/founders`, the very next debounce tick deletes everything you just added.
 
 ### What I'll change
 
-1. **New file: `src/lib/mappingMemory.ts`**
-   - Stores a dictionary of `{ normalizedCsvHeader → canonicalField }` in `localStorage` under key `founder_mapping_memory_v1`.
-   - Exports `getRememberedMapping(headers)`, `rememberMapping(mapping, headers)`, and `clearMappingMemory()`.
-   - Normalization (lowercase, strip punctuation/whitespace) matches what `fuzzyMatchHeader` already does, so "First Name", "first_name", and "FirstName" all collapse to the same key.
+**`src/pages/admin/SessionConfig.tsx` — incremental save**
 
-2. **Update `src/pages/admin/FounderPool.tsx`** (CSV upload handler around the auto-map step)
-   - When CSV is parsed: build mapping by layering **(a) hardcoded aliases → (b) remembered user mappings**, with remembered taking precedence. This way headers never seen before still get the built-in fuzzy match, and headers you've mapped manually before get YOUR choice.
-   - When the user clicks **Confirm Mapping**: call `rememberMapping(mapping, csvHeaders)` to persist every header→field pair they confirmed (skipping unmapped ones).
+1. Tag each `csvData` row with a hidden `__rowId` when loaded from DB (the company's `breakout_companies.id`). Newly added rows (CSV upload, paste, manual add, URL add, email lookup) have no `__rowId`.
+2. Tag each `TableLead` already does — `id` matches DB `breakout_leads.id` after load.
+3. Add two refs that track DB ids the user explicitly deleted **in this tab**: `deletedCompanyIdsRef`, `deletedLeadIdsRef`.
+4. Rewrite `saveRosterData` to:
+   - **Insert** rows with no `__rowId` (new rows). Strip `__rowId` from `raw_data` before writing.
+   - **Update** mapped_data on rows that have `__rowId` (so column-mapping changes still propagate). Skip if mapped_data is unchanged.
+   - **Delete** only `deletedCompanyIdsRef` / `deletedLeadIdsRef`, then clear those refs.
+   - Never call `.delete().eq("session_id", …)`.
+5. Wire the per-row delete handler in `CsvPreviewTable` to push the deleted row's `__rowId` into `deletedCompanyIdsRef` (if present).
+6. Lead removal paths (Trash2 button) push the lead `id` into `deletedLeadIdsRef` if present.
+7. Add `loaded` gate to `scheduleRosterSave` so it can never fire before the initial DB load.
+8. Add a `window.addEventListener("focus", …)` that re-queries `breakout_companies` and `breakout_leads` for the session and merges any rows added by other tabs/imports into local state (preserving any unsaved local edits).
 
-3. **Update `src/components/ColumnMapper.tsx`** — small UX additions:
-   - Show a subtle badge "✓ Remembered from last import" next to fields whose value came from memory (so you know which ones to double-check).
-   - Add a small **"Clear remembered mappings"** link in the header that calls `clearMappingMemory()` and resets the dropdowns to the hardcoded auto-map. Useful if you ever want a clean slate.
-
-4. **Apply the same to leads (optional but cheap)** — `src/components/PasteLeadsDialog.tsx` has its own `autoMapHeaders`. I'll wire it to the same memory module under a separate key (`lead_mapping_memory_v1`) so leads imports also get smarter over time. Say no if you'd rather keep this scoped to founders only.
+**`src/pages/admin/FounderPool.tsx`** — already calls `queryClient.invalidateQueries({ queryKey: ["founder_pool"] })` after import. No changes needed.
 
 ### What stays the same
 
-- All existing hardcoded aliases in `FIELD_ALIASES` keep working as the baseline.
-- The mapping UI, preview step, and import logic are unchanged — you can still override any remembered mapping before confirming.
-- Memory is per-browser (localStorage). It's not synced across devices; that would need a new DB table, which I'd only add if you ask for it.
+- The matching workflow, debounced auto-save, and the existing roster UI.
+- Column mapping, leads pool sync, LinkedIn/PDF imports.
+- Local edits still take precedence — focus refresh only adds rows the user doesn't have.
 
-### After deploy — what you do
+### After deploy
 
-1. Upload your next founder CSV. Headers you've previously mapped will already be filled in (marked with the "Remembered" badge).
-2. Adjust anything that's wrong, click **Confirm Mapping** — your tweaks become the new memory.
-3. If headers ever get badly out of sync, click **Clear remembered mappings** in the mapper and start fresh.
+1. Re-import your founders at `/admin/founders` — they'll persist.
+2. If `/admin/session/:id` is open in another tab, switching back to it will refresh the roster from the database within ~1s.
 
 ### Files touched
 
-- **New**: `src/lib/mappingMemory.ts`
-- **Updated**: `src/pages/admin/FounderPool.tsx` (load memory on parse, save memory on confirm)
-- **Updated**: `src/components/ColumnMapper.tsx` (badge + clear link, accepts optional `rememberedFields` prop)
-- **Updated** (if you want it): `src/components/PasteLeadsDialog.tsx` (same pattern, separate storage key)
-
+- `src/pages/admin/SessionConfig.tsx` — incremental `saveRosterData`, deletion-id refs, focus refresh, `loaded` gate on `scheduleRosterSave`.
