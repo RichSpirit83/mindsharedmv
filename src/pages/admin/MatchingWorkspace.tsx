@@ -948,8 +948,20 @@ export default function MatchingWorkspace() {
                     className="flex items-center justify-between p-2 rounded-md hover:bg-muted/50 text-sm cursor-pointer"
                     onClick={() => c.mapped_data && openProfile(c.mapped_data)}
                   >
-                    <div>
-                      <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <p className="font-medium truncate">{c.company_name || "Unnamed"}</p>
+                        {c.mapped_data?.revenue && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 font-normal">
+                            {c.mapped_data.revenue}
+                          </Badge>
+                        )}
+                        {c.mapped_data?.capital_raised && (
+                          <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 font-normal">
+                            {c.mapped_data.capital_raised}
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground">{c.first_name} {c.last_name}</p>
                     </div>
                     {c.sector && (
