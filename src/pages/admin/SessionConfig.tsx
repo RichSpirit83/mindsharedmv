@@ -343,6 +343,7 @@ export default function SessionConfig() {
         setNumLeads(mapped.length);
       }
 
+      tabLoadedAtRef.current = new Date().toISOString();
       setLoaded(true);
     };
     load();
