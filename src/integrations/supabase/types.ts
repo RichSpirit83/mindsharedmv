@@ -197,9 +197,12 @@ export type Database = {
       }
       breakout_tables: {
         Row: {
+          backup_created_at: string | null
+          backup_label: string | null
           briefing_content: string | null
           created_at: string
           id: string
+          is_backup: boolean
           rationale: string | null
           round_number: number
           session_id: string
@@ -211,9 +214,12 @@ export type Database = {
           theme: string | null
         }
         Insert: {
+          backup_created_at?: string | null
+          backup_label?: string | null
           briefing_content?: string | null
           created_at?: string
           id?: string
+          is_backup?: boolean
           rationale?: string | null
           round_number?: number
           session_id: string
@@ -225,9 +231,12 @@ export type Database = {
           theme?: string | null
         }
         Update: {
+          backup_created_at?: string | null
+          backup_label?: string | null
           briefing_content?: string | null
           created_at?: string
           id?: string
+          is_backup?: boolean
           rationale?: string | null
           round_number?: number
           session_id?: string

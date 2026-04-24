@@ -183,7 +183,8 @@ export default function MatchingWorkspace() {
           }
         }
       }
-      const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
+      const { data: dbTablesRaw } = await (supabase.from("breakout_tables") as any).select("*").eq("session_id", sessionId).eq("is_backup", false).order("table_number");
+      const dbTables = dbTablesRaw as any[] | null;
       if (dbTables && dbTables.length > 0) {
         // Load assignments
         const tableIds = dbTables.map((t) => t.id);
@@ -443,17 +444,42 @@ export default function MatchingWorkspace() {
     });
   };
 
+  // Ensure no founder/company appears at two tables in the same round.
+  // Keeps the first occurrence (by table_number order) and drops later duplicates.
+  const enforceUniqueCompaniesAcrossTables = (tableGroups: TableGroup[]) => {
+    const seenByRound = new Map<number, Set<string>>();
+    // Sort within each round by table_number to make "first occurrence" deterministic
+    return tableGroups.map((table) => {
+      const round = table.round_number ?? 1;
+      const seen = seenByRound.get(round) ?? new Set<string>();
+      const uniqueCompanies = (table.companies || []).filter((c) => {
+        const key =
+          (c.db_company_id && `id:${c.db_company_id}`) ||
+          (c.company_name && `name:${normalize(c.company_name)}`) ||
+          `person:${normalize((c.first_name || "") + (c.last_name || ""))}`;
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      seenByRound.set(round, seen);
+      return { ...table, companies: uniqueCompanies };
+    });
+  };
+
   const normalize = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]/g, "");
 
   const saveTablesToDb = async (tableGroups: TableGroup[]) => {
     if (!sessionId) return;
-    const normalizedTableGroups = enforceUniqueLeadsAcrossTables(tableGroups);
+    const normalizedTableGroups = enforceUniqueCompaniesAcrossTables(
+      enforceUniqueLeadsAcrossTables(tableGroups)
+    );
 
-    // Clear previous assignments for this session's tables (assignments have no session_id)
-    const { data: existingTables, error: existingTablesError } = await supabase
-      .from("breakout_tables")
+    // Clear previous LIVE assignments only — never touch backup snapshots.
+    const { data: existingTables, error: existingTablesError } = await (supabase
+      .from("breakout_tables") as any)
       .select("id")
-      .eq("session_id", sessionId);
+      .eq("session_id", sessionId)
+      .eq("is_backup", false);
     if (existingTablesError) throw existingTablesError;
 
     const existingTableIds = (existingTables || []).map((t) => t.id);
@@ -465,10 +491,11 @@ export default function MatchingWorkspace() {
       if (delAssignmentsError) throw delAssignmentsError;
     }
 
-    const { error: delTablesError } = await supabase
-      .from("breakout_tables")
+    const { error: delTablesError } = await (supabase
+      .from("breakout_tables") as any)
       .delete()
-      .eq("session_id", sessionId);
+      .eq("session_id", sessionId)
+      .eq("is_backup", false);
     if (delTablesError) throw delTablesError;
 
     const { data: dbCompanies, error: companiesError } = await supabase
@@ -1104,7 +1131,32 @@ export default function MatchingWorkspace() {
 
         {/* Context Bar */}
         <div className="px-4 py-3 border-b bg-muted/30">
-          <h2 className="font-heading font-semibold text-sm">{sessionConfig?.session_name || "Matching Workspace"}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-heading font-semibold text-sm">{sessionConfig?.session_name || "Matching Workspace"}</h2>
+            {(() => {
+              const roundTables = tables.filter((t) => t.round_number === activeRound);
+              const seen = new Set<string>();
+              roundTables.forEach((t) => (t.companies || []).forEach((c) => {
+                const k = c.db_company_id || (c.company_name || "").toLowerCase().trim();
+                if (k) seen.add(k);
+              }));
+              const totalAssignedSlots = roundTables.reduce((s, t) => s + (t.companies?.length || 0), 0);
+              const uniqueAssigned = seen.size;
+              const expected = companies.length;
+              const hasDuplicates = totalAssignedSlots !== uniqueAssigned;
+              const isComplete = uniqueAssigned === expected && !hasDuplicates && expected > 0;
+              return (
+                <Badge
+                  variant={isComplete ? "secondary" : "destructive"}
+                  className="text-xs"
+                  title={hasDuplicates ? `${totalAssignedSlots - uniqueAssigned} duplicate placement(s) across tables` : undefined}
+                >
+                  Round {activeRound}: {uniqueAssigned} / {expected} founders assigned
+                  {hasDuplicates && ` (+${totalAssignedSlots - uniqueAssigned} dup)`}
+                </Badge>
+              );
+            })()}
+          </div>
           <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed mt-0.5">
             <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
             {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
