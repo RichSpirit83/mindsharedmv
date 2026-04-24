@@ -424,14 +424,11 @@ export default function SessionConfig() {
     if (!sessionId || !loaded) return;
     setSaving(true);
     try {
-      // Save companies
-      if (csvData.length > 0) {
-        const { error: deleteError } = await supabase.from("breakout_companies").delete().eq("session_id", sessionId);
-        if (deleteError) {
-          toast.error("Error clearing old company data: " + deleteError.message);
-          throw deleteError;
-        }
-        const companyRows = csvData.map((row) => {
+      // ---- Companies: incremental save ----
+      // 1) Insert new rows (those without a __rowId from the DB).
+      const newCompanyRows = csvData.filter((row) => !row.__rowId);
+      if (newCompanyRows.length > 0) {
+        const buildMapped = (row: Record<string, string>) => {
           const mapped: Record<string, string> = {};
           for (const field of CANONICAL_FIELDS) {
             if (row[field]) mapped[field] = row[field];
@@ -439,26 +436,69 @@ export default function SessionConfig() {
           for (const [canonical, csvCol] of Object.entries(columnMapping)) {
             if (csvCol && row[csvCol]) mapped[canonical] = row[csvCol];
           }
-          return { session_id: sessionId, raw_data: row as any, mapped_data: mapped as any };
-        });
-        for (let i = 0; i < companyRows.length; i += 20) {
-          const batch = companyRows.slice(i, i + 20);
-          const { error: insertError } = await supabase.from("breakout_companies").insert(batch);
+          return mapped;
+        };
+        const stripInternal = (row: Record<string, string>) => {
+          const { __rowId, ...rest } = row as any;
+          return rest;
+        };
+        const inserts = newCompanyRows.map((row) => ({
+          session_id: sessionId,
+          raw_data: stripInternal(row) as any,
+          mapped_data: buildMapped(row) as any,
+        }));
+        for (let i = 0; i < inserts.length; i += 20) {
+          const batch = inserts.slice(i, i + 20);
+          const { data: returned, error: insertError } = await supabase
+            .from("breakout_companies")
+            .insert(batch)
+            .select("id");
           if (insertError) {
             toast.error(`Error saving company data (batch ${Math.floor(i / 20) + 1}): ${insertError.message}`);
             throw insertError;
           }
+          // Tag the inserted rows in local state with their new DB ids so the
+          // next save doesn't try to re-insert them.
+          if (returned) {
+            const insertedRefs = newCompanyRows.slice(i, i + 20);
+            setCsvData((prev) => {
+              const next = [...prev];
+              insertedRefs.forEach((ref, idx) => {
+                const dbId = returned[idx]?.id;
+                if (!dbId) return;
+                const pos = next.indexOf(ref);
+                if (pos >= 0) next[pos] = { ...next[pos], __rowId: dbId };
+              });
+              return next;
+            });
+          }
         }
       }
 
-      // Save leads
-      const { error: leadDeleteError } = await supabase.from("breakout_leads").delete().eq("session_id", sessionId);
-      if (leadDeleteError) {
-        toast.error("Error clearing old lead data: " + leadDeleteError.message);
-        throw leadDeleteError;
+      // 2) Delete only rows the user explicitly removed in this tab.
+      if (deletedCompanyIdsRef.current.size > 0) {
+        const ids = Array.from(deletedCompanyIdsRef.current);
+        const { error } = await supabase.from("breakout_companies").delete().in("id", ids);
+        if (error) {
+          toast.error("Error removing companies: " + error.message);
+          throw error;
+        }
+        deletedCompanyIdsRef.current.clear();
       }
-      if (leads.length > 0) {
-        const leadRows = leads.map((l) => ({
+
+      // ---- Leads: incremental save ----
+      // 1) Insert leads with a non-UUID-shaped client id (those that haven't been
+      // saved yet). Anything loaded from DB has a real DB UUID as its id.
+      // We track DB ids in a set and treat anything not in it as a new lead.
+      const { data: existingLeadIds } = await supabase
+        .from("breakout_leads")
+        .select("id")
+        .eq("session_id", sessionId);
+      const existingIdSet = new Set((existingLeadIds || []).map((r) => r.id));
+
+      const newLeads = leads.filter((l) => !existingIdSet.has(l.id));
+      if (newLeads.length > 0) {
+        const leadInserts = newLeads.map((l) => ({
           session_id: sessionId,
           name: l.name,
           linkedin_url: l.linkedinUrl,
@@ -469,14 +509,41 @@ export default function SessionConfig() {
           background: l.background,
           expertise_tags: l.expertiseTags as any,
         }));
-        for (let i = 0; i < leadRows.length; i += 20) {
-          const batch = leadRows.slice(i, i + 20);
-          const { error: insertError } = await supabase.from("breakout_leads").insert(batch);
+        for (let i = 0; i < leadInserts.length; i += 20) {
+          const batch = leadInserts.slice(i, i + 20);
+          const refs = newLeads.slice(i, i + 20);
+          const { data: returned, error: insertError } = await supabase
+            .from("breakout_leads")
+            .insert(batch)
+            .select("id");
           if (insertError) {
             toast.error(`Error saving leads (batch ${Math.floor(i / 20) + 1}): ${insertError.message}`);
             throw insertError;
           }
+          if (returned) {
+            setLeads((prev) => {
+              const next = [...prev];
+              refs.forEach((ref, idx) => {
+                const dbId = returned[idx]?.id;
+                if (!dbId) return;
+                const pos = next.findIndex((l) => l.id === ref.id);
+                if (pos >= 0) next[pos] = { ...next[pos], id: dbId };
+              });
+              return next;
+            });
+          }
         }
+      }
+
+      // 2) Delete only leads the user explicitly removed in this tab.
+      if (deletedLeadIdsRef.current.size > 0) {
+        const ids = Array.from(deletedLeadIdsRef.current);
+        const { error } = await supabase.from("breakout_leads").delete().in("id", ids);
+        if (error) {
+          toast.error("Error removing leads: " + error.message);
+          throw error;
+        }
+        deletedLeadIdsRef.current.clear();
       }
 
       // Mark roster as stale if session was already matched
