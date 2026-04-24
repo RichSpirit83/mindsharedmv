@@ -1131,7 +1131,32 @@ export default function MatchingWorkspace() {
 
         {/* Context Bar */}
         <div className="px-4 py-3 border-b bg-muted/30">
-          <h2 className="font-heading font-semibold text-sm">{sessionConfig?.session_name || "Matching Workspace"}</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="font-heading font-semibold text-sm">{sessionConfig?.session_name || "Matching Workspace"}</h2>
+            {(() => {
+              const roundTables = tables.filter((t) => t.round_number === activeRound);
+              const seen = new Set<string>();
+              roundTables.forEach((t) => (t.companies || []).forEach((c) => {
+                const k = c.db_company_id || (c.company_name || "").toLowerCase().trim();
+                if (k) seen.add(k);
+              }));
+              const totalAssignedSlots = roundTables.reduce((s, t) => s + (t.companies?.length || 0), 0);
+              const uniqueAssigned = seen.size;
+              const expected = companies.length;
+              const hasDuplicates = totalAssignedSlots !== uniqueAssigned;
+              const isComplete = uniqueAssigned === expected && !hasDuplicates && expected > 0;
+              return (
+                <Badge
+                  variant={isComplete ? "secondary" : "destructive"}
+                  className="text-xs"
+                  title={hasDuplicates ? `${totalAssignedSlots - uniqueAssigned} duplicate placement(s) across tables` : undefined}
+                >
+                  Round {activeRound}: {uniqueAssigned} / {expected} founders assigned
+                  {hasDuplicates && ` (+${totalAssignedSlots - uniqueAssigned} dup)`}
+                </Badge>
+              );
+            })()}
+          </div>
           <p className="text-xs text-muted-foreground max-w-3xl leading-relaxed mt-0.5">
             <span className="font-semibold">Round {activeRound}</span> — Tables grouped using a <span className="font-semibold">{activeRoundSettings.grouping_priority}</span> approach
             {activeRoundSettings.grouping_priority === "sector" && " — prioritizing sector alignment so each table shares an industry vertical"}
