@@ -1,67 +1,61 @@
-## Goal
+## Why the badges aren't showing
 
-On the Matching Workspace page, add two small visual tags to every company chip — **Revenue** and **Capital Raised** — so you can see each founder's stage at a glance without opening the profile dialog. Back up your Round 1 work first so nothing is lost.
+The chip code is correct — the badges only render when `mapped_data.revenue` and `mapped_data.capital_raised` exist. I checked your database directly: **none of the 38 founders in this session have those fields populated**, along with several other key fields (sector, business type, PMF, sales stage, employee count, ICP, primary market).
 
-## What you'll see after
+The raw CSV has the values — they just never got mapped during upload because the column headers were too long for the auto-mapper. Examples of what came in:
 
-Each company chip in a table goes from:
+- `"Company Size (Revenue): Please indicate the ARR as of the end of 2025"` → should map to `revenue`
+- `"Company Size (Capitalization): Please indicate the amount of investment received from external investors..."` → should map to `capital_raised`
+- `"Describe what sector(s) are most relevant to you"` → should map to `sector`
+- `"What is the primary market that you serve?"` → should map to `primary_market`
+- `"Which of the following best describes your business?"` → should map to `business_type`
+- `"Have you found product-market fit?"` → should map to `has_pmf`
+- `"Where are you in your sales evolution?"` → should map to `sales_stage`
+- `"Company Size (# of Employees): Please indicate..."` → should map to `employee_count`
+- `"Briefly Describe your ideal customer profile (ICP)"` → should map to `icp`
 
-```
-Acme Inc.                 Jane
-```
-
-to:
-
-```
-Acme Inc.   [$1–5M] [Seed $2M]   Jane  ✕
-```
-
-- **Revenue** badge (green tint) — pulled from `mapped_data.revenue` (e.g. "$1–5M", "Pre-revenue").
-- **Capital Raised** badge (blue tint) — pulled from `mapped_data.capital_raised` (e.g. "$2M", "Bootstrapped").
-- Empty/missing values are hidden — no badge if the founder didn't fill it in.
-- Badges are tiny (text-[9px], h-4) so chips stay compact. They don't trigger drag/click — clicking still opens the founder profile.
+The auto-mapper's alias list only had short forms ("revenue", "sector", "icp"), so these long form headers slipped through. Your raw CSV data is intact — only `mapped_data` is incomplete.
 
 ## Plan
 
-### Step 1 — Snapshot current Round 1 (safety backup)
+### Step 1 — Backfill the 38 founders in Session 2 from their raw CSV data
 
-Before any code change, duplicate the current 5 Round 1 tables + 38 assignments into `breakout_tables` rows tagged:
-- `is_backup = true`
-- `backup_label = "Pre-tags backup (2026-04-24)"`
+Run a one-shot data update that, for each founder in this session, reads the long-form CSV columns out of `raw_data` and writes the values into `mapped_data` for: `revenue`, `capital_raised`, `sector`, `primary_market`, `business_type`, `has_pmf`, `sales_stage`, `employee_count`, `icp`.
 
-These rows are filtered out of the workspace UI (already done), so you won't see them. They're recoverable if anything goes sideways.
+- Only fills in fields that are currently empty — won't overwrite anything you've already edited.
+- No re-upload needed. After this runs, the Revenue + Capital Raised badges will appear on every chip that has a value, and the Founder Profile cards will be complete.
 
-### Step 2 — Add Revenue + Capital Raised badges to the chip
+### Step 2 — Strengthen the auto-mapper so this doesn't recur
 
-In `src/pages/admin/MatchingWorkspace.tsx` around line 1483 (the company chip render), insert two `<Badge>` components between the company name and the founder first-name. Source the values from `c.mapped_data?.revenue` and `c.mapped_data?.capital_raised`. Use distinct subtle colors so the two are easy to tell apart.
+Update `src/lib/founderFields.ts` to add these long-form aliases to the canonical field map:
 
-### Step 3 — Mirror the same badges in the left "Companies" panel (optional, low cost)
+- `sector`: + "describe what sector"
+- `primary_market`: + "what is the primary market"
+- `business_type`: + "which of the following best describes your business"
+- `customer_type`: + "general go to market profile"
+- `icp`: + "briefly describe your ideal customer profile", "ideal customer profile"
+- `employee_count`: + "company size # of employees", "company size employees"
+- `revenue`: + "company size revenue", "indicate the arr", "annual recurring revenue"
+- `capital_raised`: + "company size capitalization", "amount of investment received"
+- `has_pmf`: + "have you found product market fit"
+- `sales_stage`: + "where are you in your sales evolution", "sales evolution"
 
-The left-side searchable list (lines 945-959) currently shows just the sector badge. Add the revenue + capital badges there too so the panel matches the table cards.
+Future CSV uploads with the same Typeform-style long headers will auto-map correctly without manual intervention.
 
-## Technical Details
+### Step 3 — Confirmation snapshot
 
-**File touched**: `src/pages/admin/MatchingWorkspace.tsx` only.
+Already in place: the "Pre-tags backup (2026-04-24)" of Round 1 from the previous step is still in the database. Step 1 only touches `breakout_companies.mapped_data`, not the table assignments — your matching layout (38 founders across 5 tables) is unaffected.
 
-**Chip change** (line ~1483):
-```tsx
-<div className="flex items-center gap-1.5 min-w-0">
-  <span className="font-medium truncate">{c.company_name}</span>
-  {c.mapped_data?.revenue && (
-    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 shrink-0">
-      {c.mapped_data.revenue}
-    </Badge>
-  )}
-  {c.mapped_data?.capital_raised && (
-    <Badge variant="outline" className="text-[9px] px-1 py-0 h-4 bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 shrink-0">
-      {c.mapped_data.capital_raised}
-    </Badge>
-  )}
-</div>
-```
+## Files touched
 
-**Backup**: a one-shot data insert into `breakout_tables` + `breakout_table_assignments` for session `f0833640-…`, Round 1 only, with `is_backup = true`. No schema migration needed (columns already exist).
+- **Data update** (`breakout_companies` rows for session `f0833640-…` only): backfill `mapped_data` from `raw_data`.
+- **Code**: `src/lib/founderFields.ts` — extend `FIELD_ALIASES`.
+- **No** changes to chip rendering (the badges code is already correct), no schema migration, no edge function changes.
 
-**No DB schema changes**, no edge function changes, no impact on matching logic, drag/drop, or CSV export.
+## What you'll see after
 
-Approve and I'll back up your work, then make the chip edit.
+- Refresh the matching page → every chip with revenue/capital data shows the green and blue badges next to the company name.
+- Open any Founder Profile → Revenue, Capital Raised, Sales Stage, PMF, Sector, Primary Market, Business Type, ICP all populated.
+- Re-uploading a similar CSV in the future maps these fields automatically.
+
+Approve and I'll backfill the data and update the aliases.
