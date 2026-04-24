@@ -264,6 +264,12 @@ export default function SessionConfig() {
   // imports from /admin/founders aren't wiped by this tab's debounced save.
   const deletedCompanyIdsRef = useRef<Set<string>>(new Set());
   const deletedLeadIdsRef = useRef<Set<string>>(new Set());
+  // Records when this tab loaded its roster from the DB. Any DB row created
+  // AFTER this timestamp is, by definition, an import from another tab/page —
+  // this tab has no authority to delete it, even if its id somehow ended up
+  // in deletedCompanyIdsRef.
+  const tabLoadedAtRef = useRef<string | null>(null);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   // Load lead pool for "Add from Pool" dialog
