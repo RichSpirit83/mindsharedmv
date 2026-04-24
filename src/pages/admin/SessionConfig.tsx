@@ -1117,7 +1117,12 @@ export default function SessionConfig() {
               {showMapper && (
                 <ColumnMapper csvHeaders={csvHeaders} canonicalFields={CANONICAL_FIELDS} mapping={columnMapping} onMappingChange={(m) => setColumnMapping(m)} onConfirm={() => setShowMapper(false)} />
               )}
-              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => { setCsvData((prev) => prev.filter((_, i) => i !== index)); scheduleRosterSave(); }} />}
+              {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => {
+                const removed = csvData[index];
+                if (removed?.__rowId) deletedCompanyIdsRef.current.add(removed.__rowId);
+                setCsvData((prev) => prev.filter((_, i) => i !== index));
+                scheduleRosterSave();
+              }} />}
             </div>
           )}
       </CollapsibleCard>
