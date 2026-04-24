@@ -482,16 +482,10 @@ export default function SessionConfig() {
         }
       }
 
-      // 2) Delete only rows the user explicitly removed in this tab.
-      if (deletedCompanyIdsRef.current.size > 0) {
-        const ids = Array.from(deletedCompanyIdsRef.current);
-        const { error } = await supabase.from("breakout_companies").delete().in("id", ids);
-        if (error) {
-          toast.error("Error removing companies: " + error.message);
-          throw error;
-        }
-        deletedCompanyIdsRef.current.clear();
-      }
+      // 2) Deletes are NEVER auto-flushed. They wait for the user to click
+      // the "Save changes" button. This guarantees a stale tab can never
+      // silently wipe rows imported from /admin/founders or another tab.
+      // (See flushPendingDeletes below.)
 
       // ---- Leads: incremental save ----
       // 1) Insert leads with a non-UUID-shaped client id (those that haven't been
