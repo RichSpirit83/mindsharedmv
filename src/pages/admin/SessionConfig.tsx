@@ -1347,7 +1347,7 @@ export default function SessionConfig() {
                 <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
                   const removed = leads[i];
-                  if (removed?.id) deletedLeadIdsRef.current.add(removed.id);
+                  if (removed?.id) queueLeadDelete(removed.id);
                   setLeads((prev) => prev.filter((_, idx) => idx !== i));
                   setNumLeads((prev) => prev - 1);
                   scheduleRosterSave();
