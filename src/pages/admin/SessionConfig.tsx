@@ -264,6 +264,12 @@ export default function SessionConfig() {
   // imports from /admin/founders aren't wiped by this tab's debounced save.
   const deletedCompanyIdsRef = useRef<Set<string>>(new Set());
   const deletedLeadIdsRef = useRef<Set<string>>(new Set());
+  // Records when this tab loaded its roster from the DB. Any DB row created
+  // AFTER this timestamp is, by definition, an import from another tab/page —
+  // this tab has no authority to delete it, even if its id somehow ended up
+  // in deletedCompanyIdsRef.
+  const tabLoadedAtRef = useRef<string | null>(null);
+  const [pendingDeleteCount, setPendingDeleteCount] = useState(0);
   const speedRoundInfo = useMemo(() => computeSpeedRounds(breakoutStart, breakoutEnd), [breakoutStart, breakoutEnd]);
 
   // Load lead pool for "Add from Pool" dialog
@@ -337,6 +343,7 @@ export default function SessionConfig() {
         setNumLeads(mapped.length);
       }
 
+      tabLoadedAtRef.current = new Date().toISOString();
       setLoaded(true);
     };
     load();
@@ -475,16 +482,10 @@ export default function SessionConfig() {
         }
       }
 
-      // 2) Delete only rows the user explicitly removed in this tab.
-      if (deletedCompanyIdsRef.current.size > 0) {
-        const ids = Array.from(deletedCompanyIdsRef.current);
-        const { error } = await supabase.from("breakout_companies").delete().in("id", ids);
-        if (error) {
-          toast.error("Error removing companies: " + error.message);
-          throw error;
-        }
-        deletedCompanyIdsRef.current.clear();
-      }
+      // 2) Deletes are NEVER auto-flushed. They wait for the user to click
+      // the "Save changes" button. This guarantees a stale tab can never
+      // silently wipe rows imported from /admin/founders or another tab.
+      // (See flushPendingDeletes below.)
 
       // ---- Leads: incremental save ----
       // 1) Insert leads with a non-UUID-shaped client id (those that haven't been
@@ -535,16 +536,7 @@ export default function SessionConfig() {
         }
       }
 
-      // 2) Delete only leads the user explicitly removed in this tab.
-      if (deletedLeadIdsRef.current.size > 0) {
-        const ids = Array.from(deletedLeadIdsRef.current);
-        const { error } = await supabase.from("breakout_leads").delete().in("id", ids);
-        if (error) {
-          toast.error("Error removing leads: " + error.message);
-          throw error;
-        }
-        deletedLeadIdsRef.current.clear();
-      }
+      // 2) Lead deletes also wait for explicit "Save changes" — see flushPendingDeletes.
 
       // Mark roster as stale if session was already matched
       if (sessionStatus === "matched") {
@@ -556,6 +548,117 @@ export default function SessionConfig() {
       setSaving(false);
     }
   }, [sessionId, loaded, csvData, leads, columnMapping, sessionStatus]);
+
+  // Helper called by row delete buttons / Replace File. Adds an id to the
+  // delete queue and bumps the badge counter that drives the explicit
+  // "Save changes" UI.
+  const queueCompanyDelete = useCallback((id: string) => {
+    deletedCompanyIdsRef.current.add(id);
+    setPendingDeleteCount(deletedCompanyIdsRef.current.size + deletedLeadIdsRef.current.size);
+  }, []);
+  const queueLeadDelete = useCallback((id: string) => {
+    deletedLeadIdsRef.current.add(id);
+    setPendingDeleteCount(deletedCompanyIdsRef.current.size + deletedLeadIdsRef.current.size);
+  }, []);
+
+  // Explicit, user-initiated flush. Re-validates every queued company id
+  // against the DB and DROPS any row created after this tab loaded — those
+  // are imports from another tab and were never meant to be deleted here.
+  const flushPendingDeletes = useCallback(async () => {
+    if (!sessionId) return;
+    setSaving(true);
+    try {
+      const companyIds = Array.from(deletedCompanyIdsRef.current);
+      const leadIds = Array.from(deletedLeadIdsRef.current);
+
+      let safeCompanyIds = companyIds;
+      if (companyIds.length > 0 && tabLoadedAtRef.current) {
+        const { data: live } = await supabase
+          .from("breakout_companies")
+          .select("id, created_at")
+          .in("id", companyIds);
+        const safe = new Set<string>();
+        const dropped: string[] = [];
+        (live || []).forEach((r) => {
+          if (r.created_at && r.created_at > (tabLoadedAtRef.current as string)) {
+            dropped.push(r.id);
+          } else {
+            safe.add(r.id);
+          }
+        });
+        companyIds.forEach((id) => {
+          if (!live?.find((r) => r.id === id)) safe.add(id);
+        });
+        if (dropped.length > 0) {
+          toast.warning(
+            `Skipped removing ${dropped.length} compan${dropped.length === 1 ? "y" : "ies"} that were imported after this tab opened.`
+          );
+        }
+        safeCompanyIds = Array.from(safe);
+      }
+
+      if (safeCompanyIds.length > 0) {
+        const { error } = await supabase
+          .from("breakout_companies")
+          .delete()
+          .in("id", safeCompanyIds);
+        if (error) {
+          toast.error("Error removing companies: " + error.message);
+          throw error;
+        }
+      }
+      if (leadIds.length > 0) {
+        const { error } = await supabase
+          .from("breakout_leads")
+          .delete()
+          .in("id", leadIds);
+        if (error) {
+          toast.error("Error removing leads: " + error.message);
+          throw error;
+        }
+      }
+      deletedCompanyIdsRef.current.clear();
+      deletedLeadIdsRef.current.clear();
+      setPendingDeleteCount(0);
+      toast.success("Changes saved");
+    } catch (err) {
+      console.error("Flush deletes error:", err);
+    } finally {
+      setSaving(false);
+    }
+  }, [sessionId]);
+
+  const cancelPendingDeletes = useCallback(async () => {
+    deletedCompanyIdsRef.current.clear();
+    deletedLeadIdsRef.current.clear();
+    setPendingDeleteCount(0);
+    if (!sessionId) return;
+    const [{ data: companies }, { data: dbLeads }] = await Promise.all([
+      supabase.from("breakout_companies").select("*").eq("session_id", sessionId),
+      supabase.from("breakout_leads").select("*").eq("session_id", sessionId),
+    ]);
+    if (companies) {
+      const rows = companies.map((c) => ({
+        ...(c.raw_data as Record<string, string>),
+        __rowId: c.id,
+      }));
+      setCsvData(rows);
+    }
+    if (dbLeads) {
+      setLeads(dbLeads.map((l) => ({
+        id: l.id,
+        name: l.name || "",
+        company: l.company || "",
+        title: l.title || "",
+        email: l.email || "",
+        website: l.website || "",
+        expertiseTags: (l.expertise_tags as string[]) || [],
+        background: l.background || "",
+        linkedinUrl: l.linkedin_url || "",
+      })));
+    }
+    toast.info("Pending removals discarded");
+  }, [sessionId]);
 
   // Debounce auto-save — metadata only, never touches roster/matching data
   useEffect(() => {
@@ -1112,7 +1215,15 @@ export default function SessionConfig() {
                   <Button variant="outline" size="sm" onClick={() => setShowMapper(!showMapper)}>
                     {showMapper ? "Hide Mapper" : "Edit Mapping"}
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => { setCsvData([]); setCsvHeaders([]); setColumnMapping({}); scheduleRosterSave(); }}>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    // Queue every existing DB-backed row for deletion (gated by
+                    // the explicit "Save changes" button) — clearing local
+                    // state alone would orphan rows in the DB.
+                    csvData.forEach((row) => {
+                      if (row.__rowId) queueCompanyDelete(row.__rowId);
+                    });
+                    setCsvData([]); setCsvHeaders([]); setColumnMapping({});
+                  }}>
                     Replace File
                   </Button>
                 </div>
@@ -1122,9 +1233,8 @@ export default function SessionConfig() {
               )}
               {!showMapper && <CsvPreviewTable data={csvData} mapping={columnMapping} onDeleteRow={(index) => {
                 const removed = csvData[index];
-                if (removed?.__rowId) deletedCompanyIdsRef.current.add(removed.__rowId);
+                if (removed?.__rowId) queueCompanyDelete(removed.__rowId);
                 setCsvData((prev) => prev.filter((_, i) => i !== index));
-                scheduleRosterSave();
               }} />}
             </div>
           )}
@@ -1237,7 +1347,7 @@ export default function SessionConfig() {
                 <span className="font-heading font-semibold text-sm">Lead {i + 1}</span>
                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => {
                   const removed = leads[i];
-                  if (removed?.id) deletedLeadIdsRef.current.add(removed.id);
+                  if (removed?.id) queueLeadDelete(removed.id);
                   setLeads((prev) => prev.filter((_, idx) => idx !== i));
                   setNumLeads((prev) => prev - 1);
                   scheduleRosterSave();
@@ -1434,11 +1544,24 @@ export default function SessionConfig() {
         }}
       />
 
-      <div className="flex gap-3 justify-end pb-8 items-center">
+      <div className="flex gap-3 justify-end pb-8 items-center flex-wrap">
         {rosterDirty && (
           <Badge variant="outline" className="border-amber-500 text-amber-600 bg-amber-50">
             ⚠ Roster changed — matching may be stale
           </Badge>
+        )}
+        {pendingDeleteCount > 0 && (
+          <>
+            <Badge variant="outline" className="border-destructive text-destructive bg-destructive/5">
+              {pendingDeleteCount} pending removal{pendingDeleteCount === 1 ? "" : "s"}
+            </Badge>
+            <Button variant="ghost" size="sm" onClick={cancelPendingDeletes} disabled={saving}>
+              Discard
+            </Button>
+            <Button variant="destructive" size="sm" onClick={flushPendingDeletes} disabled={saving}>
+              {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : `Confirm remove ${pendingDeleteCount}`}
+            </Button>
+          </>
         )}
         <Button variant="outline" onClick={async () => { await saveSessionMetadata(); await saveRosterData(); }} disabled={saving}>
           {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" /> Saving...</> : "Save Now"}
