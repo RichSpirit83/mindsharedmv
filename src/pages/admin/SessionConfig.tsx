@@ -536,16 +536,7 @@ export default function SessionConfig() {
         }
       }
 
-      // 2) Delete only leads the user explicitly removed in this tab.
-      if (deletedLeadIdsRef.current.size > 0) {
-        const ids = Array.from(deletedLeadIdsRef.current);
-        const { error } = await supabase.from("breakout_leads").delete().in("id", ids);
-        if (error) {
-          toast.error("Error removing leads: " + error.message);
-          throw error;
-        }
-        deletedLeadIdsRef.current.clear();
-      }
+      // 2) Lead deletes also wait for explicit "Save changes" — see flushPendingDeletes.
 
       // Mark roster as stale if session was already matched
       if (sessionStatus === "matched") {
