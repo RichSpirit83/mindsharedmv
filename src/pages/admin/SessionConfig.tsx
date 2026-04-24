@@ -306,9 +306,14 @@ export default function SessionConfig() {
         .select("*")
         .eq("session_id", sessionId);
       if (companies && companies.length > 0) {
-        const rows = companies.map((c) => c.raw_data as Record<string, string>);
+        const rows = companies.map((c) => ({
+          ...(c.raw_data as Record<string, string>),
+          __rowId: c.id,
+        }));
         setCsvData(rows);
-        if (rows[0]) setCsvHeaders(Object.keys(rows[0]));
+        // Pick widest row for headers
+        const widest = rows.reduce((a, b) => (Object.keys(b).length > Object.keys(a).length ? b : a), rows[0]);
+        setCsvHeaders(Object.keys(widest).filter((k) => k !== "__rowId"));
       }
 
       // Load leads
@@ -336,6 +341,59 @@ export default function SessionConfig() {
     };
     load();
   }, [sessionId]);
+
+  // Refresh roster from DB when window regains focus, so that imports made
+  // in another tab (e.g. /admin/founders) appear here without overwriting them.
+  useEffect(() => {
+    if (!loaded || !sessionId) return;
+    const refresh = async () => {
+      const [{ data: companies }, { data: dbLeads }] = await Promise.all([
+        supabase.from("breakout_companies").select("*").eq("session_id", sessionId),
+        supabase.from("breakout_leads").select("*").eq("session_id", sessionId),
+      ]);
+
+      if (companies) {
+        setCsvData((prev) => {
+          const localIds = new Set(prev.map((r) => r.__rowId).filter(Boolean));
+          const newFromDb = companies
+            .filter((c) => !localIds.has(c.id))
+            .map((c) => ({ ...(c.raw_data as Record<string, string>), __rowId: c.id }));
+          if (newFromDb.length === 0) return prev;
+          // Update headers if any new keys appeared
+          const merged = [...prev, ...newFromDb];
+          const headerSet = new Set<string>();
+          merged.forEach((r) => Object.keys(r).forEach((k) => k !== "__rowId" && headerSet.add(k)));
+          setCsvHeaders(Array.from(headerSet));
+          return merged;
+        });
+      }
+
+      if (dbLeads) {
+        setLeads((prev) => {
+          const localIds = new Set(prev.map((l) => l.id));
+          const newFromDb = dbLeads
+            .filter((l) => !localIds.has(l.id))
+            .map((l) => ({
+              id: l.id,
+              name: l.name || "",
+              company: l.company || "",
+              title: l.title || "",
+              email: l.email || "",
+              website: l.website || "",
+              expertiseTags: (l.expertise_tags as string[]) || [],
+              background: l.background || "",
+              linkedinUrl: l.linkedin_url || "",
+            }));
+          if (newFromDb.length === 0) return prev;
+          const merged = [...prev, ...newFromDb];
+          setNumLeads(merged.length);
+          return merged;
+        });
+      }
+    };
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [loaded, sessionId]);
 
   // Auto-save (debounced)
   const saveSessionMetadata = useCallback(async () => {
