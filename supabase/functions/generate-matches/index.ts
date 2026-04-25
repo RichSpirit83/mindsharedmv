@@ -32,10 +32,17 @@ serve(async (req) => {
       ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges."
       : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges.";
 
+    const STAGE_TIER_RULES = `Use ONLY these four canonical stage tiers when labeling stage_mix:
+  - "Pre-Traction" — Founder-Led sales AND revenue under $250K
+  - "Early Stage" — Revenue $250K–$1M, Founder-Led or Refining sales
+  - "Growth Stage" — Revenue $1M–$5M, Refining or Building Repeatable sales
+  - "Scale Stage" — Revenue over $5M OR Team-Led sales
+Derive each company's tier from its sales_stage + revenue + capital_raised. Cluster companies whose tiers MATCH. Sector is irrelevant to the grouping decision when priority is STAGE — only use sector as a soft tiebreaker for conversation relevance once stage cohorts are formed. The table_name and theme MUST describe the stage cohort (e.g. "Founder-Led Operators", "Repeatable Revenue Builders", "Scaling Teams") — DO NOT name tables after sectors or industry verticals.`;
+
     const priorityInstructions: Record<string, string> = {
-      sector: "Group companies primarily by SECTOR similarity so each table shares an industry vertical.",
-      stage: "Group companies primarily by STAGE/REVENUE similarity so each table has companies at similar growth phases.",
-      need: "Group companies primarily by shared CHALLENGES and NEEDS so conversations are most relevant.",
+      sector: "Group companies primarily by SECTOR similarity so each table shares an industry vertical. The table_name and theme should describe the sector/industry.",
+      stage: `Group companies STRICTLY by maturity stage, not by sector. ${STAGE_TIER_RULES}`,
+      need: "Group companies primarily by shared CHALLENGES and NEEDS so conversations are most relevant. The table_name and theme should describe the shared challenge.",
       hybrid: hybridRule,
     };
 
