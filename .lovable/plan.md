@@ -1,61 +1,56 @@
-## Why the badges aren't showing
+# Stage-First Matching + Aligned Table Card Indicators
 
-The chip code is correct — the badges only render when `mapped_data.revenue` and `mapped_data.capital_raised` exist. I checked your database directly: **none of the 38 founders in this session have those fields populated**, along with several other key fields (sector, business type, PMF, sales stage, employee count, ICP, primary market).
+## What's wrong today
 
-The raw CSV has the values — they just never got mapped during upload because the column headers were too long for the auto-mapper. Examples of what came in:
+Session #2 is already set to `grouping_priority = stage`, but Round 1 was generated earlier when it was `sector`. As a result the table cards still show sector-flavored names ("Hardware, Robotics & Deep Tech", "Workflow & Industry Integration") and `stage_mix` badges that mix vocabularies ("Deep-tech / R&D Heavy" vs "Growth-stage AI/Data focus"). The badge on the card doesn't actually tell you what was used to match.
 
-- `"Company Size (Revenue): Please indicate the ARR as of the end of 2025"` → should map to `revenue`
-- `"Company Size (Capitalization): Please indicate the amount of investment received from external investors..."` → should map to `capital_raised`
-- `"Describe what sector(s) are most relevant to you"` → should map to `sector`
-- `"What is the primary market that you serve?"` → should map to `primary_market`
-- `"Which of the following best describes your business?"` → should map to `business_type`
-- `"Have you found product-market fit?"` → should map to `has_pmf`
-- `"Where are you in your sales evolution?"` → should map to `sales_stage`
-- `"Company Size (# of Employees): Please indicate..."` → should map to `employee_count`
-- `"Briefly Describe your ideal customer profile (ICP)"` → should map to `icp`
+## Goal
 
-The auto-mapper's alias list only had short forms ("revenue", "sector", "icp"), so these long form headers slipped through. Your raw CSV data is intact — only `mapped_data` is incomplete.
+When grouping is **by stage**, every table should be grouped on Sales Stage + Revenue maturity (not sector), the card name/theme should describe a *stage cohort*, and the badges should make the stage logic visually obvious.
 
 ## Plan
 
-### Step 1 — Backfill the 38 founders in Session 2 from their raw CSV data
+### 1. Tighten the AI matcher for stage-first grouping
+File: `supabase/functions/generate-matches/index.ts`
 
-Run a one-shot data update that, for each founder in this session, reads the long-form CSV columns out of `raw_data` and writes the values into `mapped_data` for: `revenue`, `capital_raised`, `sector`, `primary_market`, `business_type`, `has_pmf`, `sales_stage`, `employee_count`, `icp`.
+- Rewrite the `stage` priority instruction to be unambiguous: cluster on a normalized stage tier derived from `sales_stage` + `revenue` + `capital_raised`, ignore sector when forming groups, and only use sector as a *tiebreaker* for conversation relevance.
+- Define 4 canonical stage tiers the model must use for `stage_mix` so the badge vocabulary is consistent:
+  - `Pre-Traction` (Founder-Led, <$250K)
+  - `Early Stage` ($250K–$1M, Founder-Led/Refining)
+  - `Growth Stage` ($1M–$5M, Refining/Building Repeatable)
+  - `Scale Stage` ($5M+, Team-Led)
+- Require `table_name` and `theme` to describe the *stage cohort* (e.g. "Founder-Led Operators", "Repeatable Revenue Builders") rather than a sector vertical, when priority is `stage`.
+- Add a post-processing step that recomputes each table's dominant stage tier from the actual assigned founders' `mapped_data` and overwrites `stage_mix` with the canonical label, so the badge always matches reality even if the model drifts.
 
-- Only fills in fields that are currently empty — won't overwrite anything you've already edited.
-- No re-upload needed. After this runs, the Revenue + Capital Raised badges will appear on every chip that has a value, and the Founder Profile cards will be complete.
+### 2. Re-run matching for Round 1 of Session #2
+- Back up current Round 1 to `is_backup = true` with label `Pre stage-first regen (2026-04-25)` so the user can revert.
+- Trigger a fresh generation with `groupingPriority: 'stage'` and write the new tables.
 
-### Step 2 — Strengthen the auto-mapper so this doesn't recur
+### 3. Update the table card to reflect *what drove the match*
+File: `src/pages/admin/MatchingWorkspace.tsx` (`TableCard` component)
 
-Update `src/lib/founderFields.ts` to add these long-form aliases to the canonical field map:
+- Replace the single `stage_mix` outline badge with a small **"Matched by"** indicator chip that reads from `sessionConfig.grouping_priority`:
+  - `stage` → blue badge `Stage · {canonical tier}` (e.g. `Stage · Growth Stage`)
+  - `sector` → purple badge `Sector · {dominant sector}`
+  - `need` → amber badge `Needs · {top shared challenge}`
+  - `hybrid` → neutral badge `Hybrid`
+- Add a secondary stat row under the table title showing the actual cohort makeup (computed client-side from the assigned companies):
+  - Revenue spread (e.g. `Rev: <250K → 1M`)
+  - Sales stage majority (e.g. `Mostly Founder-Led`)
+  - Sector spread count (e.g. `4 sectors`)
+- Keep the `theme` text but make clear it's an AI-written description, not the matching criterion.
 
-- `sector`: + "describe what sector"
-- `primary_market`: + "what is the primary market"
-- `business_type`: + "which of the following best describes your business"
-- `customer_type`: + "general go to market profile"
-- `icp`: + "briefly describe your ideal customer profile", "ideal customer profile"
-- `employee_count`: + "company size # of employees", "company size employees"
-- `revenue`: + "company size revenue", "indicate the arr", "annual recurring revenue"
-- `capital_raised`: + "company size capitalization", "amount of investment received"
-- `has_pmf`: + "have you found product market fit"
-- `sales_stage`: + "where are you in your sales evolution", "sales evolution"
+### 4. Surface the active grouping priority at the top of the matching page
+- Add a small read-only chip near the page header: `Matching by: Stage` (or Sector / Needs / Hybrid) so the organizer always knows which lens drove the current layout. Clicking it deep-links to Session Config to change it.
 
-Future CSV uploads with the same Typeform-style long headers will auto-map correctly without manual intervention.
+## Technical notes
 
-### Step 3 — Confirmation snapshot
+- Stage tier computation already exists in `src/components/cohort/companyData.ts` → `computeStageScoreFromMapped`. Reuse `STAGE_SCORE_THRESHOLDS` labels (`Pre-Traction`, `Early Stage`, `Growth Stage`, `Scale Stage`) as the single source of truth for the canonical badge vocabulary in both the edge function (hardcoded list) and the card UI.
+- Dominant tier per table = mode of `computeStageScoreFromMapped(c.mapped_data).label` across that table's companies.
+- No DB schema changes required. `stage_mix` column already exists.
+- The existing revenue/cap badges on each company chip stay as-is — they complement the new table-level stage badge.
 
-Already in place: the "Pre-tags backup (2026-04-24)" of Round 1 from the previous step is still in the database. Step 1 only touches `breakout_companies.mapped_data`, not the table assignments — your matching layout (38 founders across 5 tables) is unaffected.
+## Out of scope
 
-## Files touched
-
-- **Data update** (`breakout_companies` rows for session `f0833640-…` only): backfill `mapped_data` from `raw_data`.
-- **Code**: `src/lib/founderFields.ts` — extend `FIELD_ALIASES`.
-- **No** changes to chip rendering (the badges code is already correct), no schema migration, no edge function changes.
-
-## What you'll see after
-
-- Refresh the matching page → every chip with revenue/capital data shows the green and blue badges next to the company name.
-- Open any Founder Profile → Revenue, Capital Raised, Sales Stage, PMF, Sector, Primary Market, Business Type, ICP all populated.
-- Re-uploading a similar CSV in the future maps these fields automatically.
-
-Approve and I'll backfill the data and update the aliases.
+- Changing the global default `groupingPriority` for new sessions (still `sector` per Session Config UI).
+- Round 2 / Round 3 — only Round 1 is regenerated. Other rounds keep their current state.
