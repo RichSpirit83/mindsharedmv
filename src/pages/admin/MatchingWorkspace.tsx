@@ -1277,7 +1277,7 @@ export default function MatchingWorkspace() {
                   {roundTables.map((table, i) => {
                     const globalIndex = tables.indexOf(table);
                     return (
-                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} onRemoveCompany={(ci) => handleRemoveCompany(globalIndex, ci)} />
+                      <TableCard key={`${table.round_number}-${table.table_number}`} table={table} tableIndex={globalIndex} colorClass={TABLE_COLORS[i % TABLE_COLORS.length]} groupingPriority={activeRoundSettings.grouping_priority} onCompanyClick={openProfile} onLeadClick={(lead) => { setSelectedLead(lead); setLeadProfileOpen(true); }} onRemoveCompany={(ci) => handleRemoveCompany(globalIndex, ci)} />
                     );
                   })}
                 </div>
