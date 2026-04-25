@@ -1371,15 +1371,61 @@ export default function MatchingWorkspace() {
   );
 }
 
-function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick, onRemoveCompany }: { table: TableGroup; tableIndex: number; colorClass: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void; onRemoveCompany: (companyIndex: number) => void }) {
+function TableCard({ table, tableIndex, colorClass, groupingPriority, onCompanyClick, onLeadClick, onRemoveCompany }: { table: TableGroup; tableIndex: number; colorClass: string; groupingPriority?: string; onCompanyClick: (data: Record<string, string>) => void; onLeadClick: (lead: LeadChip) => void; onRemoveCompany: (companyIndex: number) => void }) {
+  // Compute cohort summary from actual companies on this table
+  const cohort = (() => {
+    const companies = table.companies || [];
+    if (companies.length === 0) return null;
+    const sectors = new Set<string>();
+    const stageCounts: Record<string, number> = {};
+    companies.forEach((c) => {
+      const s = (c.mapped_data?.sector || c.sector || "").split(",").map((x) => x.trim()).filter(Boolean);
+      s.forEach((x) => sectors.add(x));
+      const stageRaw = (c.mapped_data?.sales_stage || c.stage || "").toLowerCase();
+      let label = "Other";
+      if (stageRaw.includes("team-led") || stageRaw.includes("team led")) label = "Team-Led";
+      else if (stageRaw.includes("repeatable")) label = "Building Repeatable";
+      else if (stageRaw.includes("refining")) label = "Refining";
+      else if (stageRaw.includes("founder")) label = "Founder-Led";
+      stageCounts[label] = (stageCounts[label] || 0) + 1;
+    });
+    const dominantStage = Object.entries(stageCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Mixed";
+    return { sectorCount: sectors.size, dominantStage };
+  })();
+
+  // "Matched by" indicator chip — communicates which lens drove the table grouping
+  const matchedByChip = (() => {
+    const priority = groupingPriority || "hybrid";
+    if (priority === "stage") {
+      return { label: `Stage · ${table.stage_mix || "Mixed"}`, className: "bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300" };
+    }
+    if (priority === "sector") {
+      const dominantSector = (() => {
+        const counts: Record<string, number> = {};
+        (table.companies || []).forEach((c) => {
+          (c.mapped_data?.sector || c.sector || "").split(",").map((x) => x.trim()).filter(Boolean).forEach((s) => {
+            counts[s] = (counts[s] || 0) + 1;
+          });
+        });
+        return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || "Mixed";
+      })();
+      return { label: `Sector · ${dominantSector}`, className: "bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300" };
+    }
+    if (priority === "need") {
+      const topChallenge = (table.shared_challenges || [])[0] || "Mixed";
+      return { label: `Needs · ${topChallenge}`, className: "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300" };
+    }
+    return { label: "Hybrid match", className: "bg-muted border-border text-muted-foreground" };
+  })();
+
   return (
     <Card className="relative overflow-hidden">
       <div className={cn("absolute top-0 left-0 w-1 h-full", colorClass)} />
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="font-heading font-bold text-sm">Table {table.table_number}</span>
-            <Badge variant="outline" className="text-xs">{table.stage_mix}</Badge>
+            <Badge variant="outline" className={cn("text-xs", matchedByChip.className)}>{matchedByChip.label}</Badge>
             <Badge variant="secondary" className="text-xs">{table.companies.length + (table.assigned_leads?.length || 0)} people</Badge>
           </div>
           <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -1388,6 +1434,11 @@ function TableCard({ table, tableIndex, colorClass, onCompanyClick, onLeadClick,
         </div>
         <CardTitle className="text-base font-heading">{table.table_name}</CardTitle>
         <p className="text-xs text-muted-foreground">{table.theme}</p>
+        {cohort && (
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground/80 pt-1">
+            Mostly {cohort.dominantStage} · {cohort.sectorCount} sector{cohort.sectorCount === 1 ? "" : "s"}
+          </p>
+        )}
       </CardHeader>
       <CardContent className="space-y-3">
         {table.shared_challenges.length > 0 && (
