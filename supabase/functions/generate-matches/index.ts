@@ -105,6 +105,7 @@ Derive each company's tier from its sales_stage + revenue + capital_raised. Clus
       if (c.primary_market) parts.push(`Market: ${c.primary_market}`);
       if (c.stage || c.sales_stage) parts.push(`Stage: ${c.stage || c.sales_stage}`);
       if (c.revenue) parts.push(`Revenue: ${c.revenue}`);
+      if (c.capital_raised) parts.push(`Capital Raised: ${c.capital_raised}`);
       if (c.icp) parts.push(`ICP: ${c.icp}`);
       if (c.critical_challenges) parts.push(`Challenges: ${c.critical_challenges}`);
       if (c.topics_of_interest) parts.push(`Topics: ${c.topics_of_interest}`);
