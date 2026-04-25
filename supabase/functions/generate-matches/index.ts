@@ -307,31 +307,71 @@ ${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributi
 
     const leadSafeTables = enforceUniqueLeadAssignments(rawTables);
 
+    // Canonical stage tier inference (mirrors src/components/cohort/companyData.ts)
+    const inferStageTier = (c: any): string => {
+      const stageRaw = String(c?.sales_stage || c?.stage || "").toLowerCase();
+      const revRaw = String(c?.revenue || "").toLowerCase().replace(/\$/g, "").trim();
+
+      let stage = "founder-led";
+      if (stageRaw.includes("team-led") || stageRaw.includes("team led")) stage = "team-led";
+      else if (stageRaw.includes("repeatable")) stage = "building";
+      else if (stageRaw.includes("refining")) stage = "refining";
+
+      // Revenue bucket: 0=<250K, 1=250K-1M, 2=1M-5M, 3=5M+
+      let revBucket = 0;
+      if (/(11m|6m|21m|51m|20m|10m|5m\+|[5-9]m)/.test(revRaw) && !/(0-?5m|2m-?5m|2m)/.test(revRaw)) revBucket = 3;
+      if (/(2m-5m|2m|5m)/.test(revRaw)) revBucket = Math.max(revBucket, 2);
+      if (/(6m|10m|11m|20m|21m|51m)/.test(revRaw)) revBucket = 3;
+      if (/(251|500k|501k|1m)/.test(revRaw) && revBucket < 2) revBucket = 1;
+      if (/(0-?250k|<\s*250k|^250k|under 250)/.test(revRaw) || revRaw === "" ) revBucket = Math.max(revBucket, 0);
+
+      if (stage === "team-led" || revBucket >= 3) return "Scale Stage";
+      if (revBucket >= 2 || stage === "building") return "Growth Stage";
+      if (revBucket >= 1 || stage === "refining") return "Early Stage";
+      return "Pre-Traction";
+    };
+
+    const dominantTier = (companyList: any[]): string => {
+      const counts: Record<string, number> = {};
+      companyList.forEach((c) => {
+        const t = inferStageTier(c);
+        counts[t] = (counts[t] || 0) + 1;
+      });
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      return sorted[0]?.[0] || "Early Stage";
+    };
+
     // Map company indices back to company data
-    const tables = leadSafeTables.map((table: any) => ({
-      table_number: table.table_number,
-      table_name: table.table_name,
-      theme: table.theme,
-      stage_mix: table.stage_mix,
-      suggested_lead: table.suggested_lead || "",
-      rationale: table.rationale,
-      shared_challenges: table.shared_challenges || [],
-      companies: (table.company_indices || []).map((idx: number) => {
-        const c = companies[idx - 1]; // 1-based index
-        return c ? {
+    const tables = leadSafeTables.map((table: any) => {
+      const tableCompanies = (table.company_indices || []).map((idx: number) => companies[idx - 1]).filter(Boolean);
+      const canonicalTier = dominantTier(tableCompanies);
+      // When priority is stage, ALWAYS overwrite stage_mix with the canonical tier
+      const finalStageMix = groupingPriority === "stage"
+        ? canonicalTier
+        : (table.stage_mix || canonicalTier);
+
+      return {
+        table_number: table.table_number,
+        table_name: table.table_name,
+        theme: table.theme,
+        stage_mix: finalStageMix,
+        suggested_lead: table.suggested_lead || "",
+        rationale: table.rationale,
+        shared_challenges: table.shared_challenges || [],
+        companies: tableCompanies.map((c: any) => ({
           company_name: c.company_name || "",
           first_name: c.first_name || "",
           last_name: c.last_name || "",
           sector: c.sector || "",
           stage: c.stage || c.sales_stage || "",
           revenue: c.revenue || "",
-        } : null;
-      }).filter(Boolean),
-      assigned_leads: (table.assigned_lead_indices || []).map((idx: number) => {
-        const l = (leads || [])[idx - 1];
-        return l ? { name: l.name, company: l.company, title: l.title, expertiseTags: l.expertiseTags || [] } : null;
-      }).filter(Boolean),
-    }));
+        })),
+        assigned_leads: (table.assigned_lead_indices || []).map((idx: number) => {
+          const l = (leads || [])[idx - 1];
+          return l ? { name: l.name, company: l.company, title: l.title, expertiseTags: l.expertiseTags || [] } : null;
+        }).filter(Boolean),
+      };
+    });
 
     console.log(`Generated ${tables.length} tables`);
 
