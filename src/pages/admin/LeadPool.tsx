@@ -654,7 +654,16 @@ export default function LeadPool() {
                       </button>
                     </TableCell>
                     <TableCell className="font-medium">
-                      <div>{lead.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span>{lead.name}</span>
+                        {(lead as any).breakout_count > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                            {(lead as any).breakout_count === 1
+                              ? "1 breakout"
+                              : `${(lead as any).breakout_count} breakouts`}
+                          </Badge>
+                        )}
+                      </div>
                       {lead.linkedin_url && (
                         <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           LinkedIn
