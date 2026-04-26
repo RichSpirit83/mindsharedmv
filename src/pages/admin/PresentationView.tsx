@@ -117,17 +117,14 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
         .eq("breakout_id", sessionId)
         .eq("rsvpd", true);
 
-      const { data: history } = await supabase
-        .from("match_history")
-        .select("founder_id, table_id, created_at")
-        .eq("breakout_id", sessionId)
-        .order("created_at", { ascending: false });
+      const { data: seating } = await supabase
+        .from("breakout_seating")
+        .select("founder_id, table_id")
+        .eq("breakout_id", sessionId);
 
-      const latestTableByFounder = new Map<string, string>();
-      for (const h of history || []) {
-        if (!latestTableByFounder.has(h.founder_id) && h.table_id) {
-          latestTableByFounder.set(h.founder_id, h.table_id);
-        }
+      const seatByFounder = new Map<string, string>();
+      for (const s of seating || []) {
+        if (s.table_id) seatByFounder.set(s.founder_id, s.table_id);
       }
 
       const leadsByTable = new Map<string, any[]>();
