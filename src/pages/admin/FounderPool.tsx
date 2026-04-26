@@ -568,6 +568,7 @@ export default function FounderPool() {
         data={selectedFounder?.data || null}
         ids={selectedFounder?.ids || []}
         sessionNames={selectedFounder?.sessionNames || []}
+        tableName="founder_pool"
         onSaved={() => queryClient.invalidateQueries({ queryKey: ["founder_pool"] })}
       />
 
