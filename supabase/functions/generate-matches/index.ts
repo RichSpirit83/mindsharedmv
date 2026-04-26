@@ -127,8 +127,18 @@ serve(async (req) => {
     // Assignment state
     const assignmentsByTable = new Map<string, string[]>(); // table_id → [founder_id]
     for (const t of allTables) assignmentsByTable.set(t.id, []);
-    const assignmentByFounder = new Map<string, { tableId: string; warnings: string[] }>();
+    const assignmentByFounder = new Map<string, { tableId: string; warnings: string[]; locked?: boolean }>();
     const targetCap = breakout.target_per_table || 6;
+    const validTableIds = new Set(allTables.map((t) => t.id));
+
+    // Lock founders with a manual_table_override first — overrides always win.
+    for (const f of founders) {
+      const override = (f as any)._override as string | null;
+      if (override && validTableIds.has(override)) {
+        assignmentsByTable.get(override)!.push(f.id);
+        assignmentByFounder.set(f.id, { tableId: override, warnings: [], locked: true });
+      }
+    }
 
     function eligibleTables(founderId: string) {
       const prior = priorMatches.get(founderId) || new Set<string>();
@@ -146,31 +156,27 @@ serve(async (req) => {
       }
       const homogeneity = sectorOverlap / Math.max(1, tableLoad);
       const overCap = tableLoad >= targetCap ? 1000 : 0;
-      // Lower score = better: invert positive contributions
       return -(1.0 * sectorOverlap + 0.5 * (targetCap - tableLoad) + 2.0 * homogeneity) + overCap;
     }
 
-    // Run greedy per tier
+    // Run greedy per tier, skipping already-locked founders
     let rematchCount = 0;
     for (const tier of ["Growth", "Early"] as const) {
       const tierFounders = tieredFounders
         .filter((t) => t.tier === tier)
-        .map((t) => t.founder);
+        .map((t) => t.founder)
+        .filter((f: any) => !assignmentByFounder.has(f.id));
 
-      // Sort founders ascending by count of eligible tables (most-constrained first)
       tierFounders.sort((a: any, b: any) => eligibleTables(a.id).length - eligibleTables(b.id).length);
 
       for (const f of tierFounders) {
         const warnings: string[] = [];
         let candidates = eligibleTables(f.id);
-        let isRematch = false;
         if (candidates.length === 0) {
           candidates = allTables;
-          isRematch = true;
           rematchCount++;
           warnings.push("Re-matched with a previous lead (no fresh tables available)");
         }
-        // Pick min-score table
         let best = candidates[0];
         let bestScore = scoreTable(f.id, best);
         for (let i = 1; i < candidates.length; i++) {
