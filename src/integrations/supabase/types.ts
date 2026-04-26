@@ -14,6 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
+      breakout_briefings: {
+        Row: {
+          breakout_id: string
+          created_at: string
+          generated_at: string
+          id: string
+          lead_id: string
+          markdown: string
+          updated_at: string
+        }
+        Insert: {
+          breakout_id: string
+          created_at?: string
+          generated_at?: string
+          id?: string
+          lead_id: string
+          markdown: string
+          updated_at?: string
+        }
+        Update: {
+          breakout_id?: string
+          created_at?: string
+          generated_at?: string
+          id?: string
+          lead_id?: string
+          markdown?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       breakout_companies: {
         Row: {
           created_at: string
