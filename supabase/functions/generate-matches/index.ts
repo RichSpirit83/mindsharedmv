@@ -1,387 +1,238 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Cache-Control": "no-store",
 };
+
+const GROWTH_REVENUE = new Set(["2M-5M", "6M-10M", "11M-20M"]);
+const GROWTH_CAPITAL = new Set(["6M-10M", "11M-20M", "21M-50M", "51M+"]);
+
+function classifyStage(founder: any): "Growth" | "Early" {
+  const revenue = (founder.revenue || founder.mapped_data?.revenue || "").trim();
+  const capital = (founder.capital_raised || founder.mapped_data?.capital_raised || "").trim();
+  if (GROWTH_REVENUE.has(revenue) || GROWTH_CAPITAL.has(capital)) return "Growth";
+  return "Early";
+}
+
+function toSectorArray(s: any): string[] {
+  if (!s) return [];
+  if (Array.isArray(s)) return s.map((x) => String(x).toLowerCase().trim()).filter(Boolean);
+  if (typeof s === "string") return s.split(/[,;|]/).map((x) => x.toLowerCase().trim()).filter(Boolean);
+  return [];
+}
 
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { companies, sessionConfig, leads, previousRoundTables } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const body = await req.json().catch(() => ({}));
+    const breakoutId: string | undefined = body?.breakoutId;
+    const commit: boolean = !!body?.commit;
 
-    const numTables = sessionConfig?.numTables || Math.ceil(companies.length / 6);
-    const targetPerTable = sessionConfig?.targetPerTable || Math.ceil(companies.length / numTables);
-    const minPerTable = Math.floor(companies.length / numTables);
-    const maxPerTable = minPerTable + (companies.length % numTables > 0 ? 1 : 0);
-    const groupingPriority = sessionConfig?.groupingPriority || "hybrid";
-    const allowStageMixing =
-      typeof sessionConfig?.allowStageMixing === "boolean"
-        ? sessionConfig.allowStageMixing
-        : true;
-    const avoidCompetitors =
-      typeof sessionConfig?.avoidCompetitors === "boolean"
-        ? sessionConfig.avoidCompetitors
-        : true;
-    const leadMatchingMode = sessionConfig?.leadMatchingMode || "flexible";
-    const shuffleMode = sessionConfig?.shuffleMode || "both";
-    const hybridRule = allowStageMixing
-      ? "Balance sector alignment, stage diversity (mix early and later-stage for mentorship), and shared challenges."
-      : "Balance sector alignment, stage alignment (keep similar growth phases; avoid mixing stages), and shared challenges.";
-
-    const STAGE_TIER_RULES = `Use ONLY these four canonical stage tiers when labeling stage_mix:
-  - "Pre-Traction" — Founder-Led sales AND revenue under $250K
-  - "Early Stage" — Revenue $250K–$1M, Founder-Led or Refining sales
-  - "Growth Stage" — Revenue $1M–$5M, Refining or Building Repeatable sales
-  - "Scale Stage" — Revenue over $5M OR Team-Led sales
-Derive each company's tier from its sales_stage + revenue + capital_raised. Cluster companies whose tiers MATCH. Sector is irrelevant to the grouping decision when priority is STAGE — only use sector as a soft tiebreaker for conversation relevance once stage cohorts are formed. The table_name and theme MUST describe the stage cohort (e.g. "Founder-Led Operators", "Repeatable Revenue Builders", "Scaling Teams") — DO NOT name tables after sectors or industry verticals.`;
-
-    const priorityInstructions: Record<string, string> = {
-      sector: "Group companies primarily by SECTOR similarity so each table shares an industry vertical. The table_name and theme should describe the sector/industry.",
-      stage: `Group companies STRICTLY by maturity stage, not by sector. ${STAGE_TIER_RULES}`,
-      need: "Group companies primarily by shared CHALLENGES and NEEDS so conversations are most relevant. The table_name and theme should describe the shared challenge.",
-      hybrid: hybridRule,
-    };
-
-    const leadsInfo = (leads || [])
-      .map((l: any, idx: number) => {
-        const tags = (l.expertiseTags || []).join(", ");
-        const strengths = l.networkStrengths ? ` — strengths: ${l.networkStrengths}` : "";
-        const notes = l.notes ? ` — notes: ${l.notes}` : "";
-        const bg = l.background ? ` — background: ${l.background.slice(0, 200)}` : "";
-        const tableLeadFlag = l.isTableLead ? " [DESIGNATED TABLE LEAD]" : "";
-        return `Lead #${idx + 1}: ${l.name}${tableLeadFlag}${tags ? ` — expertise: ${tags}` : ""}${bg}${strengths}${notes}`;
-      })
-      .join("\n");
-
-    const designatedTableLeads = (leads || []).filter((l: any) => l.isTableLead);
-    const hasDesignatedLeads = designatedTableLeads.length > 0;
-    const designatedLeadsCanCoverAllTables = designatedTableLeads.length >= numTables;
-
-    const numLeads = (leads || []).length;
-    const minLeadsPerTable = numLeads > 0 ? Math.floor(numLeads / numTables) : 0;
-    const maxLeadsPerTable = numLeads > 0 ? Math.ceil(numLeads / numTables) : 0;
-    const hasLeadShortage = numLeads > 0 && numLeads < numTables;
-
-    const leadDistributionInstruction = numLeads > 0
-      ? `\nLEAD DISTRIBUTION: There are ${numLeads} leads and ${numTables} tables. Every lead MUST be assigned exactly once across all tables, and no lead index may appear in more than one table. ${hasLeadShortage ? `There are fewer leads than tables, so some tables should intentionally have no assigned leads. Do NOT duplicate leads to fill every table.` : `Aim for roughly ${minLeadsPerTable === maxLeadsPerTable ? `${minLeadsPerTable}` : `${minLeadsPerTable}-${maxLeadsPerTable}`} lead(s) per table when possible.`} Use the "assigned_lead_indices" field (1-based indices) to assign leads to tables. The FIRST lead index in each table's list will be designated as the "Table Head".${hasDesignatedLeads ? designatedLeadsCanCoverAllTables ? ` ONLY leads marked with [DESIGNATED TABLE LEAD] may be placed as Table Head (first in the list). Non-designated leads must NEVER be the first lead index for any table.` : ` Prioritize leads marked with [DESIGNATED TABLE LEAD] as Table Head where assigned. Because there are only ${designatedTableLeads.length} designated leads for ${numTables} tables, tables without a designated lead may have no lead or a non-designated lead first. Never duplicate leads.` : ` Choose the lead whose expertise is the strongest match for that table's theme.`}`
-      : "";
-
-    const leadAlignmentInstruction = numLeads > 0
-      ? `\nLEAD-FOUNDER ALIGNMENT: When assigning leads to tables, carefully consider each lead's background, expertise, and skills. Match leads to tables where the founders' challenges, sectors, and needs align with the lead's expertise. The goal is to maximize the value each lead brings to their table conversation.${hasDesignatedLeads ? designatedLeadsCanCoverAllTables ? `\n\nDESIGNATED TABLE LEADS: Leads marked with [DESIGNATED TABLE LEAD] MUST be assigned as the FIRST lead (Table Head) at their respective tables. They take priority over other leads. There are ${designatedTableLeads.length} designated table leads — assign each one to the table where their expertise is most relevant. Leads NOT marked as [DESIGNATED TABLE LEAD] must be placed AFTER designated leads in each table's assigned_lead_indices array — they should NEVER appear first.` : `\n\nDESIGNATED TABLE LEADS: Prioritize leads marked with [DESIGNATED TABLE LEAD] as first lead where possible. Since designated leads are fewer than tables, leave some tables without leads or place a non-designated lead first when needed. Do not duplicate designated or non-designated leads.` : ""}`
-      : "";
-
-    const leadMatchingInstruction = leadMatchingMode === "strict"
-      ? "STRICT LEAD ASSIGNMENT: Each lead MUST be assigned ONLY to the table whose theme most closely matches their expertise tags. Do not assign any lead to a table where their expertise does not align with the theme."
-      : "When choosing leads for each table, prefer leads whose expertise tags and background align with the table theme and founders' shared challenges, but you may use your best judgment.";
-
-    const competitorRule = avoidCompetitors
-      ? "- Direct competitors should NOT be at the same table"
-      : "- Competitors MAY be seated together (intentional competitive-intelligence setup)";
-
-    // Build shuffle constraint from previous round
-    let shuffleConstraint = "";
-    if (previousRoundTables && previousRoundTables.length > 0 && shuffleMode !== "both") {
-      if (shuffleMode === "founders") {
-        const leadAssignments = previousRoundTables.map((t: any) =>
-          `Table ${t.table_number} ("${t.table_name}"): leads = [${(t.assigned_leads || []).map((l: any) => l.name).join(", ")}]`
-        ).join("\n");
-        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Founders Only): The following lead-to-table assignments from the previous round MUST be preserved exactly. Only reshuffle the companies across tables.\nPrevious round lead assignments:\n${leadAssignments}\n`;
-      } else if (shuffleMode === "leads") {
-        const companyAssignments = previousRoundTables.map((t: any) =>
-          `Table ${t.table_number}: companies = [${(t.companies || []).map((c: any) => c.company_name).join(", ")}]`
-        ).join("\n");
-        shuffleConstraint = `\nSHUFFLE CONSTRAINT (Leads Only): The following company-to-table assignments from the previous round MUST be preserved exactly. Only reassign leads across tables.\nPrevious round company assignments:\n${companyAssignments}\n`;
-      }
+    if (!breakoutId || typeof breakoutId !== "string") {
+      return new Response(JSON.stringify({ error: "breakoutId is required" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
-    const companyList = companies.map((c: any, i: number) => {
-      const parts = [`#${i + 1} ${c.company_name || "Unknown"}`];
-      if (c.first_name) parts.push(`Contact: ${c.first_name} ${c.last_name || ""}`);
-      if (c.sector) parts.push(`Sector: ${c.sector}`);
-      if (c.primary_market) parts.push(`Market: ${c.primary_market}`);
-      if (c.stage || c.sales_stage) parts.push(`Stage: ${c.stage || c.sales_stage}`);
-      if (c.revenue) parts.push(`Revenue: ${c.revenue}`);
-      if (c.capital_raised) parts.push(`Capital Raised: ${c.capital_raised}`);
-      if (c.icp) parts.push(`ICP: ${c.icp}`);
-      if (c.critical_challenges) parts.push(`Challenges: ${c.critical_challenges}`);
-      if (c.topics_of_interest) parts.push(`Topics: ${c.topics_of_interest}`);
-      if (c.company_description) parts.push(`Desc: ${c.company_description.slice(0, 150)}`);
-      return parts.join(" | ");
-    }).join("\n");
-
-    const systemPrompt = `You are an expert event facilitator creating optimized breakout table assignments for a CEO peer-group event. You must assign ALL ${companies.length} companies to exactly ${numTables} tables.
-
-HARD SIZE CONSTRAINT: Each table MUST have between ${minPerTable} and ${maxPerTable} companies. No table may have fewer than ${minPerTable} or more than ${maxPerTable}. This is a strict requirement — do NOT create unbalanced tables.
-
-GROUPING PRIORITY: ${priorityInstructions[groupingPriority] || priorityInstructions.hybrid}
-
-ALLOW_STAGE_MIXING: ${allowStageMixing ? "true" : "false"}
-${shuffleConstraint}
-CRITICAL RULES:
-- Every company must be assigned to exactly one table
-- Each table must have between ${minPerTable} and ${maxPerTable} companies (HARD CONSTRAINT)
-- A lead index may be assigned to at most one table (no duplicate lead assignments)
-${competitorRule}
-- Each table needs a clear thematic rationale
-- Tables should foster productive peer conversation
-${allowStageMixing ? "" : "- Keep companies at similar stages within each table (avoid stage mixing)"}
-
-${leadsInfo ? `TABLE LEADS (assign to tables):\n${leadsInfo}\n\n${leadDistributionInstruction}\n${leadAlignmentInstruction}\n\n${leadMatchingInstruction}` : ""}`;
-
-    const userPrompt = `Assign these ${companies.length} companies to ${numTables} tables:\n\n${companyList}`;
-
-    console.log(`Generating matches: ${companies.length} companies -> ${numTables} tables (${groupingPriority})`);
-
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "assign_tables",
-              description: "Assign all companies to tables with rationale",
-              parameters: {
-                type: "object",
-                properties: {
-                  tables: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        table_number: { type: "number" },
-                        table_name: { type: "string", description: "Short memorable name for the table theme" },
-                        theme: { type: "string", description: "One-sentence theme description" },
-                        stage_mix: { type: "string", description: "e.g. 'Early-stage mix' or 'Growth-stage'" },
-                        suggested_lead: { type: "string", description: "Name of primary suggested table lead or empty" },
-                        rationale: { type: "string", description: "Why these companies are grouped together and why these leads are a good fit" },
-                        shared_challenges: {
-                          type: "array",
-                          items: { type: "string" },
-                          description: "2-4 shared challenge tags",
-                        },
-                        company_indices: {
-                          type: "array",
-                          items: { type: "number" },
-                          description: "1-based indices of companies assigned to this table",
-                        },
-                        assigned_lead_indices: {
-                          type: "array",
-                          items: { type: "number" },
-                          description: "1-based indices of leads assigned to this table",
-                        },
-                      },
-                      required: ["table_number", "table_name", "theme", "stage_mix", "rationale", "shared_challenges", "company_indices", "assigned_lead_indices"],
-                      additionalProperties: false,
-                    },
-                  },
-                },
-                required: ["tables"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "assign_tables" } },
-      }),
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false },
     });
 
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited, please try again shortly." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add credits." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
-      throw new Error("AI gateway error");
-    }
+    // 1) Breakout
+    const { data: breakout, error: breakoutErr } = await supabase
+      .from("breakout_sessions")
+      .select("*")
+      .eq("id", breakoutId)
+      .maybeSingle();
+    if (breakoutErr) throw breakoutErr;
+    if (!breakout) throw new Error("Breakout session not found");
 
-    const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    if (!toolCall) throw new Error("No tool call in response");
+    // 2) RSVP'd founders
+    const { data: rsvps, error: rsvpsErr } = await supabase
+      .from("breakout_rsvps")
+      .select("id, founder_id, manual_table_override, founder:founder_pool(*)")
+      .eq("breakout_id", breakoutId)
+      .eq("rsvpd", true);
+    if (rsvpsErr) throw rsvpsErr;
+    const founders = (rsvps || [])
+      .map((r: any) => ({ ...r.founder, _rsvp_id: r.id, _override: r.manual_table_override }))
+      .filter((f: any) => f && f.id);
 
-    const parsed = JSON.parse(toolCall.function.arguments);
+    // 3) Tables + leads
+    const { data: tables, error: tablesErr } = await supabase
+      .from("breakout_tables")
+      .select("*")
+      .eq("session_id", breakoutId)
+      .eq("is_backup", false)
+      .order("table_number");
+    if (tablesErr) throw tablesErr;
 
-    // Post-processing: rebalance tables if any are too small or too large
-    const rawTables = parsed.tables || [];
-    const rebalancedMin = Math.floor(companies.length / numTables);
-    const rebalancedMax = rebalancedMin + (companies.length % numTables > 0 ? 1 : 0);
+    const { data: tableLeads, error: tlErr } = await supabase
+      .from("breakout_table_leads")
+      .select("id, table_id, lead_id, stage, lead:lead_pool(*)")
+      .eq("breakout_id", breakoutId);
+    if (tlErr) throw tlErr;
 
-    // Flatten all indices and rebuild if needed
-    let needsRebalance = rawTables.some((t: any) =>
-      (t.company_indices || []).length < rebalancedMin || (t.company_indices || []).length > rebalancedMax + 1
-    );
-
-    if (needsRebalance) {
-      console.log("Rebalancing tables due to uneven distribution");
-      // Sort tables by size (smallest first) and move from largest to smallest
-      let sorted = [...rawTables].sort((a: any, b: any) =>
-        (a.company_indices || []).length - (b.company_indices || []).length
-      );
-      let maxIter = 100;
-      while (maxIter-- > 0) {
-        const smallest = sorted[0];
-        const largest = sorted[sorted.length - 1];
-        if ((smallest.company_indices || []).length >= rebalancedMin) break;
-        if ((largest.company_indices || []).length <= rebalancedMin) break;
-        // Move last company from largest to smallest
-        const moved = largest.company_indices.pop();
-        smallest.company_indices.push(moved);
-        sorted.sort((a: any, b: any) =>
-          (a.company_indices || []).length - (b.company_indices || []).length
-        );
+    const leadByTable = new Map<string, any>();
+    for (const tl of tableLeads || []) {
+      if (tl.table_id && !leadByTable.has(tl.table_id)) {
+        leadByTable.set(tl.table_id, { ...tl.lead, _stage: tl.stage });
       }
     }
 
-    // Post-processing: ensure lead assignments are globally unique (no lead duplication across tables)
-    const enforceUniqueLeadAssignments = (tablesInput: any[]) => {
-      const totalLeads = (leads || []).length;
-      const normalizedTables = [...tablesInput]
-        .map((table: any) => ({
-          ...table,
-          assigned_lead_indices: Array.isArray(table.assigned_lead_indices)
-            ? table.assigned_lead_indices
-            : [],
-        }))
-        .sort((a: any, b: any) => (a.table_number || 0) - (b.table_number || 0));
+    // 4) Match history for these founders
+    const founderIds = founders.map((f: any) => f.id);
+    let history: any[] = [];
+    if (founderIds.length > 0) {
+      const { data: hist, error: histErr } = await supabase
+        .from("match_history")
+        .select("founder_id, lead_id")
+        .in("founder_id", founderIds);
+      if (histErr) throw histErr;
+      history = hist || [];
+    }
+    const priorMatches = new Map<string, Set<string>>();
+    for (const h of history) {
+      if (!priorMatches.has(h.founder_id)) priorMatches.set(h.founder_id, new Set());
+      priorMatches.get(h.founder_id)!.add(h.lead_id);
+    }
 
-      if (totalLeads === 0) {
-        return normalizedTables.map((table: any) => ({ ...table, assigned_lead_indices: [] }));
+    // 5) Stage classification
+    const tieredFounders = founders.map((f: any) => ({ founder: f, tier: classifyStage(f) }));
+    const growthCount = tieredFounders.filter((t) => t.tier === "Growth").length;
+    const earlyCount = tieredFounders.filter((t) => t.tier === "Early").length;
+
+    // Tier → eligible tables. With no per-table stage info we treat all tables as eligible to both tiers,
+    // but greedy assignment runs per-tier so cohorts cluster naturally.
+    const allTables = (tables || []).map((t: any) => ({
+      id: t.id,
+      table_number: t.table_number,
+      lead: leadByTable.get(t.id) || null,
+    }));
+
+    // Sector lookup per founder
+    const founderSectors = new Map<string, Set<string>>();
+    for (const f of founders) {
+      founderSectors.set(f.id, new Set(toSectorArray(f.sector)));
+    }
+
+    // Assignment state
+    const assignmentsByTable = new Map<string, string[]>(); // table_id → [founder_id]
+    for (const t of allTables) assignmentsByTable.set(t.id, []);
+    const assignmentByFounder = new Map<string, { tableId: string; warnings: string[] }>();
+    const targetCap = breakout.target_per_table || 6;
+
+    function eligibleTables(founderId: string) {
+      const prior = priorMatches.get(founderId) || new Set<string>();
+      return allTables.filter((t) => !t.lead || !prior.has(t.lead.id));
+    }
+
+    function scoreTable(founderId: string, table: any): number {
+      const fSectors = founderSectors.get(founderId) || new Set<string>();
+      const assigned = assignmentsByTable.get(table.id) || [];
+      const tableLoad = assigned.length;
+      let sectorOverlap = 0;
+      for (const otherId of assigned) {
+        const oSectors = founderSectors.get(otherId) || new Set<string>();
+        for (const s of fSectors) if (oSectors.has(s)) { sectorOverlap++; break; }
       }
+      const homogeneity = sectorOverlap / Math.max(1, tableLoad);
+      const overCap = tableLoad >= targetCap ? 1000 : 0;
+      // Lower score = better: invert positive contributions
+      return -(1.0 * sectorOverlap + 0.5 * (targetCap - tableLoad) + 2.0 * homogeneity) + overCap;
+    }
 
-      const usedLeadIndices = new Set<number>();
+    // Run greedy per tier
+    let rematchCount = 0;
+    for (const tier of ["Growth", "Early"] as const) {
+      const tierFounders = tieredFounders
+        .filter((t) => t.tier === tier)
+        .map((t) => t.founder);
 
-      normalizedTables.forEach((table: any) => {
-        const uniqueLeadIndices: number[] = [];
-        for (const rawIndex of table.assigned_lead_indices || []) {
-          const leadIndex = Number(rawIndex);
-          if (!Number.isInteger(leadIndex) || leadIndex < 1 || leadIndex > totalLeads) continue;
-          if (usedLeadIndices.has(leadIndex)) continue;
-          if (uniqueLeadIndices.includes(leadIndex)) continue;
-          uniqueLeadIndices.push(leadIndex);
-          usedLeadIndices.add(leadIndex);
+      // Sort founders ascending by count of eligible tables (most-constrained first)
+      tierFounders.sort((a: any, b: any) => eligibleTables(a.id).length - eligibleTables(b.id).length);
+
+      for (const f of tierFounders) {
+        const warnings: string[] = [];
+        let candidates = eligibleTables(f.id);
+        let isRematch = false;
+        if (candidates.length === 0) {
+          candidates = allTables;
+          isRematch = true;
+          rematchCount++;
+          warnings.push("Re-matched with a previous lead (no fresh tables available)");
         }
-        table.assigned_lead_indices = uniqueLeadIndices;
-      });
-
-      const unassignedLeadIndices: number[] = [];
-      for (let i = 1; i <= totalLeads; i++) {
-        if (!usedLeadIndices.has(i)) unassignedLeadIndices.push(i);
+        // Pick min-score table
+        let best = candidates[0];
+        let bestScore = scoreTable(f.id, best);
+        for (let i = 1; i < candidates.length; i++) {
+          const s = scoreTable(f.id, candidates[i]);
+          if (s < bestScore) { best = candidates[i]; bestScore = s; }
+        }
+        assignmentsByTable.get(best.id)!.push(f.id);
+        assignmentByFounder.set(f.id, { tableId: best.id, warnings });
       }
+    }
 
-      unassignedLeadIndices.forEach((leadIndex) => {
-        normalizedTables.sort(
-          (a: any, b: any) =>
-            (a.assigned_lead_indices?.length || 0) - (b.assigned_lead_indices?.length || 0)
-        );
-        const targetTable = normalizedTables[0];
-        targetTable.assigned_lead_indices = [
-          ...(targetTable.assigned_lead_indices || []),
-          leadIndex,
-        ];
-      });
-
-      return normalizedTables.sort(
-        (a: any, b: any) => (a.table_number || 0) - (b.table_number || 0)
-      );
-    };
-
-    const leadSafeTables = enforceUniqueLeadAssignments(rawTables);
-
-    // Canonical stage tier inference (mirrors src/components/cohort/companyData.ts)
-    const inferStageTier = (c: any): string => {
-      const stageRaw = String(c?.sales_stage || c?.stage || "").toLowerCase();
-      const revRaw = String(c?.revenue || "").toLowerCase().replace(/\$/g, "").trim();
-
-      let stage = "founder-led";
-      if (stageRaw.includes("team-led") || stageRaw.includes("team led")) stage = "team-led";
-      else if (stageRaw.includes("repeatable")) stage = "building";
-      else if (stageRaw.includes("refining")) stage = "refining";
-
-      // Revenue bucket: 0=<250K, 1=250K-1M, 2=1M-5M, 3=5M+
-      let revBucket = 0;
-      if (/(11m|6m|21m|51m|20m|10m|5m\+|[5-9]m)/.test(revRaw) && !/(0-?5m|2m-?5m|2m)/.test(revRaw)) revBucket = 3;
-      if (/(2m-5m|2m|5m)/.test(revRaw)) revBucket = Math.max(revBucket, 2);
-      if (/(6m|10m|11m|20m|21m|51m)/.test(revRaw)) revBucket = 3;
-      if (/(251|500k|501k|1m)/.test(revRaw) && revBucket < 2) revBucket = 1;
-      if (/(0-?250k|<\s*250k|^250k|under 250)/.test(revRaw) || revRaw === "" ) revBucket = Math.max(revBucket, 0);
-
-      if (stage === "team-led" || revBucket >= 3) return "Scale Stage";
-      if (revBucket >= 2 || stage === "building") return "Growth Stage";
-      if (revBucket >= 1 || stage === "refining") return "Early Stage";
-      return "Pre-Traction";
-    };
-
-    const dominantTier = (companyList: any[]): string => {
-      const counts: Record<string, number> = {};
-      companyList.forEach((c) => {
-        const t = inferStageTier(c);
-        counts[t] = (counts[t] || 0) + 1;
-      });
-      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
-      return sorted[0]?.[0] || "Early Stage";
-    };
-
-    // Map company indices back to company data
-    const tables = leadSafeTables.map((table: any) => {
-      const tableCompanies = (table.company_indices || []).map((idx: number) => companies[idx - 1]).filter(Boolean);
-      const canonicalTier = dominantTier(tableCompanies);
-      // When priority is stage, ALWAYS overwrite stage_mix with the canonical tier
-      const finalStageMix = groupingPriority === "stage"
-        ? canonicalTier
-        : (table.stage_mix || canonicalTier);
-
+    // 6) Build response
+    const assignments = founders.map((f: any) => {
+      const a = assignmentByFounder.get(f.id);
+      const tableId = a?.tableId || null;
+      const lead = tableId ? leadByTable.get(tableId) : null;
       return {
-        table_number: table.table_number,
-        table_name: table.table_name,
-        theme: table.theme,
-        stage_mix: finalStageMix,
-        suggested_lead: table.suggested_lead || "",
-        rationale: table.rationale,
-        shared_challenges: table.shared_challenges || [],
-        companies: tableCompanies.map((c: any) => ({
-          company_name: c.company_name || "",
-          first_name: c.first_name || "",
-          last_name: c.last_name || "",
-          sector: c.sector || "",
-          stage: c.stage || c.sales_stage || "",
-          revenue: c.revenue || "",
-        })),
-        assigned_leads: (table.assigned_lead_indices || []).map((idx: number) => {
-          const l = (leads || [])[idx - 1];
-          return l ? { name: l.name, company: l.company, title: l.title, expertiseTags: l.expertiseTags || [] } : null;
-        }).filter(Boolean),
+        founderId: f.id,
+        tableId,
+        leadId: lead?.id || null,
+        warnings: a?.warnings || [],
       };
     });
 
-    console.log(`Generated ${tables.length} tables`);
+    // 7) Commit
+    if (commit) {
+      const rows = assignments
+        .filter((a) => a.tableId && a.leadId)
+        .map((a) => ({
+          founder_id: a.founderId,
+          lead_id: a.leadId,
+          breakout_id: breakoutId,
+          table_id: a.tableId,
+        }));
+      if (rows.length > 0) {
+        // Upsert via insert + on conflict ignore (unique founder_id, lead_id, breakout_id)
+        const { error: insErr } = await supabase
+          .from("match_history")
+          .upsert(rows, { onConflict: "founder_id,lead_id,breakout_id", ignoreDuplicates: true });
+        if (insErr) throw insErr;
+      }
+    }
 
-    return new Response(JSON.stringify({ tables }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  } catch (e) {
+    return new Response(
+      JSON.stringify({
+        assignments,
+        summary: {
+          total: founders.length,
+          growthCount,
+          earlyCount,
+          rematchCount,
+          tableCount: allTables.length,
+          committed: commit,
+        },
+      }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 },
+    );
+  } catch (e: any) {
     console.error("generate-matches error:", e);
-    return new Response(JSON.stringify({ error: e instanceof Error ? e.message : "Unknown error" }), {
-      status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+    return new Response(JSON.stringify({ error: e?.message || String(e) }), {
+      status: 500,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }
 });
