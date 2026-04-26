@@ -204,7 +204,24 @@ serve(async (req) => {
 
     // 7) Commit
     if (commit) {
-      const rows = assignments
+      // Source of truth for current seating — replaceable per (breakout, founder)
+      const seatingRows = assignments
+        .filter((a) => a.tableId)
+        .map((a) => ({
+          breakout_id: breakoutId,
+          founder_id: a.founderId,
+          table_id: a.tableId,
+          lead_id: a.leadId || null,
+        }));
+      if (seatingRows.length > 0) {
+        const { error: seatErr } = await supabase
+          .from("breakout_seating")
+          .upsert(seatingRows, { onConflict: "breakout_id,founder_id" });
+        if (seatErr) throw seatErr;
+      }
+
+      // Append-only history for "avoid re-match" — only when a real lead is paired
+      const historyRows = assignments
         .filter((a) => a.tableId && a.leadId)
         .map((a) => ({
           founder_id: a.founderId,
@@ -212,11 +229,10 @@ serve(async (req) => {
           breakout_id: breakoutId,
           table_id: a.tableId,
         }));
-      if (rows.length > 0) {
-        // Upsert via insert + on conflict ignore (unique founder_id, lead_id, breakout_id)
+      if (historyRows.length > 0) {
         const { error: insErr } = await supabase
           .from("match_history")
-          .upsert(rows, { onConflict: "founder_id,lead_id,breakout_id", ignoreDuplicates: true });
+          .upsert(historyRows, { onConflict: "founder_id,lead_id,breakout_id", ignoreDuplicates: true });
         if (insErr) throw insErr;
       }
     }

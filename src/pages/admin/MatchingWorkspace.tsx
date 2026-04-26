@@ -102,20 +102,20 @@ export default function MatchingWorkspace() {
       }));
       setTables(tRows);
 
-      // Initial assignments derive from latest match_history for this breakout, override wins
-      const { data: hist } = await supabase
-        .from("match_history")
-        .select("founder_id, lead_id, table_id, created_at")
-        .eq("breakout_id", sessionId)
-        .order("created_at", { ascending: true });
-      const histByFounder = new Map<string, { tableId: string; leadId: string }>();
-      for (const h of hist || []) {
-        if (h.table_id) histByFounder.set(h.founder_id, { tableId: h.table_id, leadId: h.lead_id });
+      // Initial assignments derive from breakout_seating (current saved seating), override wins
+      const { data: seating } = await supabase
+        .from("breakout_seating")
+        .select("founder_id, table_id, lead_id")
+        .eq("breakout_id", sessionId);
+      const seatByFounder = new Map<string, { tableId: string; leadId: string | null }>();
+      for (const s of seating || []) {
+        if (s.table_id) seatByFounder.set(s.founder_id, { tableId: s.table_id, leadId: s.lead_id });
       }
       const map = new Map<string, AssignmentRow>();
       for (const f of fRows) {
-        const tableId = f.manual_table_override || histByFounder.get(f.id)?.tableId || null;
-        const leadId = tableId ? leadByTable.get(tableId)?.id || null : null;
+        const seat = seatByFounder.get(f.id);
+        const tableId = f.manual_table_override || seat?.tableId || null;
+        const leadId = tableId ? leadByTable.get(tableId)?.id || seat?.leadId || null : null;
         map.set(f.id, {
           founderId: f.id,
           tableId,
