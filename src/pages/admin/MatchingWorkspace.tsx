@@ -1156,6 +1156,41 @@ export default function MatchingWorkspace() {
                 <Sparkles className="h-4 w-4 mr-1" />
                 {isGenerating ? "Generating..." : `Generate Round ${activeRound}`}
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isGenerating}
+                onClick={async () => {
+                  const { data, error } = await supabase.functions.invoke("generate-matches", {
+                    body: { breakoutId: sessionId, commit: false },
+                  });
+                  if (error) return toast.error(error.message);
+                  if ((data as any)?.error) return toast.error((data as any).error);
+                  const s = (data as any).summary;
+                  toast.success(
+                    `Stage preview: ${s.total} founders · ${s.growthCount} Growth · ${s.earlyCount} Early · ${s.rematchCount} re-match${s.rematchCount === 1 ? "" : "es"}`,
+                  );
+                  console.log("generate-matches preview", data);
+                }}
+              >
+                Preview Stage Matches
+              </Button>
+              <Button
+                size="sm"
+                variant="secondary"
+                disabled={isGenerating}
+                onClick={async () => {
+                  const { data, error } = await supabase.functions.invoke("generate-matches", {
+                    body: { breakoutId: sessionId, commit: true },
+                  });
+                  if (error) return toast.error(error.message);
+                  if ((data as any)?.error) return toast.error((data as any).error);
+                  const s = (data as any).summary;
+                  toast.success(`Saved ${s.total} assignments to match history`);
+                }}
+              >
+                Save Assignments
+              </Button>
             </>
           }
         />
