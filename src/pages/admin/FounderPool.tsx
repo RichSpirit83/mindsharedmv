@@ -543,6 +543,10 @@ export default function FounderPool() {
                                   <Badge key={i} variant="outline" className="text-xs">{s}</Badge>
                                 ))}
                               </div>
+                            ) : col === "_breakouts" ? (
+                              <Badge variant={r.breakoutCount > 0 ? "secondary" : "outline"} className="text-xs">
+                                {r.breakoutCount === 1 ? "1 breakout" : `${r.breakoutCount} breakouts`}
+                              </Badge>
                             ) : (
                               r.data[col] || ""
                             )}
