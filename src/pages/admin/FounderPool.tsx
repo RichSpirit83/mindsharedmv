@@ -57,45 +57,62 @@ export default function FounderPool() {
   const { data: rawData = [], isLoading } = useQuery({
     queryKey: ["founder_pool"],
     queryFn: async () => {
-      const { data: sessionsData } = await supabase.from("breakout_sessions").select("id, session_name");
+      const { data: sessionsData } = await supabase
+        .from("breakout_sessions")
+        .select("id, session_name");
       const sessionMap: Record<string, string> = {};
       (sessionsData || []).forEach((s) => { sessionMap[s.id] = s.session_name; });
 
-      const { data: companies, error } = await supabase.from("breakout_companies").select("*");
+      const { data: founders, error } = await (supabase as any)
+        .from("founder_pool")
+        .select("*");
       if (error) throw error;
-      return (companies || []).map((c) => ({
-        id: c.id,
-        session_id: c.session_id,
-        session_name: sessionMap[c.session_id] || "Unknown",
-        mapped_data: (c.mapped_data || {}) as Record<string, string>,
-      }));
+
+      const { data: rsvps } = await (supabase as any)
+        .from("breakout_rsvps")
+        .select("founder_id, breakout_id");
+      const rsvpsByFounder: Record<string, string[]> = {};
+      (rsvps || []).forEach((r: any) => {
+        (rsvpsByFounder[r.founder_id] ||= []).push(r.breakout_id);
+      });
+
+      return (founders || []).map((f: any) => {
+        const breakoutIds = rsvpsByFounder[f.id] || [];
+        const sessionNames = breakoutIds.map((bid) => sessionMap[bid]).filter(Boolean);
+        const mapped: Record<string, string> = { ...((f.mapped_data || {}) as Record<string, string>) };
+        const setIf = (k: string, v: any) => {
+          if (v != null && v !== "" && !mapped[k]) mapped[k] = String(v);
+        };
+        setIf("company_name", f.company_name);
+        setIf("first_name", f.first_name);
+        setIf("last_name", f.last_name);
+        setIf("email", f.email);
+        setIf("revenue", f.revenue);
+        setIf("capital_raised", f.capital_raised);
+        setIf("last_round", f.last_round);
+        setIf("icp", f.icp);
+        setIf("business_type", f.business_type);
+        setIf("linkedin_url", f.linkedin_url);
+        if (Array.isArray(f.sector) && !mapped.sector) mapped.sector = f.sector.join(",");
+        if (Array.isArray(f.customer_type) && !mapped.customer_type) mapped.customer_type = f.customer_type.join(",");
+        return {
+          id: f.id as string,
+          mapped_data: mapped,
+          session_names: sessionNames,
+          breakout_count: breakoutIds.length,
+        };
+      });
     },
   });
 
-  // De-duplicate founders across sessions
+  // founder_pool is already deduped server-side — adapt to legacy shape
   const dedupedData = useMemo(() => {
-    const groups = new Map<string, { data: Record<string, string>; ids: string[]; sessionNames: string[] }>();
-    rawData.forEach((r) => {
-      const email = (r.mapped_data.email || "").toLowerCase().trim();
-      const key = email || `${(r.mapped_data.first_name || "").toLowerCase().trim()}|${(r.mapped_data.last_name || "").toLowerCase().trim()}|${(r.mapped_data.company_name || "").toLowerCase().trim()}`;
-      if (!key || key === "||") {
-        // Can't dedup, treat as unique
-        groups.set(r.id, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
-        return;
-      }
-      const existing = groups.get(key);
-      if (existing) {
-        existing.ids.push(r.id);
-        if (!existing.sessionNames.includes(r.session_name)) existing.sessionNames.push(r.session_name);
-        // Merge: prefer non-empty values
-        Object.entries(r.mapped_data).forEach(([k, v]) => {
-          if (v && !existing.data[k]) existing.data[k] = v;
-        });
-      } else {
-        groups.set(key, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
-      }
-    });
-    return Array.from(groups.values());
+    return (rawData as any[]).map((r) => ({
+      data: r.mapped_data,
+      ids: [r.id],
+      sessionNames: r.session_names,
+      breakoutCount: r.breakout_count as number,
+    }));
   }, [rawData]);
 
   const allColumns = useMemo(() => {
