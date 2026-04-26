@@ -1174,8 +1174,8 @@ export default function SessionConfig() {
       />
 
       {/* Cohort Executive Summary */}
-      {csvData.length > 0 && (
-        <CohortSummary />
+      {csvData.length > 0 && sessionId && (
+        <CohortSummary sessionId={sessionId} />
       )}
 
       {/* CSV Upload */}
