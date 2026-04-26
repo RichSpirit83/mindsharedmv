@@ -1,56 +1,97 @@
-# Stage-First Matching + Aligned Table Card Indicators
+## Problem
 
-## What's wrong today
+When you click **Save Assignments** in the matching workspace and then open the **Present** page, the tables show the *previous* matching run, not the one you just saved.
 
-Session #2 is already set to `grouping_priority = stage`, but Round 1 was generated earlier when it was `sector`. As a result the table cards still show sector-flavored names ("Hardware, Robotics & Deep Tech", "Workflow & Industry Integration") and `stage_mix` badges that mix vocabularies ("Deep-tech / R&D Heavy" vs "Growth-stage AI/Data focus"). The badge on the card doesn't actually tell you what was used to match.
+## Root cause
 
-## Goal
+Two bugs that compound:
 
-When grouping is **by stage**, every table should be grouped on Sales Stage + Revenue maturity (not sector), the card name/theme should describe a *stage cohort*, and the badges should make the stage logic visually obvious.
+### 1. `generate-matches` silently drops new assignments on commit
 
-## Plan
+In `supabase/functions/generate-matches/index.ts` (line 207–219), the commit step:
 
-### 1. Tighten the AI matcher for stage-first grouping
-File: `supabase/functions/generate-matches/index.ts`
+```ts
+const rows = assignments
+  .filter((a) => a.tableId && a.leadId)         // <-- requires leadId
+  .map(...);
+await supabase.from("match_history").upsert(rows, {
+  onConflict: "founder_id,lead_id,breakout_id",
+  ignoreDuplicates: true,                        // <-- skip if combo exists
+});
+```
 
-- Rewrite the `stage` priority instruction to be unambiguous: cluster on a normalized stage tier derived from `sales_stage` + `revenue` + `capital_raised`, ignore sector when forming groups, and only use sector as a *tiebreaker* for conversation relevance.
-- Define 4 canonical stage tiers the model must use for `stage_mix` so the badge vocabulary is consistent:
-  - `Pre-Traction` (Founder-Led, <$250K)
-  - `Early Stage` ($250K–$1M, Founder-Led/Refining)
-  - `Growth Stage` ($1M–$5M, Refining/Building Repeatable)
-  - `Scale Stage` ($5M+, Team-Led)
-- Require `table_name` and `theme` to describe the *stage cohort* (e.g. "Founder-Led Operators", "Repeatable Revenue Builders") rather than a sector vertical, when priority is `stage`.
-- Add a post-processing step that recomputes each table's dominant stage tier from the actual assigned founders' `mapped_data` and overwrites `stage_mix` with the canonical label, so the badge always matches reality even if the model drifts.
+Two problems:
 
-### 2. Re-run matching for Round 1 of Session #2
-- Back up current Round 1 to `is_backup = true` with label `Pre stage-first regen (2026-04-25)` so the user can revert.
-- Trigger a fresh generation with `groupingPriority: 'stage'` and write the new tables.
+- **`leadId` is `null` for every assignment in the current run** (visible in the network log: `"leadId":null` on all 38 rows). The function only fills `leadId` when a table has a row in `breakout_table_leads` with `table_id` set — but for this breakout all `breakout_table_leads` rows have `table_id: null` (leads are in the pool but not linked to specific tables yet). Result: the filter drops every row and nothing is written.
+- Even when `leadId` is present, `ignoreDuplicates: true` on the `(founder_id, lead_id, breakout_id)` unique key means the **previous** run's `table_id` wins forever. New table assignments for the same (founder, lead) pair can never overwrite the old one.
 
-### 3. Update the table card to reflect *what drove the match*
-File: `src/pages/admin/MatchingWorkspace.tsx` (`TableCard` component)
+### 2. `PresentationView` resolves a founder's table from stale `match_history`
 
-- Replace the single `stage_mix` outline badge with a small **"Matched by"** indicator chip that reads from `sessionConfig.grouping_priority`:
-  - `stage` → blue badge `Stage · {canonical tier}` (e.g. `Stage · Growth Stage`)
-  - `sector` → purple badge `Sector · {dominant sector}`
-  - `need` → amber badge `Needs · {top shared challenge}`
-  - `hybrid` → neutral badge `Hybrid`
-- Add a secondary stat row under the table title showing the actual cohort makeup (computed client-side from the assigned companies):
-  - Revenue spread (e.g. `Rev: <250K → 1M`)
-  - Sales stage majority (e.g. `Mostly Founder-Led`)
-  - Sector spread count (e.g. `4 sectors`)
-- Keep the `theme` text but make clear it's an AI-written description, not the matching criterion.
+`PresentationView.tsx` (line 120–131) takes the most-recent `match_history` row per founder. But `match_history` is meant as an **anti-rematch ledger** (which leads has this founder met before), not a source of truth for "where does this founder sit *now*". The current seating belongs in a dedicated, replaceable record.
 
-### 4. Surface the active grouping priority at the top of the matching page
-- Add a small read-only chip near the page header: `Matching by: Stage` (or Sector / Needs / Hybrid) so the organizer always knows which lens drove the current layout. Clicking it deep-links to Session Config to change it.
+The same issue affects `MatchingWorkspace.tsx` (line 109–127) and `get-public-breakout/index.ts` (line 61–88).
 
-## Technical notes
+## Fix
 
-- Stage tier computation already exists in `src/components/cohort/companyData.ts` → `computeStageScoreFromMapped`. Reuse `STAGE_SCORE_THRESHOLDS` labels (`Pre-Traction`, `Early Stage`, `Growth Stage`, `Scale Stage`) as the single source of truth for the canonical badge vocabulary in both the edge function (hardcoded list) and the card UI.
-- Dominant tier per table = mode of `computeStageScoreFromMapped(c.mapped_data).label` across that table's companies.
-- No DB schema changes required. `stage_mix` column already exists.
-- The existing revenue/cap badges on each company chip stay as-is — they complement the new table-level stage badge.
+### A. Introduce a single source of truth for current seating
 
-## Out of scope
+Add a new table `breakout_seating` (one row per founder per breakout) that the workspace writes on Save and the presenter reads:
 
-- Changing the global default `groupingPriority` for new sessions (still `sector` per Session Config UI).
-- Round 2 / Round 3 — only Round 1 is regenerated. Other rounds keep their current state.
+```sql
+create table public.breakout_seating (
+  breakout_id uuid not null,
+  founder_id  uuid not null,
+  table_id    uuid not null,
+  lead_id     uuid,           -- nullable; filled when table has a lead linked
+  updated_at  timestamptz not null default now(),
+  primary key (breakout_id, founder_id)
+);
+alter table public.breakout_seating enable row level security;
+-- Same admin/viewer policies as the other breakout_* tables.
+```
+
+Manual overrides on `breakout_rsvps.manual_table_override` continue to win on read (so drag-and-drop is still respected).
+
+`match_history` keeps its original purpose: append-only log of every (founder, lead) pairing across breakouts, used only for the "avoid re-match" rule.
+
+### B. Rewrite the commit step in `generate-matches`
+
+When `commit: true`:
+1. **Upsert** one `breakout_seating` row per founder with the new `table_id` (and `lead_id` if known) — `on conflict (breakout_id, founder_id) do update set table_id = excluded.table_id, lead_id = excluded.lead_id, updated_at = now()`. This is what makes new assignments actually replace old ones.
+2. Append to `match_history` only when a real `lead_id` exists, keeping `ignoreDuplicates: true` (history should not double-count a re-pairing).
+3. Stop dropping seating rows just because `lead_id` is null.
+
+### C. Update the three readers to use `breakout_seating`
+
+- `src/pages/admin/PresentationView.tsx` — replace the `match_history` query with a `breakout_seating` query; keep `manual_table_override` as a wins-over override.
+- `src/pages/admin/MatchingWorkspace.tsx` — same swap, so the workspace shows the saved state on reload.
+- `supabase/functions/get-public-breakout/index.ts` — same swap, so the public attendee view matches.
+
+### D. One-time backfill (in the same migration)
+
+So existing breakouts (like the one you're looking at now) don't appear empty after the change:
+
+```sql
+insert into public.breakout_seating (breakout_id, founder_id, table_id, lead_id)
+select distinct on (mh.breakout_id, mh.founder_id)
+       mh.breakout_id, mh.founder_id, mh.table_id, mh.lead_id
+from public.match_history mh
+where mh.table_id is not null
+order by mh.breakout_id, mh.founder_id, mh.created_at desc
+on conflict do nothing;
+```
+
+## Files touched
+
+- **New**: `supabase/migrations/<ts>_breakout_seating.sql` (table + RLS + backfill)
+- **Edit**: `supabase/functions/generate-matches/index.ts` (commit logic)
+- **Edit**: `src/pages/admin/PresentationView.tsx` (read from `breakout_seating`)
+- **Edit**: `src/pages/admin/MatchingWorkspace.tsx` (read from `breakout_seating`)
+- **Edit**: `supabase/functions/get-public-breakout/index.ts` (read from `breakout_seating`)
+
+## Verification after rollout
+
+1. Open the matching workspace, click **Generate Matches**, then **Save Assignments**.
+2. Open the Present page — table grids match the workspace.
+3. Drag a founder to a different table in the workspace — Present page reflects the move on refresh.
+4. Re-run **Generate Matches** + **Save** — Present page updates to the new layout (no stale rows).

@@ -181,6 +181,33 @@ export type Database = {
           },
         ]
       }
+      breakout_seating: {
+        Row: {
+          breakout_id: string
+          created_at: string
+          founder_id: string
+          lead_id: string | null
+          table_id: string
+          updated_at: string
+        }
+        Insert: {
+          breakout_id: string
+          created_at?: string
+          founder_id: string
+          lead_id?: string | null
+          table_id: string
+          updated_at?: string
+        }
+        Update: {
+          breakout_id?: string
+          created_at?: string
+          founder_id?: string
+          lead_id?: string | null
+          table_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       breakout_sessions: {
         Row: {
           allow_stage_mixing: boolean | null
