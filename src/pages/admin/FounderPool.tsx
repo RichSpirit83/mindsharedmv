@@ -125,7 +125,7 @@ export default function FounderPool() {
     return ordered;
   }, [dedupedData]);
 
-  const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
+  const displayColumns = ["_breakouts", "session_name", "_stage_score", "_stage", ...allColumns];
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
