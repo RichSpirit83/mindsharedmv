@@ -64,11 +64,11 @@ export default function UserManagement() {
 
   const updateRoleMutation = useMutation({
     mutationFn: async ({ userId, newRole }: { userId: string; newRole: string }) => {
-      const { error } = await supabase
-        .from("user_roles")
-        .update({ role: newRole as any })
-        .eq("user_id", userId);
+      const { data, error } = await supabase.functions.invoke("manage-users", {
+        body: { action: "update_role", userId, role: newRole },
+      });
       if (error) throw error;
+      if ((data as any)?.error) throw new Error((data as any).error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["users_with_roles"] });
