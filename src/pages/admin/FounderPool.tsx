@@ -57,45 +57,62 @@ export default function FounderPool() {
   const { data: rawData = [], isLoading } = useQuery({
     queryKey: ["founder_pool"],
     queryFn: async () => {
-      const { data: sessionsData } = await supabase.from("breakout_sessions").select("id, session_name");
+      const { data: sessionsData } = await supabase
+        .from("breakout_sessions")
+        .select("id, session_name");
       const sessionMap: Record<string, string> = {};
       (sessionsData || []).forEach((s) => { sessionMap[s.id] = s.session_name; });
 
-      const { data: companies, error } = await supabase.from("breakout_companies").select("*");
+      const { data: founders, error } = await (supabase as any)
+        .from("founder_pool")
+        .select("*");
       if (error) throw error;
-      return (companies || []).map((c) => ({
-        id: c.id,
-        session_id: c.session_id,
-        session_name: sessionMap[c.session_id] || "Unknown",
-        mapped_data: (c.mapped_data || {}) as Record<string, string>,
-      }));
+
+      const { data: rsvps } = await (supabase as any)
+        .from("breakout_rsvps")
+        .select("founder_id, breakout_id");
+      const rsvpsByFounder: Record<string, string[]> = {};
+      (rsvps || []).forEach((r: any) => {
+        (rsvpsByFounder[r.founder_id] ||= []).push(r.breakout_id);
+      });
+
+      return (founders || []).map((f: any) => {
+        const breakoutIds = rsvpsByFounder[f.id] || [];
+        const sessionNames = breakoutIds.map((bid) => sessionMap[bid]).filter(Boolean);
+        const mapped: Record<string, string> = { ...((f.mapped_data || {}) as Record<string, string>) };
+        const setIf = (k: string, v: any) => {
+          if (v != null && v !== "" && !mapped[k]) mapped[k] = String(v);
+        };
+        setIf("company_name", f.company_name);
+        setIf("first_name", f.first_name);
+        setIf("last_name", f.last_name);
+        setIf("email", f.email);
+        setIf("revenue", f.revenue);
+        setIf("capital_raised", f.capital_raised);
+        setIf("last_round", f.last_round);
+        setIf("icp", f.icp);
+        setIf("business_type", f.business_type);
+        setIf("linkedin_url", f.linkedin_url);
+        if (Array.isArray(f.sector) && !mapped.sector) mapped.sector = f.sector.join(",");
+        if (Array.isArray(f.customer_type) && !mapped.customer_type) mapped.customer_type = f.customer_type.join(",");
+        return {
+          id: f.id as string,
+          mapped_data: mapped,
+          session_names: sessionNames,
+          breakout_count: breakoutIds.length,
+        };
+      });
     },
   });
 
-  // De-duplicate founders across sessions
+  // founder_pool is already deduped server-side — adapt to legacy shape
   const dedupedData = useMemo(() => {
-    const groups = new Map<string, { data: Record<string, string>; ids: string[]; sessionNames: string[] }>();
-    rawData.forEach((r) => {
-      const email = (r.mapped_data.email || "").toLowerCase().trim();
-      const key = email || `${(r.mapped_data.first_name || "").toLowerCase().trim()}|${(r.mapped_data.last_name || "").toLowerCase().trim()}|${(r.mapped_data.company_name || "").toLowerCase().trim()}`;
-      if (!key || key === "||") {
-        // Can't dedup, treat as unique
-        groups.set(r.id, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
-        return;
-      }
-      const existing = groups.get(key);
-      if (existing) {
-        existing.ids.push(r.id);
-        if (!existing.sessionNames.includes(r.session_name)) existing.sessionNames.push(r.session_name);
-        // Merge: prefer non-empty values
-        Object.entries(r.mapped_data).forEach(([k, v]) => {
-          if (v && !existing.data[k]) existing.data[k] = v;
-        });
-      } else {
-        groups.set(key, { data: { ...r.mapped_data }, ids: [r.id], sessionNames: [r.session_name] });
-      }
-    });
-    return Array.from(groups.values());
+    return (rawData as any[]).map((r) => ({
+      data: r.mapped_data,
+      ids: [r.id],
+      sessionNames: r.session_names,
+      breakoutCount: r.breakout_count as number,
+    }));
   }, [rawData]);
 
   const allColumns = useMemo(() => {
@@ -108,7 +125,7 @@ export default function FounderPool() {
     return ordered;
   }, [dedupedData]);
 
-  const displayColumns = ["session_name", "_stage_score", "_stage", ...allColumns];
+  const displayColumns = ["_breakouts", "session_name", "_stage_score", "_stage", ...allColumns];
 
   const toggleSort = (field: string) => {
     if (sortField === field) {
@@ -126,9 +143,10 @@ export default function FounderPool() {
   };
 
   const formatHeader = (key: string) => {
-    if (key === "session_name") return "Session";
+    if (key === "session_name") return "Sessions";
     if (key === "_stage_score") return "Score";
     if (key === "_stage") return "Stage";
+    if (key === "_breakouts") return "Breakouts";
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
@@ -144,6 +162,9 @@ export default function FounderPool() {
           const aScore = computeStageScoreFromMapped(a.data).score;
           const bScore = computeStageScoreFromMapped(b.data).score;
           return sortDir === "asc" ? aScore - bScore : bScore - aScore;
+        }
+        if (sortField === "_breakouts") {
+          return sortDir === "asc" ? a.breakoutCount - b.breakoutCount : b.breakoutCount - a.breakoutCount;
         }
         const aVal = sortField === "session_name" ? a.sessionNames.join(", ") : (a.data[sortField] || "");
         const bVal = sortField === "session_name" ? b.sessionNames.join(", ") : (b.data[sortField] || "");
@@ -266,7 +287,6 @@ export default function FounderPool() {
     };
 
     try {
-      // Build mapped rows
       const builtRows = csvData.map((row) => {
         const mapped: Record<string, string> = {};
         Object.entries(columnMapping).forEach(([canonical, csvHeader]) => {
@@ -275,75 +295,129 @@ export default function FounderPool() {
         return { raw_data: trimRawData(row), mapped_data: mapped };
       });
 
-      // Skip empty rows (no first/last/company)
-      const nonEmptyRows = builtRows.filter(r => {
+      const nonEmptyRows = builtRows.filter((r) => {
         const m = r.mapped_data;
-        return (m.first_name || m.last_name || m.company_name);
+        return m.first_name || m.last_name || m.company_name;
       });
       const emptySkipped = builtRows.length - nonEmptyRows.length;
 
-      // Dedup: check existing companies in this session
-      const existingInSession = rawData.filter(r => r.session_id === selectedSessionId);
       const normalize = (s: string) => (s || "").toLowerCase().trim();
-      const existingKeys = new Set(
-        existingInSession.map(r =>
-          `${normalize(r.mapped_data.first_name)}|${normalize(r.mapped_data.last_name)}|${normalize(r.mapped_data.company_name)}`
-        )
-      );
 
-      const uniqueRows = nonEmptyRows.filter(r => {
-        const key = `${normalize(r.mapped_data.first_name)}|${normalize(r.mapped_data.last_name)}|${normalize(r.mapped_data.company_name)}`;
-        return !existingKeys.has(key);
+      // Pre-fetch existing founder_pool rows so we can merge on dedup key (company_name + email)
+      const { data: existingPool } = await (supabase as any)
+        .from("founder_pool")
+        .select("id, company_name, email, mapped_data, raw_data");
+      const existingByKey = new Map<string, any>();
+      (existingPool || []).forEach((p: any) => {
+        const key = `${normalize(p.company_name)}|${normalize(p.email)}`;
+        existingByKey.set(key, p);
       });
-      const dupSkipped = nonEmptyRows.length - uniqueRows.length;
 
-      const inserts = uniqueRows.map(r => ({
-        session_id: selectedSessionId,
-        raw_data: r.raw_data,
-        mapped_data: r.mapped_data,
-      }));
-
-      let inserted = 0;
+      let upsertedFounderIds: string[] = [];
+      let createdCount = 0;
+      let mergedCount = 0;
       const failures: { name: string; message: string }[] = [];
 
-      for (let i = 0; i < inserts.length; i += BATCH_SIZE) {
-        const batch = inserts.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from("breakout_companies").insert(batch);
-        if (!error) {
-          inserted += batch.length;
-          continue;
-        }
-        console.error("[FounderPool] batch insert failed, falling back per-row:", error);
-        // Per-row fallback
-        for (const row of batch) {
-          const { error: rowErr } = await supabase.from("breakout_companies").insert(row);
-          if (rowErr) {
-            const m = row.mapped_data as Record<string, string>;
-            const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || m.company_name || "(unnamed)";
-            console.error("[FounderPool] row insert failed:", name, rowErr, row);
-            failures.push({ name, message: rowErr.message });
+      const splitCsv = (s: string | undefined) =>
+        s ? s.split(",").map((t) => t.trim()).filter(Boolean) : null;
+
+      for (const r of nonEmptyRows) {
+        const m = r.mapped_data;
+        const company = m.company_name || "";
+        const email = m.email || "";
+        const key = `${normalize(company)}|${normalize(email)}`;
+        const existing = existingByKey.get(key);
+
+        const baseFields: Record<string, any> = {
+          company_name: company || null,
+          first_name: m.first_name || null,
+          last_name: m.last_name || null,
+          email: email || null,
+          revenue: m.revenue || null,
+          capital_raised: m.capital_raised || null,
+          last_round: m.last_round || null,
+          icp: m.icp || null,
+          business_type: m.business_type || null,
+          linkedin_url: m.linkedin_url || null,
+          sector: splitCsv(m.sector),
+          customer_type: splitCsv(m.customer_type),
+        };
+
+        if (existing) {
+          // Merge: only fill non-empty fields where existing is empty
+          const merged: Record<string, any> = {};
+          Object.entries(baseFields).forEach(([k, v]) => {
+            if (v != null && v !== "" && (existing[k] == null || existing[k] === "")) {
+              merged[k] = v;
+            }
+          });
+          merged.mapped_data = { ...(existing.mapped_data || {}), ...m };
+          merged.raw_data = { ...(existing.raw_data || {}), ...r.raw_data };
+
+          const { error: updErr } = await (supabase as any)
+            .from("founder_pool")
+            .update(merged)
+            .eq("id", existing.id);
+          if (updErr) {
+            const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || company || "(unnamed)";
+            failures.push({ name, message: updErr.message });
           } else {
-            inserted += 1;
+            upsertedFounderIds.push(existing.id);
+            mergedCount += 1;
           }
+        } else {
+          const { data: ins, error: insErr } = await (supabase as any)
+            .from("founder_pool")
+            .insert({ ...baseFields, raw_data: r.raw_data, mapped_data: m })
+            .select("id")
+            .single();
+          if (insErr) {
+            const name = [m.first_name, m.last_name].filter(Boolean).join(" ") || company || "(unnamed)";
+            failures.push({ name, message: insErr.message });
+          } else if (ins?.id) {
+            upsertedFounderIds.push(ins.id);
+            createdCount += 1;
+            existingByKey.set(key, { id: ins.id, ...baseFields });
+          }
+        }
+      }
+
+      // Link every imported founder to the chosen breakout via breakout_rsvps
+      let rsvpCreated = 0;
+      if (upsertedFounderIds.length > 0) {
+        // Fetch existing RSVPs for this breakout to avoid duplicates
+        const { data: existingRsvps } = await (supabase as any)
+          .from("breakout_rsvps")
+          .select("founder_id")
+          .eq("breakout_id", selectedSessionId);
+        const have = new Set((existingRsvps || []).map((r: any) => r.founder_id));
+        const newRsvps = upsertedFounderIds
+          .filter((fid) => !have.has(fid))
+          .map((fid) => ({ breakout_id: selectedSessionId, founder_id: fid, rsvpd: true }));
+        for (let i = 0; i < newRsvps.length; i += BATCH_SIZE) {
+          const batch = newRsvps.slice(i, i + BATCH_SIZE);
+          const { error } = await (supabase as any).from("breakout_rsvps").insert(batch);
+          if (!error) rsvpCreated += batch.length;
+          else console.error("[FounderPool] rsvp batch failed:", error);
         }
       }
 
       queryClient.invalidateQueries({ queryKey: ["founder_pool"] });
 
-      const parts: string[] = [`Added: ${inserted}`];
-      if (dupSkipped > 0) parts.push(`Skipped duplicates: ${dupSkipped}`);
+      const parts: string[] = [
+        `Created: ${createdCount}`,
+        `Merged: ${mergedCount}`,
+        `RSVPs added: ${rsvpCreated}`,
+      ];
       if (emptySkipped > 0) parts.push(`Empty rows skipped: ${emptySkipped}`);
       if (failures.length > 0) parts.push(`Failed: ${failures.length}`);
 
-      const description = parts.join(" · ") + (
-        failures.length > 0
-          ? `\nFirst failure — "${failures[0].name}": ${failures[0].message}`
-          : ""
-      );
+      const description =
+        parts.join(" · ") +
+        (failures.length > 0 ? `\nFirst failure — "${failures[0].name}": ${failures[0].message}` : "");
 
-      if (inserted === 0 && failures.length > 0) {
+      if (createdCount + mergedCount === 0 && failures.length > 0) {
         toast({ title: "Import failed", description, variant: "destructive" });
-        // keep dialog open
       } else {
         toast({
           title: failures.length > 0 ? "Import completed with errors" : "Import complete",
@@ -469,6 +543,10 @@ export default function FounderPool() {
                                   <Badge key={i} variant="outline" className="text-xs">{s}</Badge>
                                 ))}
                               </div>
+                            ) : col === "_breakouts" ? (
+                              <Badge variant={r.breakoutCount > 0 ? "secondary" : "outline"} className="text-xs">
+                                {r.breakoutCount === 1 ? "1 breakout" : `${r.breakoutCount} breakouts`}
+                              </Badge>
                             ) : (
                               r.data[col] || ""
                             )}
@@ -490,6 +568,7 @@ export default function FounderPool() {
         data={selectedFounder?.data || null}
         ids={selectedFounder?.ids || []}
         sessionNames={selectedFounder?.sessionNames || []}
+        tableName="founder_pool"
         onSaved={() => queryClient.invalidateQueries({ queryKey: ["founder_pool"] })}
       />
 

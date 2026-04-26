@@ -110,11 +110,22 @@ export default function LeadPool() {
         .select("*")
         .order("created_at", { ascending: false }) as any);
       if (error) throw error;
+
+      // Count breakouts per lead via breakout_table_leads
+      const { data: links } = await (supabase as any)
+        .from("breakout_table_leads")
+        .select("lead_id, breakout_id");
+      const breakoutsByLead: Record<string, Set<string>> = {};
+      (links || []).forEach((l: any) => {
+        (breakoutsByLead[l.lead_id] ||= new Set()).add(l.breakout_id);
+      });
+
       return (data ?? []).map((l: any) => ({
         ...l,
         expertise_tags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
         tags: Array.isArray(l.tags) ? l.tags : [],
-      })) as LeadPoolEntry[];
+        breakout_count: (breakoutsByLead[l.id]?.size || 0),
+      })) as (LeadPoolEntry & { breakout_count: number })[];
     },
   });
 
@@ -643,7 +654,16 @@ export default function LeadPool() {
                       </button>
                     </TableCell>
                     <TableCell className="font-medium">
-                      <div>{lead.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span>{lead.name}</span>
+                        {(lead as any).breakout_count > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+                            {(lead as any).breakout_count === 1
+                              ? "1 breakout"
+                              : `${(lead as any).breakout_count} breakouts`}
+                          </Badge>
+                        )}
+                      </div>
                       {lead.linkedin_url && (
                         <a href={lead.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
                           LinkedIn

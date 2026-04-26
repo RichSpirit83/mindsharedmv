@@ -17,9 +17,11 @@ interface FounderProfileDialogProps {
   ids?: string[];
   sessionNames?: string[];
   onSaved?: () => void;
+  /** Which table to write edits to. Defaults to legacy `breakout_companies`. */
+  tableName?: "breakout_companies" | "founder_pool";
 }
 
-export default function FounderProfileDialog({ open, onOpenChange, data, ids = [], sessionNames = [], onSaved }: FounderProfileDialogProps) {
+export default function FounderProfileDialog({ open, onOpenChange, data, ids = [], sessionNames = [], onSaved, tableName = "breakout_companies" }: FounderProfileDialogProps) {
   const [editing, setEditing] = useState(false);
   const [editData, setEditData] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
@@ -42,9 +44,12 @@ export default function FounderProfileDialog({ open, onOpenChange, data, ids = [
     setSaving(true);
     try {
       for (const id of ids) {
-        const { error } = await supabase
-          .from("breakout_companies")
-          .update({ mapped_data: editData as any })
+        const payload = tableName === "founder_pool"
+          ? { mapped_data: editData as any }
+          : { mapped_data: editData as any };
+        const { error } = await (supabase as any)
+          .from(tableName)
+          .update(payload)
           .eq("id", id);
         if (error) throw error;
       }
