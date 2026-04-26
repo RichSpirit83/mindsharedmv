@@ -1191,6 +1191,25 @@ export default function MatchingWorkspace() {
               >
                 Save Assignments
               </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isGenerating}
+                onClick={async () => {
+                  toast.message("Generating table prompts…");
+                  const { data, error } = await supabase.functions.invoke("generate-prompts", {
+                    body: { breakoutId: sessionId },
+                  });
+                  if (error) return toast.error(error.message);
+                  if ((data as any)?.error) return toast.error((data as any).error);
+                  const map = ((data as any)?.prompts || {}) as Record<string, string[]>;
+                  const tableCount = Object.keys(map).length;
+                  toast.success(`Generated prompts for ${tableCount} table${tableCount === 1 ? "" : "s"}`);
+                  console.log("generate-prompts result", map);
+                }}
+              >
+                Generate Table Prompts
+              </Button>
             </>
           }
         />

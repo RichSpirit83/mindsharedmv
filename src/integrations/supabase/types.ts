@@ -199,6 +199,7 @@ export type Database = {
           session_format: string | null
           session_name: string
           status: string | null
+          table_prompts: Json
           target_per_table: number | null
           updated_at: string
         }
@@ -219,6 +220,7 @@ export type Database = {
           session_format?: string | null
           session_name?: string
           status?: string | null
+          table_prompts?: Json
           target_per_table?: number | null
           updated_at?: string
         }
@@ -239,6 +241,7 @@ export type Database = {
           session_format?: string | null
           session_name?: string
           status?: string | null
+          table_prompts?: Json
           target_per_table?: number | null
           updated_at?: string
         }
