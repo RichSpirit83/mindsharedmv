@@ -143,9 +143,10 @@ export default function FounderPool() {
   };
 
   const formatHeader = (key: string) => {
-    if (key === "session_name") return "Session";
+    if (key === "session_name") return "Sessions";
     if (key === "_stage_score") return "Score";
     if (key === "_stage") return "Stage";
+    if (key === "_breakouts") return "Breakouts";
     return key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
