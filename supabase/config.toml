@@ -1,1 +1,4 @@
 project_id = "fdgaxcxjupkipvvvvojl"
+
+[functions.get-public-breakout]
+verify_jwt = false
