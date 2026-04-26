@@ -110,11 +110,22 @@ export default function LeadPool() {
         .select("*")
         .order("created_at", { ascending: false }) as any);
       if (error) throw error;
+
+      // Count breakouts per lead via breakout_table_leads
+      const { data: links } = await (supabase as any)
+        .from("breakout_table_leads")
+        .select("lead_id, breakout_id");
+      const breakoutsByLead: Record<string, Set<string>> = {};
+      (links || []).forEach((l: any) => {
+        (breakoutsByLead[l.lead_id] ||= new Set()).add(l.breakout_id);
+      });
+
       return (data ?? []).map((l: any) => ({
         ...l,
         expertise_tags: Array.isArray(l.expertise_tags) ? l.expertise_tags : [],
         tags: Array.isArray(l.tags) ? l.tags : [],
-      })) as LeadPoolEntry[];
+        breakout_count: (breakoutsByLead[l.id]?.size || 0),
+      })) as (LeadPoolEntry & { breakout_count: number })[];
     },
   });
 
