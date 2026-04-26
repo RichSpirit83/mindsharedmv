@@ -44,9 +44,12 @@ export default function FounderProfileDialog({ open, onOpenChange, data, ids = [
     setSaving(true);
     try {
       for (const id of ids) {
-        const { error } = await supabase
-          .from("breakout_companies")
-          .update({ mapped_data: editData as any })
+        const payload = tableName === "founder_pool"
+          ? { mapped_data: editData as any }
+          : { mapped_data: editData as any };
+        const { error } = await (supabase as any)
+          .from(tableName)
+          .update(payload)
           .eq("id", id);
         if (error) throw error;
       }
