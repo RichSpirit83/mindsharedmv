@@ -135,6 +135,21 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const breakoutId: string | undefined = body?.breakoutId;
     const tableIdFilter: string | undefined = body?.tableId;
+
+    // Legacy session-wide flow: { challenges: string[], topics: string[] } -> { prompts: string[] }
+    if (!breakoutId && (Array.isArray(body?.challenges) || Array.isArray(body?.topics))) {
+      const challenges: string[] = (body.challenges || []).map(String).filter(Boolean);
+      const topics: string[] = (body.topics || []).map(String).filter(Boolean);
+      const prompts = await callLovableAI(
+        "You are an expert facilitator for CEO peer-group breakout sessions. Generate exactly 3 powerful, open-ended engagement prompts that resonate with the aggregated attendee challenges and topics provided. Return ONLY via the return_prompts tool.",
+        `TOP CHALLENGES:\n${challenges.slice(0, 30).join("\n")}\n\nTOPICS OF INTEREST:\n${topics.slice(0, 30).join("\n")}`,
+      );
+      return new Response(JSON.stringify({ prompts: prompts.slice(0, 3) }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
     if (!breakoutId) {
       return new Response(JSON.stringify({ error: "breakoutId is required" }), {
         status: 400,
