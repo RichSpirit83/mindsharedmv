@@ -163,6 +163,9 @@ export default function FounderPool() {
           const bScore = computeStageScoreFromMapped(b.data).score;
           return sortDir === "asc" ? aScore - bScore : bScore - aScore;
         }
+        if (sortField === "_breakouts") {
+          return sortDir === "asc" ? a.breakoutCount - b.breakoutCount : b.breakoutCount - a.breakoutCount;
+        }
         const aVal = sortField === "session_name" ? a.sessionNames.join(", ") : (a.data[sortField] || "");
         const bVal = sortField === "session_name" ? b.sessionNames.join(", ") : (b.data[sortField] || "");
         if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
