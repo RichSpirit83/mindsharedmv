@@ -67,12 +67,38 @@ serve(async (req) => {
       });
     }
 
-    if (action === "delete") {
+    if (action === "delete" || action === "remove") {
       if (!userId) throw new Error("userId is required");
       if (callerId && userId === callerId) throw new Error("Cannot delete your own account");
       await adminClient.from("user_roles").delete().eq("user_id", userId);
       const { error } = await adminClient.auth.admin.deleteUser(userId);
       if (error) throw error;
+      return new Response(JSON.stringify({ success: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "update_role") {
+      if (!userId) throw new Error("userId is required");
+      if (!role) throw new Error("role is required");
+      // Upsert role (single role per user via existing schema)
+      const { data: existing } = await adminClient
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+      if (existing?.id) {
+        const { error } = await adminClient
+          .from("user_roles")
+          .update({ role })
+          .eq("user_id", userId);
+        if (error) throw error;
+      } else {
+        const { error } = await adminClient
+          .from("user_roles")
+          .insert({ user_id: userId, role });
+        if (error) throw error;
+      }
       return new Response(JSON.stringify({ success: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
