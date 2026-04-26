@@ -27,7 +27,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Shield, CheckCircle2, Clock, UserPlus, Trash2, Loader2, KeyRound } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
+import { toast as sonner } from "sonner";
+
+const toast = ({ title, description, variant }: { title: string; description?: string; variant?: "destructive" }) => {
+  if (variant === "destructive") sonner.error(title, { description });
+  else sonner.success(title, { description });
+};
 
 type UserWithRole = {
   user_id: string;
