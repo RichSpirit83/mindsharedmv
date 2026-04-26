@@ -198,6 +198,7 @@ serve(async (req) => {
         tableId,
         leadId: lead?.id || null,
         warnings: a?.warnings || [],
+        locked: !!a?.locked,
       };
     });
 
