@@ -99,6 +99,58 @@ export type Database = {
           },
         ]
       }
+      breakout_rsvps: {
+        Row: {
+          attended: boolean
+          breakout_id: string
+          created_at: string
+          founder_id: string
+          id: string
+          manual_table_override: string | null
+          rsvpd: boolean
+        }
+        Insert: {
+          attended?: boolean
+          breakout_id: string
+          created_at?: string
+          founder_id: string
+          id?: string
+          manual_table_override?: string | null
+          rsvpd?: boolean
+        }
+        Update: {
+          attended?: boolean
+          breakout_id?: string
+          created_at?: string
+          founder_id?: string
+          id?: string
+          manual_table_override?: string | null
+          rsvpd?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_rsvps_breakout_id_fkey"
+            columns: ["breakout_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakout_rsvps_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "founder_pool"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakout_rsvps_manual_table_override_fkey"
+            columns: ["manual_table_override"]
+            isOneToOne: false
+            referencedRelation: "breakout_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       breakout_sessions: {
         Row: {
           allow_stage_mixing: boolean | null
@@ -195,6 +247,55 @@ export type Database = {
           },
         ]
       }
+      breakout_table_leads: {
+        Row: {
+          breakout_id: string
+          created_at: string
+          id: string
+          lead_id: string
+          stage: string | null
+          table_id: string | null
+        }
+        Insert: {
+          breakout_id: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          stage?: string | null
+          table_id?: string | null
+        }
+        Update: {
+          breakout_id?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          stage?: string | null
+          table_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "breakout_table_leads_breakout_id_fkey"
+            columns: ["breakout_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakout_table_leads_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead_pool"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "breakout_table_leads_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_tables"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       breakout_tables: {
         Row: {
           backup_created_at: string | null
@@ -257,47 +358,187 @@ export type Database = {
           },
         ]
       }
+      founder_pool: {
+        Row: {
+          active: boolean
+          business_type: string | null
+          capital_raised: string | null
+          company_name: string | null
+          created_at: string
+          customer_type: Json | null
+          email: string | null
+          first_name: string | null
+          icp: string | null
+          id: string
+          last_name: string | null
+          last_round: string | null
+          linkedin_url: string | null
+          mapped_data: Json | null
+          raw_data: Json | null
+          revenue: string | null
+          sector: Json | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          business_type?: string | null
+          capital_raised?: string | null
+          company_name?: string | null
+          created_at?: string
+          customer_type?: Json | null
+          email?: string | null
+          first_name?: string | null
+          icp?: string | null
+          id?: string
+          last_name?: string | null
+          last_round?: string | null
+          linkedin_url?: string | null
+          mapped_data?: Json | null
+          raw_data?: Json | null
+          revenue?: string | null
+          sector?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          business_type?: string | null
+          capital_raised?: string | null
+          company_name?: string | null
+          created_at?: string
+          customer_type?: Json | null
+          email?: string | null
+          first_name?: string | null
+          icp?: string | null
+          id?: string
+          last_name?: string | null
+          last_round?: string | null
+          linkedin_url?: string | null
+          mapped_data?: Json | null
+          raw_data?: Json | null
+          revenue?: string | null
+          sector?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       lead_pool: {
         Row: {
+          active: boolean
           background: string | null
+          bio: string | null
           company: string | null
           created_at: string
+          default_stage: string | null
           email: string | null
           expertise_tags: Json | null
           id: string
           linkedin_url: string | null
           name: string
+          network_strengths: string | null
+          profile_pdf_url: string | null
+          sector_strengths: Json | null
           tags: Json
           title: string | null
+          updated_at: string
           website: string | null
         }
         Insert: {
+          active?: boolean
           background?: string | null
+          bio?: string | null
           company?: string | null
           created_at?: string
+          default_stage?: string | null
           email?: string | null
           expertise_tags?: Json | null
           id?: string
           linkedin_url?: string | null
           name: string
+          network_strengths?: string | null
+          profile_pdf_url?: string | null
+          sector_strengths?: Json | null
           tags?: Json
           title?: string | null
+          updated_at?: string
           website?: string | null
         }
         Update: {
+          active?: boolean
           background?: string | null
+          bio?: string | null
           company?: string | null
           created_at?: string
+          default_stage?: string | null
           email?: string | null
           expertise_tags?: Json | null
           id?: string
           linkedin_url?: string | null
           name?: string
+          network_strengths?: string | null
+          profile_pdf_url?: string | null
+          sector_strengths?: Json | null
           tags?: Json
           title?: string | null
+          updated_at?: string
           website?: string | null
         }
         Relationships: []
+      }
+      match_history: {
+        Row: {
+          breakout_id: string
+          created_at: string
+          founder_id: string
+          id: string
+          lead_id: string
+          table_id: string | null
+        }
+        Insert: {
+          breakout_id: string
+          created_at?: string
+          founder_id: string
+          id?: string
+          lead_id: string
+          table_id?: string | null
+        }
+        Update: {
+          breakout_id?: string
+          created_at?: string
+          founder_id?: string
+          id?: string
+          lead_id?: string
+          table_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_history_breakout_id_fkey"
+            columns: ["breakout_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_history_founder_id_fkey"
+            columns: ["founder_id"]
+            isOneToOne: false
+            referencedRelation: "founder_pool"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "lead_pool"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_history_table_id_fkey"
+            columns: ["table_id"]
+            isOneToOne: false
+            referencedRelation: "breakout_tables"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       prompt_pool: {
         Row: {
