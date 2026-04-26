@@ -65,43 +65,140 @@ export default function PresentationView({ isPublic = false }: { isPublic?: bool
 
   useEffect(() => {
     if (!sessionId) return;
-    const load = async () => {
+    let cancelled = false;
+
+    const loadPublic = async () => {
+      const res = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/get-public-breakout?breakoutId=${encodeURIComponent(sessionId)}`,
+        { headers: { "Cache-Control": "no-store" } },
+      );
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      if (cancelled) return;
+      setSession(data.session);
+      const display: TableDisplay[] = (data.tables || []).map((t: any) => ({
+        id: t.id,
+        table_number: t.table_number,
+        table_name: t.table_name || "",
+        theme: t.theme || "",
+        suggested_lead: (t.leads || []).map((l: any) => l.name).join(", "),
+        leads: (t.leads || []).map((l: any) => ({ name: l.name, company: l.company || "", title: l.title || "" })),
+        round_number: 1,
+        companies: (t.founders || []).map((f: any) => ({
+          company_name: f.company_name || "",
+          first_name: f.first_name || "",
+          last_name: f.last_name || "",
+          mapped_data: { company_name: f.company_name || "", first_name: f.first_name || "", last_name: f.last_name || "" },
+        })),
+      }));
+      setTables(display);
+    };
+
+    const loadAdmin = async () => {
       const { data: s } = await supabase.from("breakout_sessions").select("*").eq("id", sessionId).single();
+      if (cancelled) return;
       setSession(s);
 
-      const { data: dbTables } = await supabase.from("breakout_tables").select("*").eq("session_id", sessionId).order("table_number");
-      const { data: dbLeads } = await supabase.from("breakout_leads").select("*").eq("session_id", sessionId);
-      if (dbTables) {
-        const tableIds = dbTables.map((t) => t.id);
-        const { data: assignments } = await supabase.from("breakout_table_assignments").select("*, breakout_companies(*)").in("table_id", tableIds);
+      const { data: dbTables } = await supabase
+        .from("breakout_tables")
+        .select("*")
+        .eq("session_id", sessionId)
+        .eq("is_backup", false)
+        .order("table_number");
 
-        const display: TableDisplay[] = dbTables.map((t) => {
-          const tableAssignments = (assignments || []).filter((a) => a.table_id === t.id);
-          const leadNames = (t.suggested_lead || "").split(",").map((n: string) => n.trim()).filter(Boolean);
-          const leads: LeadDisplay[] = leadNames.map((name: string) => {
-            const lead = (dbLeads || []).find((l: any) => l.name === name);
-            return lead ? { name: lead.name, company: lead.company || "", title: lead.title || "" } : { name };
-          });
+      const { data: tableLeads } = await supabase
+        .from("breakout_table_leads")
+        .select("table_id, lead:lead_pool(*)")
+        .eq("breakout_id", sessionId);
+
+      const { data: rsvps } = await supabase
+        .from("breakout_rsvps")
+        .select("founder_id, manual_table_override, founder:founder_pool(*)")
+        .eq("breakout_id", sessionId)
+        .eq("rsvpd", true);
+
+      const { data: history } = await supabase
+        .from("match_history")
+        .select("founder_id, table_id, created_at")
+        .eq("breakout_id", sessionId)
+        .order("created_at", { ascending: false });
+
+      const latestTableByFounder = new Map<string, string>();
+      for (const h of history || []) {
+        if (!latestTableByFounder.has(h.founder_id) && h.table_id) {
+          latestTableByFounder.set(h.founder_id, h.table_id);
+        }
+      }
+
+      const leadsByTable = new Map<string, any[]>();
+      for (const tl of tableLeads || []) {
+        if (!tl.table_id || !tl.lead) continue;
+        if (!leadsByTable.has(tl.table_id)) leadsByTable.set(tl.table_id, []);
+        leadsByTable.get(tl.table_id)!.push(tl.lead);
+      }
+
+      const foundersByTable = new Map<string, any[]>();
+      for (const r of rsvps || []) {
+        const tableId = r.manual_table_override || latestTableByFounder.get(r.founder_id);
+        if (!tableId || !r.founder) continue;
+        if (!foundersByTable.has(tableId)) foundersByTable.set(tableId, []);
+        foundersByTable.get(tableId)!.push(r.founder);
+      }
+
+      const display: TableDisplay[] = (dbTables || []).map((t) => {
+        const leads = (leadsByTable.get(t.id) || []).map((l: any) => ({
+          name: l.name,
+          company: l.company || "",
+          title: l.title || "",
+        }));
+        const founders = (foundersByTable.get(t.id) || []).map((f: any) => {
+          const mapped: Record<string, string> = {
+            company_name: f.company_name || "",
+            first_name: f.first_name || "",
+            last_name: f.last_name || "",
+            email: f.email || "",
+            sector: Array.isArray(f.sector) ? f.sector.join(", ") : (f.sector || ""),
+            revenue: f.revenue || "",
+            capital_raised: f.capital_raised || "",
+            icp: f.icp || "",
+          };
           return {
-            id: t.id,
-            table_number: t.table_number,
-            table_name: t.table_name || "",
-            theme: t.theme || "",
-            suggested_lead: t.suggested_lead || "",
-            leads,
-            round_number: (t as any).round_number ?? 1,
-            companies: tableAssignments.map((a) => {
-              const m = ((a as any).breakout_companies?.mapped_data || {}) as Record<string, string>;
-              return { company_name: m.company_name || "", first_name: m.first_name || "", last_name: m.last_name || "", mapped_data: m };
-            }),
+            company_name: f.company_name || "",
+            first_name: f.first_name || "",
+            last_name: f.last_name || "",
+            mapped_data: mapped,
           };
         });
-        setTables(display);
-      }
-      setLoading(false);
+        return {
+          id: t.id,
+          table_number: t.table_number,
+          table_name: t.table_name || "",
+          theme: t.theme || "",
+          suggested_lead: leads.map((l) => l.name).join(", "),
+          leads,
+          round_number: (t as any).round_number ?? 1,
+          companies: founders,
+        };
+      });
+      setTables(display);
     };
-    load();
-  }, [sessionId]);
+
+    const run = async () => {
+      try {
+        if (isPublic) await loadPublic();
+        else await loadAdmin();
+      } catch (e) {
+        console.error("PresentationView load failed", e);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    run();
+
+    // Auto-refresh every 30s
+    const interval = setInterval(run, 30_000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [sessionId, isPublic]);
 
   // Auto-start timer if current time is past breakout_start
   useEffect(() => {
